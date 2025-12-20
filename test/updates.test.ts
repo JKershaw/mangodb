@@ -526,5 +526,69 @@ describe(`Update Operation Tests (${getTestModeName()})`, () => {
       const doc = await collection.findOne({ name: "Alice" });
       assert.deepStrictEqual(doc?.profile, { bio: "Hello", age: 30 });
     });
+
+    it("should handle nested arrays in $set", async () => {
+      const collection = client.db(dbName).collection("update_nested_arrays");
+      await collection.insertOne({ name: "test" });
+
+      await collection.updateOne(
+        { name: "test" },
+        { $set: { matrix: [[1, 2], [3, 4]] } }
+      );
+
+      const doc = await collection.findOne({ name: "test" });
+      assert.ok(Array.isArray(doc?.matrix));
+      assert.ok(Array.isArray((doc?.matrix as unknown[])[0]));
+      assert.deepStrictEqual(doc?.matrix, [[1, 2], [3, 4]]);
+    });
+
+    it("should preserve nested arrays when updating other fields", async () => {
+      const collection = client.db(dbName).collection("preserve_nested_arr");
+      // Document already has nested arrays
+      await collection.insertOne({ name: "test", matrix: [[1, 2], [3, 4]] });
+
+      // Update a different field - this triggers cloneDocument on existing doc
+      await collection.updateOne(
+        { name: "test" },
+        { $set: { updated: true } }
+      );
+
+      const doc = await collection.findOne({ name: "test" });
+      assert.ok(Array.isArray(doc?.matrix), "matrix should be an array");
+      assert.ok(
+        Array.isArray((doc?.matrix as unknown[])[0]),
+        "matrix[0] should be an array, not an object"
+      );
+      assert.deepStrictEqual(doc?.matrix, [[1, 2], [3, 4]]);
+    });
+
+    it("should handle deeply nested arrays with objects", async () => {
+      const collection = client.db(dbName).collection("update_deep_nested");
+      await collection.insertOne({ name: "test" });
+
+      await collection.updateOne(
+        { name: "test" },
+        { $set: { data: [{ items: [1, 2] }, { items: [3, 4] }] } }
+      );
+
+      const doc = await collection.findOne({ name: "test" });
+      assert.deepStrictEqual(doc?.data, [{ items: [1, 2] }, { items: [3, 4] }]);
+    });
+
+    it("should include $eq filter fields in upserted document", async () => {
+      const collection = client.db(dbName).collection("upsert_eq_filter");
+
+      await collection.updateOne(
+        { type: { $eq: "fruit" }, name: "apple" },
+        { $set: { color: "red" } },
+        { upsert: true }
+      );
+
+      const doc = await collection.findOne({ name: "apple" });
+      assert.ok(doc !== null);
+      assert.strictEqual(doc?.type, "fruit");
+      assert.strictEqual(doc?.name, "apple");
+      assert.strictEqual(doc?.color, "red");
+    });
   });
 });

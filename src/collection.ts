@@ -508,14 +508,6 @@ export class MongoneCollection<T extends Document = Document> {
         current[part] = isNextNumeric ? [] : {};
       }
 
-      // Handle array indices
-      if (Array.isArray(current[part])) {
-        const index = parseInt(part, 10);
-        if (!isNaN(index)) {
-          current = current as unknown as Record<string, unknown>;
-        }
-      }
-
       current = current[part] as Record<string, unknown>;
     }
 
@@ -578,31 +570,28 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
+   * Deep clone a value (handles primitives, arrays, objects, ObjectId, Date).
+   */
+  private cloneValue(value: unknown): unknown {
+    if (value instanceof ObjectId) {
+      return new ObjectId(value.toHexString());
+    } else if (value instanceof Date) {
+      return new Date(value.getTime());
+    } else if (Array.isArray(value)) {
+      return value.map((item) => this.cloneValue(item));
+    } else if (value && typeof value === "object") {
+      return this.cloneDocument(value as T);
+    }
+    return value;
+  }
+
+  /**
    * Deep clone a document.
    */
   private cloneDocument(doc: T): T {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(doc)) {
-      if (value instanceof ObjectId) {
-        result[key] = new ObjectId(value.toHexString());
-      } else if (value instanceof Date) {
-        result[key] = new Date(value.getTime());
-      } else if (Array.isArray(value)) {
-        result[key] = value.map((item) => {
-          if (item instanceof ObjectId) {
-            return new ObjectId(item.toHexString());
-          } else if (item instanceof Date) {
-            return new Date(item.getTime());
-          } else if (item && typeof item === "object") {
-            return this.cloneDocument(item as T);
-          }
-          return item;
-        });
-      } else if (value && typeof value === "object") {
-        result[key] = this.cloneDocument(value as T);
-      } else {
-        result[key] = value;
-      }
+      result[key] = this.cloneValue(value);
     }
     return result as T;
   }
@@ -671,18 +660,31 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Create a document from filter for upsert.
-   * Extracts simple equality conditions from the filter.
+   * Extracts simple equality conditions and $eq values from the filter.
    */
   private createDocumentFromFilter(filter: Filter<T>): T {
     const doc: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(filter)) {
-      // Only include simple equality values (not operators)
       if (!this.isOperatorObject(value)) {
+        // Simple equality value
         if (key.includes(".")) {
           this.setValueByPath(doc, key, value);
         } else {
           doc[key] = value;
+        }
+      } else if (
+        value &&
+        typeof value === "object" &&
+        "$eq" in value &&
+        Object.keys(value).length === 1
+      ) {
+        // Extract $eq value (only if $eq is the only operator)
+        const eqValue = (value as { $eq: unknown }).$eq;
+        if (key.includes(".")) {
+          this.setValueByPath(doc, key, eqValue);
+        } else {
+          doc[key] = eqValue;
         }
       }
     }

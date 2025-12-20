@@ -115,9 +115,8 @@ Current implementation has these intentional limitations:
 
 1. **No indexing** - All queries scan full collection
 2. **No logical operators** - No $and, $or, $not, $nor (coming in Phase 5)
-3. **No update operations** - Coming in Phase 3
-4. **No cursor operations** - No sort/limit/skip, coming in Phase 4
-5. **No projection** - Returns full documents only
-6. **Single-threaded** - No concurrent write protection
+3. **No cursor operations** - No sort/limit/skip, coming in Phase 4
+4. **No projection** - Returns full documents only
+5. **Single-threaded** - No concurrent write protection
 
 These will be addressed in future phases as documented in [ROADMAP.md](./ROADMAP.md).
