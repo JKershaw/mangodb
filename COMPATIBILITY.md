@@ -404,7 +404,8 @@ await collection.find({}).sort({ value: 1 }).toArray();
 **Behaviors**:
 - Returns at most n documents
 - If fewer documents exist, returns all available
-- `limit(0)` returns empty array
+- `limit(0)` means no limit (returns all documents)
+- Negative values are treated as their absolute value
 
 ### skip
 

@@ -422,13 +422,14 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 2);
     });
 
-    it("should return empty array if limit is 0", async () => {
+    it("should return all documents if limit is 0 (no limit)", async () => {
       const collection = client.db(dbName).collection("limit_zero");
       await collection.insertMany([{ value: 1 }, { value: 2 }]);
 
+      // In MongoDB, limit(0) means "no limit" - returns all documents
       const docs = await collection.find({}).limit(0).toArray();
 
-      assert.strictEqual(docs.length, 0);
+      assert.strictEqual(docs.length, 2);
     });
 
     it("should handle negative limit (returns absolute value)", async () => {

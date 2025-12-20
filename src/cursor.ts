@@ -165,9 +165,12 @@ export class MongoneCursor<T extends Document = Document> {
    * Limit the number of results returned.
    * Returns this cursor for chaining.
    * Negative values are treated as positive (MongoDB 3.2+ behavior).
+   * limit(0) means no limit (returns all documents).
    */
   limit(n: number): MongoneCursor<T> {
-    this.limitValue = Math.abs(n);
+    const absN = Math.abs(n);
+    // limit(0) means no limit in MongoDB
+    this.limitValue = absN === 0 ? null : absN;
     return this;
   }
 
