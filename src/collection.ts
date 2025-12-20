@@ -48,6 +48,27 @@ interface DeleteResult {
   deletedCount: number;
 }
 
+interface UpdateResult {
+  acknowledged: boolean;
+  matchedCount: number;
+  modifiedCount: number;
+  upsertedCount: number;
+  upsertedId: ObjectId | null;
+}
+
+interface UpdateOptions {
+  upsert?: boolean;
+}
+
+/**
+ * Update operators supported by Mongone.
+ */
+interface UpdateOperators {
+  $set?: Record<string, unknown>;
+  $unset?: Record<string, unknown>;
+  $inc?: Record<string, number>;
+}
+
 /**
  * MongoneCollection represents a collection in Mongone.
  * It mirrors the Collection API from the official MongoDB driver.
@@ -466,6 +487,212 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
+   * Set a value at a given path using dot notation.
+   * Creates intermediate objects/arrays as needed.
+   */
+  private setValueByPath(
+    doc: Record<string, unknown>,
+    path: string,
+    value: unknown
+  ): void {
+    const parts = path.split(".");
+    let current: Record<string, unknown> = doc;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      const nextPart = parts[i + 1];
+      const isNextNumeric = /^\d+$/.test(nextPart);
+
+      if (current[part] === undefined || current[part] === null) {
+        // Create nested structure: array if next part is numeric, object otherwise
+        current[part] = isNextNumeric ? [] : {};
+      }
+
+      current = current[part] as Record<string, unknown>;
+    }
+
+    const lastPart = parts[parts.length - 1];
+    current[lastPart] = value;
+  }
+
+  /**
+   * Delete a value at a given path using dot notation.
+   */
+  private deleteValueByPath(doc: Record<string, unknown>, path: string): void {
+    const parts = path.split(".");
+    let current: Record<string, unknown> = doc;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (
+        current[part] === undefined ||
+        current[part] === null ||
+        typeof current[part] !== "object"
+      ) {
+        return; // Path doesn't exist, nothing to delete
+      }
+      current = current[part] as Record<string, unknown>;
+    }
+
+    const lastPart = parts[parts.length - 1];
+    delete current[lastPart];
+  }
+
+  /**
+   * Get a value at a given path for updates (direct access, no array traversal).
+   */
+  private getValueAtPath(
+    doc: Record<string, unknown>,
+    path: string
+  ): unknown {
+    const parts = path.split(".");
+    let current: unknown = doc;
+
+    for (const part of parts) {
+      if (current === undefined || current === null) {
+        return undefined;
+      }
+      if (Array.isArray(current)) {
+        const index = parseInt(part, 10);
+        if (!isNaN(index)) {
+          current = current[index];
+        } else {
+          return undefined;
+        }
+      } else if (typeof current === "object") {
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        return undefined;
+      }
+    }
+
+    return current;
+  }
+
+  /**
+   * Deep clone a value (handles primitives, arrays, objects, ObjectId, Date).
+   */
+  private cloneValue(value: unknown): unknown {
+    if (value instanceof ObjectId) {
+      return new ObjectId(value.toHexString());
+    } else if (value instanceof Date) {
+      return new Date(value.getTime());
+    } else if (Array.isArray(value)) {
+      return value.map((item) => this.cloneValue(item));
+    } else if (value && typeof value === "object") {
+      return this.cloneDocument(value as T);
+    }
+    return value;
+  }
+
+  /**
+   * Deep clone a document.
+   */
+  private cloneDocument(doc: T): T {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(doc)) {
+      result[key] = this.cloneValue(value);
+    }
+    return result as T;
+  }
+
+  /**
+   * Check if two documents are deeply equal.
+   */
+  private documentsEqual(a: T, b: T): boolean {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+
+    if (aKeys.length !== bKeys.length) return false;
+
+    for (const key of aKeys) {
+      const aVal = (a as Record<string, unknown>)[key];
+      const bVal = (b as Record<string, unknown>)[key];
+
+      if (!this.valuesEqual(aVal, bVal)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Apply update operators to a document.
+   * Returns a new document with the updates applied.
+   */
+  private applyUpdateOperators(doc: T, update: UpdateOperators): T {
+    const result = this.cloneDocument(doc);
+
+    // Apply $set
+    if (update.$set) {
+      for (const [path, value] of Object.entries(update.$set)) {
+        this.setValueByPath(result as Record<string, unknown>, path, value);
+      }
+    }
+
+    // Apply $unset
+    if (update.$unset) {
+      for (const path of Object.keys(update.$unset)) {
+        this.deleteValueByPath(result as Record<string, unknown>, path);
+      }
+    }
+
+    // Apply $inc
+    if (update.$inc) {
+      for (const [path, increment] of Object.entries(update.$inc)) {
+        const currentValue = this.getValueAtPath(
+          result as Record<string, unknown>,
+          path
+        );
+        const numericCurrent =
+          typeof currentValue === "number" ? currentValue : 0;
+        this.setValueByPath(
+          result as Record<string, unknown>,
+          path,
+          numericCurrent + increment
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Create a document from filter for upsert.
+   * Extracts simple equality conditions and $eq values from the filter.
+   */
+  private createDocumentFromFilter(filter: Filter<T>): T {
+    const doc: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(filter)) {
+      if (!this.isOperatorObject(value)) {
+        // Simple equality value
+        if (key.includes(".")) {
+          this.setValueByPath(doc, key, value);
+        } else {
+          doc[key] = value;
+        }
+      } else if (
+        value &&
+        typeof value === "object" &&
+        "$eq" in value &&
+        Object.keys(value).length === 1
+      ) {
+        // Extract $eq value (only if $eq is the only operator)
+        const eqValue = (value as { $eq: unknown }).$eq;
+        if (key.includes(".")) {
+          this.setValueByPath(doc, key, eqValue);
+        } else {
+          doc[key] = eqValue;
+        }
+      }
+    }
+
+    return doc as T;
+  }
+
+  /**
    * Insert a single document into the collection.
    */
   async insertOne(doc: T): Promise<InsertOneResult> {
@@ -576,6 +803,126 @@ export class MongoneCollection<T extends Document = Document> {
     return {
       acknowledged: true,
       deletedCount,
+    };
+  }
+
+  /**
+   * Update a single document matching the filter.
+   */
+  async updateOne(
+    filter: Filter<T>,
+    update: UpdateOperators,
+    options: UpdateOptions = {}
+  ): Promise<UpdateResult> {
+    const documents = await this.readDocuments();
+    let matchedCount = 0;
+    let modifiedCount = 0;
+    let upsertedId: ObjectId | null = null;
+    let upsertedCount = 0;
+
+    let matchFound = false;
+    const updatedDocuments: T[] = [];
+
+    for (const doc of documents) {
+      if (!matchFound && this.matchesFilter(doc, filter)) {
+        matchFound = true;
+        matchedCount = 1;
+        const updatedDoc = this.applyUpdateOperators(doc, update);
+
+        // Check if document actually changed
+        if (!this.documentsEqual(doc, updatedDoc)) {
+          modifiedCount = 1;
+          updatedDocuments.push(updatedDoc);
+        } else {
+          updatedDocuments.push(doc);
+        }
+      } else {
+        updatedDocuments.push(doc);
+      }
+    }
+
+    // Handle upsert
+    if (!matchFound && options.upsert) {
+      const baseDoc = this.createDocumentFromFilter(filter);
+      const newDoc = this.applyUpdateOperators(baseDoc, update);
+
+      // Add _id if not present
+      if (!("_id" in newDoc)) {
+        (newDoc as Record<string, unknown>)._id = new ObjectId();
+      }
+
+      upsertedId = (newDoc as unknown as { _id: ObjectId })._id;
+      upsertedCount = 1;
+      updatedDocuments.push(newDoc);
+    }
+
+    await this.writeDocuments(updatedDocuments);
+
+    return {
+      acknowledged: true,
+      matchedCount,
+      modifiedCount,
+      upsertedCount,
+      upsertedId,
+    };
+  }
+
+  /**
+   * Update all documents matching the filter.
+   */
+  async updateMany(
+    filter: Filter<T>,
+    update: UpdateOperators,
+    options: UpdateOptions = {}
+  ): Promise<UpdateResult> {
+    const documents = await this.readDocuments();
+    let matchedCount = 0;
+    let modifiedCount = 0;
+    let upsertedId: ObjectId | null = null;
+    let upsertedCount = 0;
+
+    const updatedDocuments: T[] = [];
+
+    for (const doc of documents) {
+      if (this.matchesFilter(doc, filter)) {
+        matchedCount++;
+        const updatedDoc = this.applyUpdateOperators(doc, update);
+
+        // Check if document actually changed
+        if (!this.documentsEqual(doc, updatedDoc)) {
+          modifiedCount++;
+          updatedDocuments.push(updatedDoc);
+        } else {
+          updatedDocuments.push(doc);
+        }
+      } else {
+        updatedDocuments.push(doc);
+      }
+    }
+
+    // Handle upsert - only if no matches found
+    if (matchedCount === 0 && options.upsert) {
+      const baseDoc = this.createDocumentFromFilter(filter);
+      const newDoc = this.applyUpdateOperators(baseDoc, update);
+
+      // Add _id if not present
+      if (!("_id" in newDoc)) {
+        (newDoc as Record<string, unknown>)._id = new ObjectId();
+      }
+
+      upsertedId = (newDoc as unknown as { _id: ObjectId })._id;
+      upsertedCount = 1;
+      updatedDocuments.push(newDoc);
+    }
+
+    await this.writeDocuments(updatedDocuments);
+
+    return {
+      acknowledged: true,
+      matchedCount,
+      modifiedCount,
+      upsertedCount,
+      upsertedId,
     };
   }
 }

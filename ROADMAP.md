@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 3 - Updates
+## Current Phase: Phase 4 - Cursor Operations
 
 ---
 
@@ -59,19 +59,19 @@ This document outlines the implementation phases for Mongone. Each phase builds 
 
 ---
 
-## Phase 3: Updates
+## Phase 3: Updates (Complete)
 
 **Goal**: Support document updates with common operators.
 
 ### Operations
-- [ ] `collection.updateOne(filter, update)`
-- [ ] `collection.updateMany(filter, update)`
-- [ ] `$set` - Set field values
-- [ ] `$unset` - Remove fields
-- [ ] `$inc` - Increment numeric values
-- [ ] `upsert` option - Insert if not found
+- [x] `collection.updateOne(filter, update)`
+- [x] `collection.updateMany(filter, update)`
+- [x] `$set` - Set field values
+- [x] `$unset` - Remove fields
+- [x] `$inc` - Increment numeric values
+- [x] `upsert` option - Insert if not found
 
-### Considerations
+### Considerations (Resolved)
 - Dot notation in updates creates nested structure
 - Update operators can be combined
 - Return values (matchedCount, modifiedCount, upsertedId)
