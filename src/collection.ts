@@ -477,6 +477,7 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Check if ANY of the values matches a filter condition.
+   * Special case: $exists: false requires ALL values to be undefined.
    */
   private anyValueMatches(
     values: unknown[],
@@ -484,7 +485,15 @@ export class MongoneCollection<T extends Document = Document> {
     isOperator: boolean
   ): boolean {
     if (isOperator) {
-      // For operators, check if ANY value matches
+      const ops = filterValue as QueryOperators;
+
+      // Special case: $exists: false requires ALL paths to be undefined
+      // This differs from other operators where ANY match is sufficient
+      if (ops.$exists === false && Object.keys(ops).length === 1) {
+        return values.every((v) => v === undefined);
+      }
+
+      // For other operators, check if ANY value matches
       return values.some((v) =>
         this.matchesOperators(v, filterValue as QueryOperators)
       );
@@ -508,6 +517,9 @@ export class MongoneCollection<T extends Document = Document> {
     for (const [key, filterValue] of Object.entries(filter)) {
       // Handle top-level logical operators
       if (key === "$and") {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$and must be an array");
+        }
         const conditions = filterValue as Filter<T>[];
         // Empty $and is vacuously true (matches all)
         if (conditions.length === 0) continue;
@@ -519,6 +531,9 @@ export class MongoneCollection<T extends Document = Document> {
       }
 
       if (key === "$or") {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$or must be an array");
+        }
         const conditions = filterValue as Filter<T>[];
         // Empty $or matches nothing
         if (conditions.length === 0) return false;
@@ -530,6 +545,9 @@ export class MongoneCollection<T extends Document = Document> {
       }
 
       if (key === "$nor") {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$nor must be an array");
+        }
         const conditions = filterValue as Filter<T>[];
         // Empty $nor is vacuously true (matches all - none of zero conditions are true)
         if (conditions.length === 0) continue;

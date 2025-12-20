@@ -120,6 +120,40 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 1);
       assert.strictEqual(docs[0].name, "Alice");
     });
+
+    it("should work with array element dot notation for $exists: true", async () => {
+      const collection = client.db(dbName).collection("exists_array_true");
+      await collection.insertMany([
+        { items: [{ name: "a" }, { name: "b" }] },
+        { items: [{ name: "c", deleted: true }] },
+        { items: [{ other: "x" }] }, // no name field in any element
+      ]);
+
+      // Should match if ANY array element has the field
+      const docs = await collection
+        .find({ "items.name": { $exists: true } })
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+    });
+
+    it("should work with array element dot notation for $exists: false", async () => {
+      const collection = client.db(dbName).collection("exists_array_false");
+      await collection.insertMany([
+        { items: [{ name: "a" }, { name: "b" }] }, // all have name
+        { items: [{ name: "c" }, { other: "x" }] }, // mixed - one has, one doesn't
+        { items: [{ other: "x" }, { other: "y" }] }, // none have name
+      ]);
+
+      // $exists: false should only match when NO array element has the field
+      const docs = await collection
+        .find({ "items.name": { $exists: false } })
+        .toArray();
+
+      // Only the last document has no 'name' in any array element
+      assert.strictEqual(docs.length, 1);
+      assert.ok(docs[0].items.every((item: Record<string, unknown>) => !("name" in item)));
+    });
   });
 
   describe("$and operator", () => {
@@ -553,6 +587,41 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 2);
       assert.ok(docs.some((d) => d.name === "Alice"));
       assert.ok(docs.some((d) => d.name === "Bob"));
+    });
+  });
+
+  describe("Error handling", () => {
+    it("should throw error when $and is not an array", async () => {
+      const collection = client.db(dbName).collection("error_and");
+      await collection.insertMany([{ a: 1 }]);
+
+      await assert.rejects(
+        // @ts-expect-error - intentionally passing invalid type
+        async () => await collection.find({ $and: "not an array" }).toArray(),
+        { message: "$and must be an array" }
+      );
+    });
+
+    it("should throw error when $or is not an array", async () => {
+      const collection = client.db(dbName).collection("error_or");
+      await collection.insertMany([{ a: 1 }]);
+
+      await assert.rejects(
+        // @ts-expect-error - intentionally passing invalid type
+        async () => await collection.find({ $or: { a: 1 } }).toArray(),
+        { message: "$or must be an array" }
+      );
+    });
+
+    it("should throw error when $nor is not an array", async () => {
+      const collection = client.db(dbName).collection("error_nor");
+      await collection.insertMany([{ a: 1 }]);
+
+      await assert.rejects(
+        // @ts-expect-error - intentionally passing invalid type
+        async () => await collection.find({ $nor: null }).toArray(),
+        { message: "$nor must be an array" }
+      );
     });
   });
 });

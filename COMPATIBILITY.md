@@ -482,6 +482,9 @@ await collection.find({ deleted: { $exists: false } }).toArray();
 - `$exists: true` matches documents where the field exists (including null values)
 - `$exists: false` matches documents where the field does not exist
 - Works with dot notation for nested fields: `{ "user.email": { $exists: true } }`
+- With array traversal (`"items.field"`):
+  - `$exists: true` matches if ANY array element has the field
+  - `$exists: false` matches only if NO array element has the field
 
 ### $and
 
@@ -502,6 +505,7 @@ await collection.find({
 - All conditions in the array must match
 - Empty array `$and: []` matches all documents (vacuous truth)
 - Can be nested with other logical operators
+- Throws error if value is not an array
 
 ### $or
 
@@ -521,6 +525,7 @@ await collection.find({
 - At least one condition must match
 - Empty array `$or: []` matches no documents
 - Field conditions are AND'd with the $or result
+- Throws error if value is not an array
 
 ### $not
 
@@ -548,6 +553,7 @@ await collection.find({
 - No condition in the array may match (opposite of $or)
 - Matches documents where the queried field is missing
 - Empty array `$nor: []` matches all documents
+- Throws error if value is not an array
 
 ---
 
