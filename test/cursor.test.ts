@@ -430,6 +430,28 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
 
       assert.strictEqual(docs.length, 0);
     });
+
+    it("should treat negative limit as positive (MongoDB 3.2+ behavior)", async () => {
+      const collection = client.db(dbName).collection("limit_negative");
+      await collection.insertMany([
+        { value: 1 },
+        { value: 2 },
+        { value: 3 },
+        { value: 4 },
+        { value: 5 },
+      ]);
+
+      const docs = await collection
+        .find({})
+        .sort({ value: 1 })
+        .limit(-3)
+        .toArray();
+
+      assert.strictEqual(docs.length, 3);
+      assert.strictEqual(docs[0].value, 1);
+      assert.strictEqual(docs[1].value, 2);
+      assert.strictEqual(docs[2].value, 3);
+    });
   });
 
   describe("skip", () => {
@@ -723,6 +745,43 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
         assert.strictEqual(docs[0].age, undefined);
         assert.strictEqual(docs[1].name, "Bob");
         assert.strictEqual(docs[1].score, 85);
+      });
+    });
+
+    describe("projection error handling", () => {
+      it("should throw error when mixing inclusion and exclusion", async () => {
+        const collection = client.db(dbName).collection("proj_mix_error");
+        await collection.insertOne({ name: "Alice", age: 30, city: "NYC" });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .find({}, { projection: { name: 1, age: 0 } })
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(
+              err.message.toLowerCase().includes("inclusion") ||
+                err.message.toLowerCase().includes("exclusion") ||
+                err.message.toLowerCase().includes("mix")
+            );
+            return true;
+          }
+        );
+      });
+
+      it("should allow _id: 0 with inclusion projection", async () => {
+        const collection = client.db(dbName).collection("proj_id_exclusion");
+        await collection.insertOne({ name: "Alice", age: 30, city: "NYC" });
+
+        // This should NOT throw - _id: 0 is special case
+        const docs = await collection
+          .find({}, { projection: { name: 1, _id: 0 } })
+          .toArray();
+
+        assert.strictEqual(docs.length, 1);
+        assert.strictEqual(docs[0].name, "Alice");
+        assert.strictEqual(docs[0]._id, undefined);
       });
     });
   });
