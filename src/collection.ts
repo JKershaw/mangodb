@@ -426,12 +426,12 @@ export class MongoneCollection<T extends Document = Document> {
             typeof opValue !== "object" ||
             Array.isArray(opValue)
           ) {
-            throw new Error("$not needs a regex or a document");
+            throw new Error("$not argument must be a regex or an object");
           }
           const notOps = opValue as QueryOperators;
           const notKeys = Object.keys(notOps);
           if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith("$"))) {
-            throw new Error("$not needs a regex or a document");
+            throw new Error("$not argument must be a regex or an object");
           }
           // $not does NOT match documents where the field is missing
           if (docValue === undefined) return false;
@@ -540,10 +540,10 @@ export class MongoneCollection<T extends Document = Document> {
       // Handle top-level logical operators
       if (key === "$and") {
         if (!Array.isArray(filterValue)) {
-          throw new Error("$and must be an array");
+          throw new Error("$and argument must be an array");
         }
         if (filterValue.length === 0) {
-          throw new Error("$and must be a nonempty array");
+          throw new Error("$and argument must be a non-empty array");
         }
         const conditions = filterValue as Filter<T>[];
         // All conditions must match
@@ -555,10 +555,10 @@ export class MongoneCollection<T extends Document = Document> {
 
       if (key === "$or") {
         if (!Array.isArray(filterValue)) {
-          throw new Error("$or must be an array");
+          throw new Error("$or argument must be an array");
         }
         if (filterValue.length === 0) {
-          throw new Error("$or must be a nonempty array");
+          throw new Error("$or argument must be a non-empty array");
         }
         const conditions = filterValue as Filter<T>[];
         // At least one condition must match
@@ -570,10 +570,10 @@ export class MongoneCollection<T extends Document = Document> {
 
       if (key === "$nor") {
         if (!Array.isArray(filterValue)) {
-          throw new Error("$nor must be an array");
+          throw new Error("$nor argument must be an array");
         }
         if (filterValue.length === 0) {
-          throw new Error("$nor must be a nonempty array");
+          throw new Error("$nor argument must be a non-empty array");
         }
         const conditions = filterValue as Filter<T>[];
         // No condition may match

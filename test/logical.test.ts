@@ -230,7 +230,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => await collection.find({ $and: [] } as never).toArray(),
-        { message: "$and must be a nonempty array" }
+        { message: "$and argument must be a non-empty array" }
       );
     });
 
@@ -309,7 +309,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => await collection.find({ $or: [] } as never).toArray(),
-        { message: "$or must be a nonempty array" }
+        { message: "$or argument must be a non-empty array" }
       );
     });
 
@@ -504,7 +504,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => await collection.find({ $nor: [] } as never).toArray(),
-        { message: "$nor must be a nonempty array" }
+        { message: "$nor argument must be a non-empty array" }
       );
     });
   });
@@ -599,7 +599,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $and: "not an array" } as never).toArray(),
-        { message: "$and must be an array" }
+        { message: "$and argument must be an array" }
       );
     });
 
@@ -610,7 +610,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $or: { a: 1 } } as never).toArray(),
-        { message: "$or must be an array" }
+        { message: "$or argument must be an array" }
       );
     });
 
@@ -621,7 +621,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $nor: null } as never).toArray(),
-        { message: "$nor must be an array" }
+        { message: "$nor argument must be an array" }
       );
     });
 
@@ -673,7 +673,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
           await collection
             .find({ field: { $not: "value" } } as never)
             .toArray(),
-        { message: "$not needs a regex or a document" }
+        { message: "$not argument must be a regex or an object" }
       );
     });
   });
