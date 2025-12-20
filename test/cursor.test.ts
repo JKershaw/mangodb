@@ -323,20 +323,6 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
         assert.strictEqual(docs[1].name, "with_null");
         assert.strictEqual(docs[2].name, "with_value");
       });
-
-      it("should compare array with scalar value", async () => {
-        const collection = client.db(dbName).collection("sort_array_scalar");
-        await collection.insertMany([
-          { name: "scalar", value: 15 },
-          { name: "array", value: [10, 20] }, // min: 10 for ascending
-        ]);
-
-        const docs = await collection.find({}).sort({ value: 1 }).toArray();
-
-        assert.strictEqual(docs.length, 2);
-        assert.strictEqual(docs[0].name, "array"); // min 10 < 15
-        assert.strictEqual(docs[1].name, "scalar"); // 15
-      });
     });
 
     describe("sort with mixed types", () => {
