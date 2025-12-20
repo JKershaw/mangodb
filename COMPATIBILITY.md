@@ -535,10 +535,9 @@ await collection.find({ status: { $not: { $in: ["deleted", "archived"] } } }).to
 
 **Behaviors**:
 - Wraps another operator expression and inverts its result
-- **IMPORTANT**: `$not` does NOT match documents where the field is missing
-- This differs from `$ne`, which does match missing fields
-- Example: `{ value: { $not: { $gt: 25 } } }` on `{ other: "field" }` does NOT match
-- Throws error "$not needs a regex or a document" if value is not an operator expression
+- `$not` DOES match documents where the field is missing (the inner condition can't be true)
+- Example: `{ value: { $not: { $gt: 25 } } }` on `{ other: "field" }` DOES match
+- Throws error "$not argument must be a regex or an object" if value is not an operator expression
 
 ### $nor
 

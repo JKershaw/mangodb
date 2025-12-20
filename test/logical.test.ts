@@ -379,7 +379,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 2);
     });
 
-    it("should NOT match documents where field is missing", async () => {
+    it("should match documents where field is missing", async () => {
       const collection = client.db(dbName).collection("not_missing");
       await collection.insertMany([
         { value: 10 },
@@ -387,15 +387,16 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
         { other: "field" }, // value is missing
       ]);
 
-      // $not does NOT match documents where the field is missing
-      // This is different from $ne which DOES match missing fields
+      // $not DOES match documents where the field is missing
+      // (the inner condition can't be true if the field doesn't exist)
       const docs = await collection
         .find({ value: { $not: { $gt: 25 } } })
         .toArray();
 
-      // Only value: 10 should match (not the missing field document)
-      assert.strictEqual(docs.length, 1);
-      assert.strictEqual(docs[0].value, 10);
+      // value: 10 matches (not > 25), missing field also matches
+      assert.strictEqual(docs.length, 2);
+      assert.ok(docs.some((d) => d.value === 10));
+      assert.ok(docs.some((d) => d.other === "field"));
     });
 
     it("should work with $lt operator", async () => {

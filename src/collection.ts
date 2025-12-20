@@ -433,8 +433,9 @@ export class MongoneCollection<T extends Document = Document> {
           if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith("$"))) {
             throw new Error("$not argument must be a regex or an object");
           }
-          // $not does NOT match documents where the field is missing
-          if (docValue === undefined) return false;
+          // $not DOES match documents where the field is missing
+          // (the inner condition can't be true if field doesn't exist)
+          if (docValue === undefined) break;
           // Invert the result of the nested operators
           if (this.matchesOperators(docValue, notOps)) {
             return false;

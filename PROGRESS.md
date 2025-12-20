@@ -25,7 +25,7 @@ This document tracks implementation progress and notable discoveries.
 - `$exists: true` matches documents where field exists (including null values)
 - `$exists: false` matches documents where field does not exist
 - `$and`, `$or`, `$nor` require nonempty arrays (throws error otherwise)
-- `$not` does NOT match documents where field is missing (differs from `$ne`)
+- `$not` DOES match documents where field is missing (inner condition can't be true)
 - Logical operators can be nested and combined
 - Multiple logical operators can be used at top level with field conditions
 - Field-level use of `$and`/`$or`/`$nor` throws "unknown operator" error
