@@ -111,6 +111,29 @@ function getValueByPath(doc: unknown, path: string): unknown {
 }
 
 /**
+ * Deep clone a value, handling ObjectId and Date properly.
+ */
+function cloneValue(value: unknown): unknown {
+  if (value instanceof ObjectId) {
+    return new ObjectId(value.toHexString());
+  }
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneValue(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      result[k] = cloneValue(v);
+    }
+    return result;
+  }
+  return value;
+}
+
+/**
  * Set a value in a document using dot notation (for projection).
  */
 function setValueByPath(
@@ -176,9 +199,9 @@ function applyProjection<T extends Document>(
     }
   } else {
     // Exclusion mode: include all fields except specified
-    // Copy all fields first
+    // Deep copy all fields first to avoid mutating original
     for (const [key, value] of Object.entries(doc)) {
-      result[key] = value;
+      result[key] = cloneValue(value);
     }
 
     // Remove excluded fields
@@ -237,17 +260,22 @@ export class MongoneCursor<T extends Document = Document> {
   /**
    * Limit the number of results returned.
    * Returns this cursor for chaining.
+   * Negative values are treated as positive (MongoDB 3.2+ behavior).
    */
   limit(n: number): MongoneCursor<T> {
-    this.limitValue = n;
+    this.limitValue = Math.abs(n);
     return this;
   }
 
   /**
    * Skip the first n results.
    * Returns this cursor for chaining.
+   * @throws Error if n is negative (MongoDB behavior).
    */
   skip(n: number): MongoneCursor<T> {
+    if (n < 0) {
+      throw new Error("Skip value must be non-negative");
+    }
     this.skipValue = n;
     return this;
   }

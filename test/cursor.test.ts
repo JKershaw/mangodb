@@ -350,6 +350,18 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
 
       assert.strictEqual(docs.length, 2);
     });
+
+    it("should throw error for negative skip", async () => {
+      const collection = client.db(dbName).collection("skip_negative");
+      await collection.insertMany([{ value: 1 }, { value: 2 }]);
+
+      await assert.rejects(
+        async () => {
+          await collection.find({}).skip(-1).toArray();
+        },
+        { message: /non-negative|skip/i }
+      );
+    });
   });
 
   describe("chaining cursor methods", () => {

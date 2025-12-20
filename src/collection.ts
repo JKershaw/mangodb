@@ -828,9 +828,9 @@ export class MongoneCollection<T extends Document = Document> {
       }
     } else {
       // Exclusion mode: include all fields except specified
-      // Copy all fields first
+      // Deep copy all fields first to avoid mutating original
       for (const [key, value] of Object.entries(doc)) {
-        result[key] = value;
+        result[key] = this.cloneValue(value);
       }
 
       // Remove excluded fields
