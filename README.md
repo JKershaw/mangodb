@@ -99,8 +99,14 @@ See [PROGRESS.md](./PROGRESS.md) for detailed status.
 - [x] Projection (field inclusion and exclusion)
 - [x] `collection.countDocuments(filter)` - Count matching documents
 
+### Phase 5: Logical Operators (Complete)
+- [x] `$exists` - Field existence check
+- [x] `$and` - Explicit logical AND
+- [x] `$or` - Logical OR
+- [x] `$not` - Operator negation
+- [x] `$nor` - Logical NOR
+
 ### Planned
-- Logical operators ($and, $or, $not)
 - Array handling ($elemMatch, $push, $pull)
 - Indexes
 

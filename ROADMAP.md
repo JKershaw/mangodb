@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 5 - Logical Operators
+## Current Phase: Phase 6 - Array Handling
 
 ---
 
@@ -98,21 +98,142 @@ This document outlines the implementation phases for Mongone. Each phase builds 
 
 ---
 
-## Phase 5: Logical Operators
+## Phase 5: Logical Operators (Complete)
 
 **Goal**: Support complex query logic.
 
 ### Operations
-- [ ] `$and` - Logical AND
-- [ ] `$or` - Logical OR
-- [ ] `$not` - Logical NOT
-- [ ] `$nor` - Logical NOR
-- [ ] `$exists` - Field existence
+- [x] `$exists` - Field existence check
+- [x] `$and` - Logical AND (explicit)
+- [x] `$or` - Logical OR
+- [x] `$not` - Logical NOT (operator negation)
+- [x] `$nor` - Logical NOR
+
+### Implementation Plan
+
+#### Step 1: `$exists` Operator
+Add to `QueryOperators` interface and `matchesOperators()` method.
+
+**Syntax**: `{ field: { $exists: boolean } }`
+
+**Behavior**:
+- `{ $exists: true }` - matches documents where field exists (including null values)
+- `{ $exists: false }` - matches documents where field does not exist
+- Works with dot notation paths
+
+**Test Cases**:
+```typescript
+// Field exists
+await collection.find({ name: { $exists: true } }).toArray();
+// Field does not exist
+await collection.find({ deleted: { $exists: false } }).toArray();
+// Nested field with dot notation
+await collection.find({ "user.email": { $exists: true } }).toArray();
+// Exists with null value (should match $exists: true)
+await collection.find({ value: { $exists: true } }).toArray(); // matches { value: null }
+```
+
+#### Step 2: `$and` Operator
+Add top-level logical operator handling to `matchesFilter()`.
+
+**Syntax**: `{ $and: [ { condition1 }, { condition2 }, ... ] }`
+
+**Behavior**:
+- All conditions in the array must match
+- Can combine with field conditions: `{ name: "Alice", $and: [...] }`
+- Explicit $and useful when same field appears multiple times
+
+**Test Cases**:
+```typescript
+// Basic $and
+await collection.find({ $and: [{ age: { $gte: 18 } }, { age: { $lte: 65 } }] }).toArray();
+// $and with other field conditions
+await collection.find({ status: "active", $and: [{ score: { $gt: 50 } }] }).toArray();
+// Nested $and with $or
+await collection.find({ $and: [{ $or: [{ a: 1 }, { b: 2 }] }, { c: 3 }] }).toArray();
+```
+
+#### Step 3: `$or` Operator
+Add top-level logical operator handling to `matchesFilter()`.
+
+**Syntax**: `{ $or: [ { condition1 }, { condition2 }, ... ] }`
+
+**Behavior**:
+- At least one condition in the array must match
+- Can combine with field conditions (implicit AND with other fields)
+- Empty array matches nothing
+
+**Test Cases**:
+```typescript
+// Basic $or
+await collection.find({ $or: [{ status: "active" }, { priority: "high" }] }).toArray();
+// $or with other field conditions
+await collection.find({ type: "task", $or: [{ urgent: true }, { dueDate: { $lt: tomorrow } }] }).toArray();
+// $or with comparison operators
+await collection.find({ $or: [{ value: { $lt: 10 } }, { value: { $gt: 100 } }] }).toArray();
+```
+
+#### Step 4: `$not` Operator
+Add to `QueryOperators` interface - wraps another operator expression.
+
+**Syntax**: `{ field: { $not: { operator: value } } }`
+
+**Behavior**:
+- Inverts the result of the wrapped operator expression
+- Does NOT match if field is missing (differs from $ne)
+- Can wrap any comparison operator
+
+**Test Cases**:
+```typescript
+// $not with $gt
+await collection.find({ age: { $not: { $gt: 30 } } }).toArray();
+// $not with $in
+await collection.find({ status: { $not: { $in: ["deleted", "archived"] } } }).toArray();
+// $not with regex (if regex supported)
+// Note: Missing fields do NOT match $not conditions
+```
+
+#### Step 5: `$nor` Operator
+Add top-level logical operator handling to `matchesFilter()`.
+
+**Syntax**: `{ $nor: [ { condition1 }, { condition2 }, ... ] }`
+
+**Behavior**:
+- No condition in the array may match (opposite of $or)
+- Equivalent to `{ $not: { $or: [...] } }` but at top level
+- Also matches documents missing the queried fields
+
+**Test Cases**:
+```typescript
+// Basic $nor
+await collection.find({ $nor: [{ status: "deleted" }, { status: "archived" }] }).toArray();
+// $nor with other field conditions
+await collection.find({ active: true, $nor: [{ error: true }, { suspended: true }] }).toArray();
+```
+
+### Code Changes Required
+
+1. **`src/collection.ts`**:
+   - Extend `QueryOperators` interface to add `$exists` and `$not`
+   - Create `LogicalOperators` type for `$and`, `$or`, `$nor`
+   - Modify `Filter` type to include logical operators
+   - Update `matchesFilter()` to handle top-level logical operators first
+   - Update `matchesOperators()` to handle `$exists` and `$not`
+
+2. **`test/logical.test.ts`** (new file):
+   - Test suite for all logical operators
+   - Edge cases: empty arrays, missing fields, nested operators
+   - Combination tests with existing comparison operators
 
 ### Considerations
-- Implicit $and in query objects
-- Operator precedence
-- Combining with comparison operators
+- **Implicit AND**: Already implemented - `{ a: 1, b: 2 }` requires both to match
+- **Operator precedence**: Logical operators evaluated within their scope
+- **Recursion**: `$and`, `$or`, `$nor` recursively call `matchesFilter()`
+- **$not vs $ne**: `$not` doesn't match missing fields; `$ne` does
+- **Empty logical arrays**:
+  - `$and: []` - matches all documents (vacuous truth)
+  - `$or: []` - matches no documents
+  - `$nor: []` - matches all documents
 
 ---
 

@@ -4,12 +4,51 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 4 - Cursor Operations
+**Phase**: 5 - Logical Operators
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-20 - Phase 5: Logical Operators
+
+#### Added
+- Logical query operators for complex filtering:
+  - `$exists` - Check if field exists or not
+  - `$and` - Explicit logical AND (all conditions must match)
+  - `$or` - Logical OR (any condition must match)
+  - `$not` - Negate operator expression
+  - `$nor` - Logical NOR (no condition may match)
+
+#### Behaviors Implemented
+- `$exists: true` matches documents where field exists (including null values)
+- `$exists: false` matches documents where field does not exist
+- `$and`, `$or`, `$nor` require nonempty arrays (throws error otherwise)
+- `$not` DOES match documents where field is missing (inner condition can't be true)
+- Logical operators can be nested and combined
+- Multiple logical operators can be used at top level with field conditions
+- Field-level use of `$and`/`$or`/`$nor` throws "unknown operator" error
+
+#### Examples
+```typescript
+// Field existence
+await collection.find({ deleted: { $exists: false } }).toArray();
+
+// Explicit AND for same field with different operators
+await collection.find({ $and: [{ score: { $gt: 50 } }, { score: { $lt: 100 } }] }).toArray();
+
+// OR with field condition (implicit AND)
+await collection.find({ type: "A", $or: [{ status: "active" }, { priority: "high" }] }).toArray();
+
+// NOT operator
+await collection.find({ age: { $not: { $gt: 30 } } }).toArray();
+
+// NOR operator
+await collection.find({ $nor: [{ deleted: true }, { archived: true }] }).toArray();
+```
+
+---
 
 ### 2025-12-20 - Phase 4: Cursor Operations
 
@@ -144,7 +183,7 @@ See [COMPATIBILITY.md](./COMPATIBILITY.md) for detailed documentation of MongoDB
 Current implementation has these intentional limitations:
 
 1. **No indexing** - All queries scan full collection
-2. **No logical operators** - No $and, $or, $not, $nor (coming in Phase 5)
+2. **No array operators** - No $elemMatch, $size, $all, $push, $pull (Phase 6)
 3. **Single-threaded** - No concurrent write protection
 
 These will be addressed in future phases as documented in [ROADMAP.md](./ROADMAP.md).

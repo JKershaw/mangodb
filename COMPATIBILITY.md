@@ -469,6 +469,104 @@ await collection.countDocuments({ value: { $gte: 10 } });  // Works with operato
 
 ---
 
+## Logical Operators
+
+### $exists
+
+```typescript
+await collection.find({ age: { $exists: true } }).toArray();
+await collection.find({ deleted: { $exists: false } }).toArray();
+```
+
+**Behaviors**:
+- `$exists: true` matches documents where the field exists (including null values)
+- `$exists: false` matches documents where the field does not exist
+- Works with dot notation for nested fields: `{ "user.email": { $exists: true } }`
+- With array traversal (`"items.field"`):
+  - `$exists: true` matches if ANY array element has the field
+  - `$exists: false` matches only if NO array element has the field
+
+### $and
+
+```typescript
+// Explicit AND - useful when same field has multiple conditions
+await collection.find({
+  $and: [{ score: { $gte: 50 } }, { score: { $lte: 100 } }]
+}).toArray();
+
+// Can combine with field conditions
+await collection.find({
+  type: "A",
+  $and: [{ status: "active" }]
+}).toArray();
+```
+
+**Behaviors**:
+- All conditions in the array must match
+- Can be nested with other logical operators
+- Throws error if value is not a nonempty array
+
+### $or
+
+```typescript
+await collection.find({
+  $or: [{ status: "active" }, { priority: "high" }]
+}).toArray();
+
+// Combines with field conditions via implicit AND
+await collection.find({
+  type: "A",
+  $or: [{ status: "active" }, { status: "pending" }]
+}).toArray();
+```
+
+**Behaviors**:
+- At least one condition must match
+- Field conditions are AND'd with the $or result
+- Throws error if value is not a nonempty array
+
+### $not
+
+```typescript
+// Invert operator result
+await collection.find({ age: { $not: { $gt: 30 } } }).toArray();
+await collection.find({ status: { $not: { $in: ["deleted", "archived"] } } }).toArray();
+```
+
+**Behaviors**:
+- Wraps another operator expression and inverts its result
+- `$not` DOES match documents where the field is missing (the inner condition can't be true)
+- Example: `{ value: { $not: { $gt: 25 } } }` on `{ other: "field" }` DOES match
+- Throws error "$not argument must be a regex or an object" if value is not an operator expression
+
+### $nor
+
+```typescript
+await collection.find({
+  $nor: [{ status: "deleted" }, { status: "archived" }]
+}).toArray();
+```
+
+**Behaviors**:
+- No condition in the array may match (opposite of $or)
+- Matches documents where the queried field is missing
+- Throws error if value is not a nonempty array
+
+### Field-Level Logical Operator Errors
+
+Logical operators (`$and`, `$or`, `$nor`) are only valid at the top level of a filter, not inside field conditions:
+
+```typescript
+// VALID - top level
+await collection.find({ $and: [{ a: 1 }, { b: 2 }] }).toArray();
+
+// INVALID - throws error
+await collection.find({ field: { $and: [{ a: 1 }] } }).toArray();
+// Error: "unknown operator: $and"
+```
+
+---
+
 ## Notes
 
 This document will be updated as more behaviors are discovered through testing. Each entry should include:

@@ -18,6 +18,8 @@ interface QueryOperators {
   $lte?: unknown;
   $in?: unknown[];
   $nin?: unknown[];
+  $exists?: boolean;
+  $not?: QueryOperators;
 }
 
 /**
@@ -27,11 +29,16 @@ type FilterValue = unknown | QueryOperators;
 
 /**
  * Filter type for queries.
+ * Supports field conditions and logical operators ($and, $or, $nor).
  */
 type Filter<T> = {
   [P in keyof T]?: FilterValue;
 } & {
   [key: string]: FilterValue;
+} & {
+  $and?: Filter<T>[];
+  $or?: Filter<T>[];
+  $nor?: Filter<T>[];
 };
 
 interface InsertOneResult {
@@ -405,8 +412,48 @@ export class MongoneCollection<T extends Document = Document> {
           break;
         }
 
+        case "$exists": {
+          const shouldExist = opValue as boolean;
+          const exists = docValue !== undefined;
+          if (shouldExist !== exists) return false;
+          break;
+        }
+
+        case "$not": {
+          // $not requires an operator expression (or regex), not a plain value
+          if (
+            opValue === null ||
+            typeof opValue !== "object" ||
+            Array.isArray(opValue)
+          ) {
+            throw new Error("$not argument must be a regex or an object");
+          }
+          const notOps = opValue as QueryOperators;
+          const notKeys = Object.keys(notOps);
+          if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith("$"))) {
+            throw new Error("$not argument must be a regex or an object");
+          }
+          // $not DOES match documents where the field is missing
+          // (the inner condition can't be true if field doesn't exist)
+          if (docValue === undefined) break;
+          // Invert the result of the nested operators
+          if (this.matchesOperators(docValue, notOps)) {
+            return false;
+          }
+          break;
+        }
+
+        case "$and":
+          throw new Error("unknown operator: $and");
+
+        case "$or":
+          throw new Error("unknown operator: $or");
+
+        case "$nor":
+          throw new Error("unknown operator: $nor");
+
         default:
-          // Unknown operator - ignore
+          // Unknown operator - ignore for forward compatibility
           break;
       }
     }
@@ -453,6 +500,7 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Check if ANY of the values matches a filter condition.
+   * Special case: $exists: false requires ALL values to be undefined.
    */
   private anyValueMatches(
     values: unknown[],
@@ -460,7 +508,15 @@ export class MongoneCollection<T extends Document = Document> {
     isOperator: boolean
   ): boolean {
     if (isOperator) {
-      // For operators, check if ANY value matches
+      const ops = filterValue as QueryOperators;
+
+      // Special case: $exists: false requires ALL paths to be undefined
+      // This differs from other operators where ANY match is sufficient
+      if (ops.$exists === false && Object.keys(ops).length === 1) {
+        return values.every((v) => v === undefined);
+      }
+
+      // For other operators, check if ANY value matches
       return values.some((v) =>
         this.matchesOperators(v, filterValue as QueryOperators)
       );
@@ -476,11 +532,59 @@ export class MongoneCollection<T extends Document = Document> {
    * - Empty filter (matches all)
    * - Simple equality
    * - Dot notation for nested fields (including array element traversal)
-   * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin)
+   * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $exists, $not)
+   * - Logical operators ($and, $or, $nor)
    * - Array field matching
    */
   private matchesFilter(doc: T, filter: Filter<T>): boolean {
     for (const [key, filterValue] of Object.entries(filter)) {
+      // Handle top-level logical operators
+      if (key === "$and") {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$and argument must be an array");
+        }
+        if (filterValue.length === 0) {
+          throw new Error("$and argument must be a non-empty array");
+        }
+        const conditions = filterValue as Filter<T>[];
+        // All conditions must match
+        if (!conditions.every((cond) => this.matchesFilter(doc, cond))) {
+          return false;
+        }
+        continue;
+      }
+
+      if (key === "$or") {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$or argument must be an array");
+        }
+        if (filterValue.length === 0) {
+          throw new Error("$or argument must be a non-empty array");
+        }
+        const conditions = filterValue as Filter<T>[];
+        // At least one condition must match
+        if (!conditions.some((cond) => this.matchesFilter(doc, cond))) {
+          return false;
+        }
+        continue;
+      }
+
+      if (key === "$nor") {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$nor argument must be an array");
+        }
+        if (filterValue.length === 0) {
+          throw new Error("$nor argument must be a non-empty array");
+        }
+        const conditions = filterValue as Filter<T>[];
+        // No condition may match
+        if (conditions.some((cond) => this.matchesFilter(doc, cond))) {
+          return false;
+        }
+        continue;
+      }
+
+      // Regular field condition
       const docValues = this.getValuesByPath(doc, key);
       const isOperator = this.isOperatorObject(filterValue);
 
