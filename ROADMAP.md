@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 4 - Cursor Operations
+## Current Phase: Phase 5 - Logical Operators
 
 ---
 
@@ -78,22 +78,22 @@ This document outlines the implementation phases for Mongone. Each phase builds 
 
 ---
 
-## Phase 4: Cursor Operations
+## Phase 4: Cursor Operations (Complete)
 
 **Goal**: Support result manipulation and projection.
 
 ### Operations
-- [ ] `cursor.sort(spec)` - Single field
-- [ ] `cursor.sort(spec)` - Compound/multiple fields
-- [ ] `cursor.limit(n)`
-- [ ] `cursor.skip(n)`
-- [ ] Projection (field inclusion)
-- [ ] Projection (field exclusion)
-- [ ] `collection.countDocuments(filter)`
+- [x] `cursor.sort(spec)` - Single field
+- [x] `cursor.sort(spec)` - Compound/multiple fields
+- [x] `cursor.limit(n)`
+- [x] `cursor.skip(n)`
+- [x] Projection (field inclusion)
+- [x] Projection (field exclusion)
+- [x] `collection.countDocuments(filter)`
 
-### Considerations
-- Sort order for mixed types (MongoDB has specific rules)
-- Chaining cursor methods
+### Considerations (Resolved)
+- Sort order for mixed types follows MongoDB type ordering
+- Chaining cursor methods (order doesn't matter - always sort, skip, limit)
 - Projection cannot mix inclusion/exclusion (except _id)
 
 ---

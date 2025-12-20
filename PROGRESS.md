@@ -4,12 +4,42 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 3 - Updates
+**Phase**: 4 - Cursor Operations
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-20 - Phase 4: Cursor Operations
+
+#### Added
+- Cursor operations for result manipulation:
+  - `cursor.sort(spec)` - Sort by single or multiple fields (compound sort)
+  - `cursor.limit(n)` - Limit number of results returned
+  - `cursor.skip(n)` - Skip first n results
+- Projection support:
+  - Field inclusion: `find({}, { projection: { name: 1, age: 1 } })`
+  - Field exclusion: `find({}, { projection: { password: 0 } })`
+  - `_id` can be excluded with inclusion: `{ name: 1, _id: 0 }`
+  - Nested field projection with dot notation
+- `countDocuments(filter)` - Count matching documents
+
+#### Behaviors Implemented
+- Cursor methods can be chained in any order
+- Execution order is always: sort → skip → limit
+- Sort handles multiple types with MongoDB's type ordering (null/undefined first)
+- Null and missing values sort first when ascending, last when descending
+- Projection cannot mix inclusion and exclusion (except _id)
+- Nested field projection preserves parent structure
+
+#### Return Values
+```typescript
+// cursor.toArray() returns projected/sorted/limited documents
+// countDocuments() returns number
+```
+
+---
 
 ### 2025-12-20 - Phase 3: Updates
 
@@ -115,8 +145,6 @@ Current implementation has these intentional limitations:
 
 1. **No indexing** - All queries scan full collection
 2. **No logical operators** - No $and, $or, $not, $nor (coming in Phase 5)
-3. **No cursor operations** - No sort/limit/skip, coming in Phase 4
-4. **No projection** - Returns full documents only
-5. **Single-threaded** - No concurrent write protection
+3. **Single-threaded** - No concurrent write protection
 
 These will be addressed in future phases as documented in [ROADMAP.md](./ROADMAP.md).

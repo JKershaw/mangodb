@@ -60,6 +60,10 @@ interface UpdateOptions {
   upsert?: boolean;
 }
 
+interface FindOptions {
+  projection?: Record<string, 0 | 1>;
+}
+
 /**
  * Update operators supported by Mongone.
  */
@@ -740,11 +744,17 @@ export class MongoneCollection<T extends Document = Document> {
   /**
    * Find a single document matching the filter.
    */
-  async findOne(filter: Filter<T> = {}): Promise<T | null> {
+  async findOne(
+    filter: Filter<T> = {},
+    options: FindOptions = {}
+  ): Promise<T | null> {
     const documents = await this.readDocuments();
 
     for (const doc of documents) {
       if (this.matchesFilter(doc, filter)) {
+        if (options.projection) {
+          return this.applyProjection(doc, options.projection);
+        }
         return doc;
       }
     }
@@ -756,11 +766,147 @@ export class MongoneCollection<T extends Document = Document> {
    * Find documents matching the filter.
    * Returns a cursor for further operations.
    */
-  find(filter: Filter<T> = {}): MongoneCursor<T> {
-    return new MongoneCursor<T>(async () => {
-      const documents = await this.readDocuments();
-      return documents.filter((doc) => this.matchesFilter(doc, filter));
-    });
+  find(filter: Filter<T> = {}, options: FindOptions = {}): MongoneCursor<T> {
+    return new MongoneCursor<T>(
+      async () => {
+        const documents = await this.readDocuments();
+        return documents.filter((doc) => this.matchesFilter(doc, filter));
+      },
+      options.projection || null
+    );
+  }
+
+  /**
+   * Count documents matching the filter.
+   */
+  async countDocuments(filter: Filter<T> = {}): Promise<number> {
+    const documents = await this.readDocuments();
+    return documents.filter((doc) => this.matchesFilter(doc, filter)).length;
+  }
+
+  /**
+   * Apply projection to a document.
+   */
+  private applyProjection(
+    doc: T,
+    projection: Record<string, 0 | 1>
+  ): T {
+    const keys = Object.keys(projection);
+    if (keys.length === 0) return doc;
+
+    // Determine if this is inclusion or exclusion mode
+    // _id: 0 doesn't count for determining mode
+    const nonIdKeys = keys.filter((k) => k !== "_id");
+    const hasInclusion = nonIdKeys.some((k) => projection[k] === 1);
+    const hasExclusion = nonIdKeys.some((k) => projection[k] === 0);
+
+    // Can't mix inclusion and exclusion (except for _id)
+    if (hasInclusion && hasExclusion) {
+      throw new Error("Cannot mix inclusion and exclusion in projection");
+    }
+
+    const result: Record<string, unknown> = {};
+
+    if (hasInclusion) {
+      // Inclusion mode: only include specified fields
+      // Always include _id unless explicitly excluded
+      if (projection._id !== 0) {
+        result._id = (doc as Record<string, unknown>)._id;
+      }
+
+      for (const key of nonIdKeys) {
+        if (projection[key] === 1) {
+          const value = this.getProjectionValue(doc, key);
+          if (value !== undefined) {
+            if (key.includes(".")) {
+              this.setProjectionValue(result, key, value);
+            } else {
+              result[key] = value;
+            }
+          }
+        }
+      }
+    } else {
+      // Exclusion mode: include all fields except specified
+      // Copy all fields first
+      for (const [key, value] of Object.entries(doc)) {
+        result[key] = value;
+      }
+
+      // Remove excluded fields
+      for (const key of keys) {
+        if (projection[key] === 0) {
+          if (key.includes(".")) {
+            // Handle nested field exclusion
+            const parts = key.split(".");
+            let current: Record<string, unknown> = result;
+            for (let i = 0; i < parts.length - 1; i++) {
+              if (current[parts[i]] && typeof current[parts[i]] === "object") {
+                current = current[parts[i]] as Record<string, unknown>;
+              } else {
+                break;
+              }
+            }
+            delete current[parts[parts.length - 1]];
+          } else {
+            delete result[key];
+          }
+        }
+      }
+    }
+
+    return result as T;
+  }
+
+  /**
+   * Get value from document for projection (supports dot notation).
+   */
+  private getProjectionValue(doc: unknown, path: string): unknown {
+    const parts = path.split(".");
+    let current: unknown = doc;
+
+    for (const part of parts) {
+      if (current === null || current === undefined) {
+        return undefined;
+      }
+
+      if (Array.isArray(current)) {
+        const index = parseInt(part, 10);
+        if (!isNaN(index)) {
+          current = current[index];
+        } else {
+          return undefined;
+        }
+      } else if (typeof current === "object") {
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        return undefined;
+      }
+    }
+
+    return current;
+  }
+
+  /**
+   * Set value in document for projection (supports dot notation).
+   */
+  private setProjectionValue(
+    doc: Record<string, unknown>,
+    path: string,
+    value: unknown
+  ): void {
+    const parts = path.split(".");
+    let current: Record<string, unknown> = doc;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      if (current[part] === undefined) {
+        current[part] = {};
+      }
+      current = current[part] as Record<string, unknown>;
+    }
+
+    current[parts[parts.length - 1]] = value;
   }
 
   /**

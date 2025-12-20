@@ -92,8 +92,14 @@ See [PROGRESS.md](./PROGRESS.md) for detailed status.
 - [x] `$inc` - Increment numeric values
 - [x] `upsert` option - Insert if not found
 
+### Phase 4: Cursor Operations (Complete)
+- [x] `cursor.sort(spec)` - Single and compound field sorting
+- [x] `cursor.limit(n)` - Limit result count
+- [x] `cursor.skip(n)` - Skip first n results
+- [x] Projection (field inclusion and exclusion)
+- [x] `collection.countDocuments(filter)` - Count matching documents
+
 ### Planned
-- Cursor operations (sort, limit, skip)
 - Logical operators ($and, $or, $not)
 - Array handling ($elemMatch, $push, $pull)
 - Indexes
