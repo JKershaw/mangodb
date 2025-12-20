@@ -152,7 +152,8 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       // Only the last document has no 'name' in any array element
       assert.strictEqual(docs.length, 1);
-      assert.ok(docs[0].items.every((item: Record<string, unknown>) => !("name" in item)));
+      const doc = docs[0] as { items: Record<string, unknown>[] };
+      assert.ok(doc.items.every((item) => !("name" in item)));
     });
   });
 
@@ -596,8 +597,8 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await collection.insertMany([{ a: 1 }]);
 
       await assert.rejects(
-        // @ts-expect-error - intentionally passing invalid type
-        async () => await collection.find({ $and: "not an array" }).toArray(),
+        async () =>
+          await collection.find({ $and: "not an array" } as never).toArray(),
         { message: "$and must be an array" }
       );
     });
@@ -607,8 +608,8 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await collection.insertMany([{ a: 1 }]);
 
       await assert.rejects(
-        // @ts-expect-error - intentionally passing invalid type
-        async () => await collection.find({ $or: { a: 1 } }).toArray(),
+        async () =>
+          await collection.find({ $or: { a: 1 } } as never).toArray(),
         { message: "$or must be an array" }
       );
     });
@@ -618,8 +619,8 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await collection.insertMany([{ a: 1 }]);
 
       await assert.rejects(
-        // @ts-expect-error - intentionally passing invalid type
-        async () => await collection.find({ $nor: null }).toArray(),
+        async () =>
+          await collection.find({ $nor: null } as never).toArray(),
         { message: "$nor must be an array" }
       );
     });
@@ -631,8 +632,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection
-            // @ts-expect-error - intentionally passing invalid usage
-            .find({ field: { $and: [{ a: 1 }] } })
+            .find({ field: { $and: [{ a: 1 }] } } as never)
             .toArray(),
         { message: "$and is not allowed as a field-level operator" }
       );
@@ -645,8 +645,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection
-            // @ts-expect-error - intentionally passing invalid usage
-            .find({ field: { $or: [{ a: 1 }] } })
+            .find({ field: { $or: [{ a: 1 }] } } as never)
             .toArray(),
         { message: "$or is not allowed as a field-level operator" }
       );
@@ -659,8 +658,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection
-            // @ts-expect-error - intentionally passing invalid usage
-            .find({ field: { $nor: [{ a: 1 }] } })
+            .find({ field: { $nor: [{ a: 1 }] } } as never)
             .toArray(),
         { message: "$nor is not allowed as a field-level operator" }
       );
@@ -673,8 +671,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection
-            // @ts-expect-error - intentionally passing invalid usage
-            .find({ field: { $not: "value" } })
+            .find({ field: { $not: "value" } } as never)
             .toArray(),
         { message: "$not requires an operator expression" }
       );
