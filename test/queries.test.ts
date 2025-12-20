@@ -500,4 +500,170 @@ describe(`Basic Query Tests (${getTestModeName()})`, () => {
       );
     });
   });
+
+  describe("Array element dot notation (querying into arrays)", () => {
+    it("should match nested field in any array element", async () => {
+      const collection = client.db(dbName).collection("array_elem_dot");
+      await collection.insertMany([
+        { items: [{ name: "Alice" }, { name: "Bob" }] },
+        { items: [{ name: "Charlie" }, { name: "Dave" }] },
+        { items: [{ name: "Eve" }] },
+      ]);
+
+      // Should match if ANY array element has name: "Alice"
+      const docs = await collection.find({ "items.name": "Alice" }).toArray();
+
+      assert.strictEqual(docs.length, 1);
+    });
+
+    it("should match deeply nested field in array elements", async () => {
+      const collection = client.db(dbName).collection("array_elem_deep");
+      await collection.insertMany([
+        { orders: [{ product: { sku: "A1" } }, { product: { sku: "B2" } }] },
+        { orders: [{ product: { sku: "C3" } }] },
+      ]);
+
+      const docs = await collection
+        .find({ "orders.product.sku": "A1" })
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+    });
+
+    it("should work with comparison operators on array element fields", async () => {
+      const collection = client.db(dbName).collection("array_elem_cmp");
+      await collection.insertMany([
+        { scores: [{ value: 50 }, { value: 80 }] },
+        { scores: [{ value: 30 }, { value: 40 }] },
+        { scores: [{ value: 90 }, { value: 95 }] },
+      ]);
+
+      // Should match if ANY score.value >= 80
+      const docs = await collection
+        .find({ "scores.value": { $gte: 80 } })
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+    });
+
+    it("should handle multiple levels of arrays", async () => {
+      const collection = client.db(dbName).collection("array_elem_multi");
+      await collection.insertMany([
+        { groups: [{ members: [{ name: "Alice" }] }] },
+        { groups: [{ members: [{ name: "Bob" }] }] },
+      ]);
+
+      const docs = await collection
+        .find({ "groups.members.name": "Alice" })
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+    });
+
+    it("should not match when no array element has the nested field value", async () => {
+      const collection = client.db(dbName).collection("array_elem_nomatch");
+      await collection.insertMany([
+        { items: [{ name: "Alice" }, { name: "Bob" }] },
+      ]);
+
+      const docs = await collection.find({ "items.name": "Charlie" }).toArray();
+
+      assert.strictEqual(docs.length, 0);
+    });
+  });
+
+  describe("Boolean comparison operators", () => {
+    it("should compare booleans with $gt (false < true)", async () => {
+      const collection = client.db(dbName).collection("bool_gt");
+      await collection.insertMany([
+        { active: false },
+        { active: true },
+        { active: false },
+      ]);
+
+      // In MongoDB, false < true, so $gt: false should match true
+      const docs = await collection
+        .find({ active: { $gt: false } })
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0].active, true);
+    });
+
+    it("should compare booleans with $lt (false < true)", async () => {
+      const collection = client.db(dbName).collection("bool_lt");
+      await collection.insertMany([
+        { active: false },
+        { active: true },
+        { active: true },
+      ]);
+
+      // $lt: true should match false
+      const docs = await collection
+        .find({ active: { $lt: true } })
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0].active, false);
+    });
+
+    it("should compare booleans with $gte", async () => {
+      const collection = client.db(dbName).collection("bool_gte");
+      await collection.insertMany([
+        { active: false },
+        { active: true },
+        { active: true },
+      ]);
+
+      // $gte: true should match only true values
+      const docs = await collection
+        .find({ active: { $gte: true } })
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+      assert.ok(docs.every((d) => d.active === true));
+    });
+
+    it("should compare booleans with $lte", async () => {
+      const collection = client.db(dbName).collection("bool_lte");
+      await collection.insertMany([
+        { active: false },
+        { active: true },
+        { active: false },
+      ]);
+
+      // $lte: false should match only false values
+      const docs = await collection
+        .find({ active: { $lte: false } })
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+      assert.ok(docs.every((d) => d.active === false));
+    });
+  });
+
+  describe("Edge cases", () => {
+    it("should handle negative array indices (no match)", async () => {
+      const collection = client.db(dbName).collection("negative_index");
+      await collection.insertMany([
+        { items: ["a", "b", "c"] },
+      ]);
+
+      // Negative indices should not match anything in MongoDB
+      const docs = await collection.find({ "items.-1": "c" }).toArray();
+
+      assert.strictEqual(docs.length, 0);
+    });
+
+    it("should handle out-of-bounds array indices (no match)", async () => {
+      const collection = client.db(dbName).collection("oob_index");
+      await collection.insertMany([
+        { items: ["a", "b", "c"] },
+      ]);
+
+      const docs = await collection.find({ "items.10": "a" }).toArray();
+
+      assert.strictEqual(docs.length, 0);
+    });
+  });
 });

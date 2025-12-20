@@ -171,35 +171,66 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
-   * Get a value from a document using dot notation.
-   * Supports nested objects and array indices.
+   * Get all possible values from a document using dot notation.
+   * When traversing arrays with non-numeric path segments, returns values from all elements.
+   * This handles MongoDB's array element querying behavior.
    */
-  private getValueByPath(doc: unknown, path: string): unknown {
+  private getValuesByPath(doc: unknown, path: string): unknown[] {
     const parts = path.split(".");
-    let current: unknown = doc;
+    let currentValues: unknown[] = [doc];
 
     for (const part of parts) {
-      if (current === null || current === undefined) {
-        return undefined;
+      const nextValues: unknown[] = [];
+
+      for (const current of currentValues) {
+        if (current === null || current === undefined) {
+          // Keep undefined to signal missing path
+          nextValues.push(undefined);
+          continue;
+        }
+
+        if (Array.isArray(current)) {
+          // Try to parse as array index
+          const index = parseInt(part, 10);
+          if (!isNaN(index) && index >= 0) {
+            // Numeric index - access specific element
+            nextValues.push(current[index]);
+          } else {
+            // Non-numeric - traverse into each array element
+            for (const elem of current) {
+              if (elem !== null && typeof elem === "object" && !Array.isArray(elem)) {
+                nextValues.push((elem as Record<string, unknown>)[part]);
+              } else if (Array.isArray(elem)) {
+                // Handle nested arrays - recurse into each element
+                for (const nested of elem) {
+                  if (nested !== null && typeof nested === "object") {
+                    nextValues.push((nested as Record<string, unknown>)[part]);
+                  }
+                }
+              }
+            }
+          }
+        } else if (typeof current === "object") {
+          nextValues.push((current as Record<string, unknown>)[part]);
+        } else {
+          nextValues.push(undefined);
+        }
       }
 
-      if (Array.isArray(current)) {
-        // Try to parse as array index
-        const index = parseInt(part, 10);
-        if (!isNaN(index)) {
-          current = current[index];
-        } else {
-          // Not a valid index for array - no match
-          return undefined;
-        }
-      } else if (typeof current === "object") {
-        current = (current as Record<string, unknown>)[part];
-      } else {
-        return undefined;
-      }
+      currentValues = nextValues;
     }
 
-    return current;
+    return currentValues;
+  }
+
+  /**
+   * Get a single value from a document using dot notation.
+   * For simple cases where array traversal isn't needed.
+   */
+  private getValueByPath(doc: unknown, path: string): unknown {
+    const values = this.getValuesByPath(doc, path);
+    // Return first non-undefined value, or undefined if all are undefined
+    return values.find((v) => v !== undefined) ?? values[0];
   }
 
   /**
@@ -235,6 +266,11 @@ export class MongoneCollection<T extends Document = Document> {
       }
       if (typeof a === "string" && typeof b === "string") {
         return a.localeCompare(b);
+      }
+      // Handle boolean comparison: false < true
+      if (typeof a === "boolean" && typeof b === "boolean") {
+        if (a === b) return 0;
+        return a ? 1 : -1; // false < true, so false returns -1, true returns 1
       }
     }
 
@@ -390,28 +426,40 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
+   * Check if ANY of the values matches a filter condition.
+   */
+  private anyValueMatches(
+    values: unknown[],
+    filterValue: unknown,
+    isOperator: boolean
+  ): boolean {
+    if (isOperator) {
+      // For operators, check if ANY value matches
+      return values.some((v) =>
+        this.matchesOperators(v, filterValue as QueryOperators)
+      );
+    } else {
+      // For direct values, check if ANY value matches
+      return values.some((v) => this.matchesSingleValue(v, filterValue));
+    }
+  }
+
+  /**
    * Check if a document matches a filter.
    * Supports:
    * - Empty filter (matches all)
    * - Simple equality
-   * - Dot notation for nested fields
+   * - Dot notation for nested fields (including array element traversal)
    * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin)
    * - Array field matching
    */
   private matchesFilter(doc: T, filter: Filter<T>): boolean {
     for (const [key, filterValue] of Object.entries(filter)) {
-      const docValue = this.getValueByPath(doc, key);
+      const docValues = this.getValuesByPath(doc, key);
+      const isOperator = this.isOperatorObject(filterValue);
 
-      if (this.isOperatorObject(filterValue)) {
-        // Handle query operators
-        if (!this.matchesOperators(docValue, filterValue as QueryOperators)) {
-          return false;
-        }
-      } else {
-        // Handle direct value comparison
-        if (!this.matchesSingleValue(docValue, filterValue)) {
-          return false;
-        }
+      if (!this.anyValueMatches(docValues, filterValue, isOperator)) {
+        return false;
       }
     }
     return true;

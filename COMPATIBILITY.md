@@ -168,6 +168,22 @@ await collection.find({ "user.name": "Alice" }).toArray();  // Matches
 await collection.find({ "user.scores.0": 10 }).toArray();   // Matches (array index)
 ```
 
+### Array Element Dot Notation (Tested)
+- `{ "items.name": "value" }` matches if ANY array element's nested field equals the value
+- Works with comparison operators
+- Supports multiple levels of nesting
+
+**Example**:
+```typescript
+// Given: { items: [{ name: "Alice" }, { name: "Bob" }] }
+await collection.find({ "items.name": "Alice" }).toArray();  // Matches
+await collection.find({ "items.name": "Charlie" }).toArray();  // No match
+
+// With comparison operators:
+// Given: { scores: [{ value: 50 }, { value: 80 }] }
+await collection.find({ "scores.value": { $gte: 80 } }).toArray();  // Matches
+```
+
 ---
 
 ## Comparison Operators
@@ -188,15 +204,21 @@ await collection.find({ value: { $ne: 10 } }).toArray();
 ```
 
 ### $gt, $gte, $lt, $lte - Comparison
-- Work with numbers, strings (lexicographic), and dates
+- Work with numbers, strings (lexicographic), dates, and booleans
 - No type coercion - types must be comparable
 - Date comparison uses timestamp values
+- Boolean comparison: `false < true`
 
 **Example**:
 ```typescript
 await collection.find({ age: { $gte: 18, $lt: 65 } }).toArray();
 await collection.find({ name: { $gt: "M" } }).toArray();  // Names after "M"
 await collection.find({ createdAt: { $gte: new Date("2024-01-01") } }).toArray();
+
+// Boolean comparison:
+// Given: [{ active: false }, { active: true }]
+await collection.find({ active: { $gt: false } }).toArray();  // Matches only true
+await collection.find({ active: { $lte: false } }).toArray();  // Matches only false
 ```
 
 ### $in - Match Any
