@@ -238,6 +238,108 @@ await collection.find({ tags: { $in: ["a", "x"] } }).toArray();  // Matches (has
 
 ---
 
+## Update Operations
+
+### updateOne / updateMany
+
+**Return Value**:
+```typescript
+{
+  acknowledged: true,
+  matchedCount: number,   // Number of documents matching filter
+  modifiedCount: number,  // Number of documents actually modified
+  upsertedCount: number,  // 0 or 1
+  upsertedId: ObjectId | null  // ID of upserted document, or null
+}
+```
+
+**Behaviors**:
+- `matchedCount` counts documents matching filter
+- `modifiedCount` only counts documents where values actually changed
+- Setting same value results in `modifiedCount: 0`
+
+### $set Operator
+
+- Sets field values on matched documents
+- Creates fields if they don't exist
+- Supports dot notation for nested fields
+- Dot notation creates nested structure if path doesn't exist
+
+**Example**:
+```typescript
+// Creates nested structure: { a: { b: { c: "value" } } }
+await collection.updateOne({ name: "Alice" }, { $set: { "a.b.c": "value" } });
+
+// Update array element by index
+await collection.updateOne({}, { $set: { "items.0": "newValue" } });
+```
+
+### $unset Operator
+
+- Removes fields from documents
+- Value doesn't matter (commonly "" or 1)
+- No-op if field doesn't exist (still counted as matched)
+
+**Example**:
+```typescript
+await collection.updateOne({ name: "Alice" }, { $unset: { age: "" } });
+```
+
+### $inc Operator
+
+- Increments numeric fields
+- Creates field with increment value if doesn't exist
+- Negative values decrement
+- Works with floating point numbers
+
+**Example**:
+```typescript
+// Increment by 10
+await collection.updateOne({ name: "Alice" }, { $inc: { score: 10 } });
+
+// Decrement by 5
+await collection.updateOne({ name: "Alice" }, { $inc: { score: -5 } });
+
+// Creates field with value 50 if doesn't exist
+await collection.updateOne({ name: "Alice" }, { $inc: { newField: 50 } });
+```
+
+### Upsert Option
+
+- When `upsert: true` and no match found, inserts new document
+- New document includes filter equality conditions
+- `$set` and `$inc` values applied to new document
+- Returns `upsertedId` with the new document's ObjectId
+
+**Example**:
+```typescript
+// If no document with name: "Bob", creates { name: "Bob", age: 25 }
+await collection.updateOne(
+  { name: "Bob" },
+  { $set: { age: 25 } },
+  { upsert: true }
+);
+```
+
+### Combining Operators
+
+- Multiple operators can be used in single update
+- Applied in order: $set, $unset, $inc
+
+**Example**:
+```typescript
+await collection.updateOne(
+  { name: "Alice" },
+  {
+    $set: { status: "active" },
+    $inc: { loginCount: 1 },
+    $unset: { tempField: "" }
+  }
+);
+```
+
+---
+
 ## Type Ordering in Sort (To Be Tested)
 
 MongoDB has specific ordering for mixed types:

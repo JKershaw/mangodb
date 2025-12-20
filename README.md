@@ -85,8 +85,14 @@ See [PROGRESS.md](./PROGRESS.md) for detailed status.
 - [x] Array field matching (any element match)
 - [x] Date serialization and comparison
 
+### Phase 3: Updates (Complete)
+- [x] `updateOne` and `updateMany` operations
+- [x] `$set` - Set field values (with dot notation for nested fields)
+- [x] `$unset` - Remove fields
+- [x] `$inc` - Increment numeric values
+- [x] `upsert` option - Insert if not found
+
 ### Planned
-- Update operations ($set, $unset, $inc)
 - Cursor operations (sort, limit, skip)
 - Logical operators ($and, $or, $not)
 - Array handling ($elemMatch, $push, $pull)

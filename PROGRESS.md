@@ -4,12 +4,46 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 2 - Basic Queries
+**Phase**: 3 - Updates
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-20 - Phase 3: Updates
+
+#### Added
+- Update operations for modifying documents:
+  - `updateOne(filter, update, options)` - Update a single matching document
+  - `updateMany(filter, update, options)` - Update all matching documents
+- Update operators:
+  - `$set` - Set field values (supports dot notation for nested fields)
+  - `$unset` - Remove fields from documents
+  - `$inc` - Increment/decrement numeric values
+- `upsert` option - Insert document if no match found
+- Combining multiple update operators in single update
+
+#### Behaviors Implemented
+- Dot notation in `$set` creates nested structures when path doesn't exist
+- `$inc` creates field with increment value if field doesn't exist
+- `$unset` on non-existent field is a no-op
+- `modifiedCount` is 0 when values don't actually change
+- Upsert includes filter equality fields in the new document
+- Array element updates via index using dot notation (e.g., `"items.0"`)
+
+#### Return Values
+```typescript
+{
+  acknowledged: true,
+  matchedCount: number,   // Documents matching filter
+  modifiedCount: number,  // Documents actually modified
+  upsertedCount: number,  // 0 or 1
+  upsertedId: ObjectId | null
+}
+```
+
+---
 
 ### 2024-12-20 - Phase 2: Basic Queries
 

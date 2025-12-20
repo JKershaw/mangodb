@@ -24,6 +24,18 @@ export interface TestDb {
   dropDatabase(): Promise<void>;
 }
 
+export interface UpdateResult {
+  acknowledged: boolean;
+  matchedCount: number;
+  modifiedCount: number;
+  upsertedCount: number;
+  upsertedId: unknown | null;
+}
+
+export interface UpdateOptions {
+  upsert?: boolean;
+}
+
 export interface TestCollection<T extends Document = Document> {
   insertOne(
     doc: T
@@ -39,6 +51,16 @@ export interface TestCollection<T extends Document = Document> {
   deleteMany(
     filter: Partial<T>
   ): Promise<{ acknowledged: boolean; deletedCount: number }>;
+  updateOne(
+    filter: Partial<T>,
+    update: Document,
+    options?: UpdateOptions
+  ): Promise<UpdateResult>;
+  updateMany(
+    filter: Partial<T>,
+    update: Document,
+    options?: UpdateOptions
+  ): Promise<UpdateResult>;
 }
 
 export interface TestCursor<T> {
