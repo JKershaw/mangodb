@@ -599,7 +599,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $and: "not an array" } as never).toArray(),
-        { message: "$and must be a nonempty array" }
+        { message: "$and must be an array" }
       );
     });
 
@@ -610,7 +610,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $or: { a: 1 } } as never).toArray(),
-        { message: "$or must be a nonempty array" }
+        { message: "$or must be an array" }
       );
     });
 
@@ -621,7 +621,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $nor: null } as never).toArray(),
-        { message: "$nor must be a nonempty array" }
+        { message: "$nor must be an array" }
       );
     });
 

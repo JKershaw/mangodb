@@ -539,7 +539,10 @@ export class MongoneCollection<T extends Document = Document> {
     for (const [key, filterValue] of Object.entries(filter)) {
       // Handle top-level logical operators
       if (key === "$and") {
-        if (!Array.isArray(filterValue) || filterValue.length === 0) {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$and must be an array");
+        }
+        if (filterValue.length === 0) {
           throw new Error("$and must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
@@ -551,7 +554,10 @@ export class MongoneCollection<T extends Document = Document> {
       }
 
       if (key === "$or") {
-        if (!Array.isArray(filterValue) || filterValue.length === 0) {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$or must be an array");
+        }
+        if (filterValue.length === 0) {
           throw new Error("$or must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
@@ -563,7 +569,10 @@ export class MongoneCollection<T extends Document = Document> {
       }
 
       if (key === "$nor") {
-        if (!Array.isArray(filterValue) || filterValue.length === 0) {
+        if (!Array.isArray(filterValue)) {
+          throw new Error("$nor must be an array");
+        }
+        if (filterValue.length === 0) {
           throw new Error("$nor must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
