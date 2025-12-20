@@ -420,18 +420,18 @@ export class MongoneCollection<T extends Document = Document> {
         }
 
         case "$not": {
-          // $not requires an operator expression, not a plain value
+          // $not requires an operator expression (or regex), not a plain value
           if (
             opValue === null ||
             typeof opValue !== "object" ||
             Array.isArray(opValue)
           ) {
-            throw new Error("$not requires an operator expression");
+            throw new Error("$not needs a regex or a document");
           }
           const notOps = opValue as QueryOperators;
           const notKeys = Object.keys(notOps);
           if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith("$"))) {
-            throw new Error("$not requires an operator expression");
+            throw new Error("$not needs a regex or a document");
           }
           // $not does NOT match documents where the field is missing
           if (docValue === undefined) return false;
@@ -443,13 +443,13 @@ export class MongoneCollection<T extends Document = Document> {
         }
 
         case "$and":
-          throw new Error("$and is not allowed as a field-level operator");
+          throw new Error("unknown operator: $and");
 
         case "$or":
-          throw new Error("$or is not allowed as a field-level operator");
+          throw new Error("unknown operator: $or");
 
         case "$nor":
-          throw new Error("$nor is not allowed as a field-level operator");
+          throw new Error("unknown operator: $nor");
 
         default:
           // Unknown operator - ignore for forward compatibility
@@ -539,12 +539,10 @@ export class MongoneCollection<T extends Document = Document> {
     for (const [key, filterValue] of Object.entries(filter)) {
       // Handle top-level logical operators
       if (key === "$and") {
-        if (!Array.isArray(filterValue)) {
-          throw new Error("$and must be an array");
+        if (!Array.isArray(filterValue) || filterValue.length === 0) {
+          throw new Error("$and/$or/$nor must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
-        // Empty $and is vacuously true (matches all)
-        if (conditions.length === 0) continue;
         // All conditions must match
         if (!conditions.every((cond) => this.matchesFilter(doc, cond))) {
           return false;
@@ -553,12 +551,10 @@ export class MongoneCollection<T extends Document = Document> {
       }
 
       if (key === "$or") {
-        if (!Array.isArray(filterValue)) {
-          throw new Error("$or must be an array");
+        if (!Array.isArray(filterValue) || filterValue.length === 0) {
+          throw new Error("$and/$or/$nor must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
-        // Empty $or matches nothing
-        if (conditions.length === 0) return false;
         // At least one condition must match
         if (!conditions.some((cond) => this.matchesFilter(doc, cond))) {
           return false;
@@ -567,12 +563,10 @@ export class MongoneCollection<T extends Document = Document> {
       }
 
       if (key === "$nor") {
-        if (!Array.isArray(filterValue)) {
-          throw new Error("$nor must be an array");
+        if (!Array.isArray(filterValue) || filterValue.length === 0) {
+          throw new Error("$and/$or/$nor must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
-        // Empty $nor is vacuously true (matches all - none of zero conditions are true)
-        if (conditions.length === 0) continue;
         // No condition may match
         if (conditions.some((cond) => this.matchesFilter(doc, cond))) {
           return false;

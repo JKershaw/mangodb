@@ -224,14 +224,14 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 2);
     });
 
-    it("should handle empty $and array (matches all)", async () => {
+    it("should throw error for empty $and array", async () => {
       const collection = client.db(dbName).collection("and_empty");
       await collection.insertMany([{ a: 1 }, { b: 2 }, { c: 3 }]);
 
-      const docs = await collection.find({ $and: [] }).toArray();
-
-      // Empty $and is vacuously true - matches all documents
-      assert.strictEqual(docs.length, 3);
+      await assert.rejects(
+        async () => await collection.find({ $and: [] } as never).toArray(),
+        { message: "$and/$or/$nor must be a nonempty array" }
+      );
     });
 
     it("should support nested $and with $or", async () => {
@@ -303,14 +303,14 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       assert.ok(docs.every((d) => d.type === "A"));
     });
 
-    it("should handle empty $or array (matches nothing)", async () => {
+    it("should throw error for empty $or array", async () => {
       const collection = client.db(dbName).collection("or_empty");
       await collection.insertMany([{ a: 1 }, { b: 2 }, { c: 3 }]);
 
-      const docs = await collection.find({ $or: [] }).toArray();
-
-      // Empty $or matches nothing
-      assert.strictEqual(docs.length, 0);
+      await assert.rejects(
+        async () => await collection.find({ $or: [] } as never).toArray(),
+        { message: "$and/$or/$nor must be a nonempty array" }
+      );
     });
 
     it("should support nested $or", async () => {
@@ -498,14 +498,14 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs[0].active, true);
     });
 
-    it("should handle empty $nor array (matches all)", async () => {
+    it("should throw error for empty $nor array", async () => {
       const collection = client.db(dbName).collection("nor_empty");
       await collection.insertMany([{ a: 1 }, { b: 2 }, { c: 3 }]);
 
-      const docs = await collection.find({ $nor: [] }).toArray();
-
-      // Empty $nor matches all documents (none of zero conditions are true)
-      assert.strictEqual(docs.length, 3);
+      await assert.rejects(
+        async () => await collection.find({ $nor: [] } as never).toArray(),
+        { message: "$and/$or/$nor must be a nonempty array" }
+      );
     });
   });
 
@@ -599,7 +599,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $and: "not an array" } as never).toArray(),
-        { message: "$and must be an array" }
+        { message: "$and/$or/$nor must be a nonempty array" }
       );
     });
 
@@ -610,7 +610,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $or: { a: 1 } } as never).toArray(),
-        { message: "$or must be an array" }
+        { message: "$and/$or/$nor must be a nonempty array" }
       );
     });
 
@@ -621,7 +621,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $nor: null } as never).toArray(),
-        { message: "$nor must be an array" }
+        { message: "$and/$or/$nor must be a nonempty array" }
       );
     });
 
@@ -634,7 +634,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
           await collection
             .find({ field: { $and: [{ a: 1 }] } } as never)
             .toArray(),
-        { message: "$and is not allowed as a field-level operator" }
+        { message: "unknown operator: $and" }
       );
     });
 
@@ -647,7 +647,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
           await collection
             .find({ field: { $or: [{ a: 1 }] } } as never)
             .toArray(),
-        { message: "$or is not allowed as a field-level operator" }
+        { message: "unknown operator: $or" }
       );
     });
 
@@ -660,7 +660,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
           await collection
             .find({ field: { $nor: [{ a: 1 }] } } as never)
             .toArray(),
-        { message: "$nor is not allowed as a field-level operator" }
+        { message: "unknown operator: $nor" }
       );
     });
 
@@ -673,7 +673,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
           await collection
             .find({ field: { $not: "value" } } as never)
             .toArray(),
-        { message: "$not requires an operator expression" }
+        { message: "$not needs a regex or a document" }
       );
     });
   });

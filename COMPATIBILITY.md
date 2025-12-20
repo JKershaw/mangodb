@@ -503,9 +503,8 @@ await collection.find({
 
 **Behaviors**:
 - All conditions in the array must match
-- Empty array `$and: []` matches all documents (vacuous truth)
 - Can be nested with other logical operators
-- Throws error if value is not an array
+- Throws error if value is not a nonempty array
 
 ### $or
 
@@ -523,9 +522,8 @@ await collection.find({
 
 **Behaviors**:
 - At least one condition must match
-- Empty array `$or: []` matches no documents
 - Field conditions are AND'd with the $or result
-- Throws error if value is not an array
+- Throws error if value is not a nonempty array
 
 ### $not
 
@@ -540,7 +538,7 @@ await collection.find({ status: { $not: { $in: ["deleted", "archived"] } } }).to
 - **IMPORTANT**: `$not` does NOT match documents where the field is missing
 - This differs from `$ne`, which does match missing fields
 - Example: `{ value: { $not: { $gt: 25 } } }` on `{ other: "field" }` does NOT match
-- Throws error if value is not an operator expression (e.g., `{ $not: "value" }`)
+- Throws error "$not needs a regex or a document" if value is not an operator expression
 
 ### $nor
 
@@ -553,8 +551,7 @@ await collection.find({
 **Behaviors**:
 - No condition in the array may match (opposite of $or)
 - Matches documents where the queried field is missing
-- Empty array `$nor: []` matches all documents
-- Throws error if value is not an array
+- Throws error if value is not a nonempty array
 
 ### Field-Level Logical Operator Errors
 
@@ -566,7 +563,7 @@ await collection.find({ $and: [{ a: 1 }, { b: 2 }] }).toArray();
 
 // INVALID - throws error
 await collection.find({ field: { $and: [{ a: 1 }] } }).toArray();
-// Error: "$and is not allowed as a field-level operator"
+// Error: "unknown operator: $and"
 ```
 
 ---
