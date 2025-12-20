@@ -230,7 +230,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => await collection.find({ $and: [] } as never).toArray(),
-        { message: "$and/$or/$nor must be a nonempty array" }
+        { message: "$and must be a nonempty array" }
       );
     });
 
@@ -309,7 +309,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => await collection.find({ $or: [] } as never).toArray(),
-        { message: "$and/$or/$nor must be a nonempty array" }
+        { message: "$or must be a nonempty array" }
       );
     });
 
@@ -504,7 +504,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => await collection.find({ $nor: [] } as never).toArray(),
-        { message: "$and/$or/$nor must be a nonempty array" }
+        { message: "$nor must be a nonempty array" }
       );
     });
   });
@@ -599,7 +599,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $and: "not an array" } as never).toArray(),
-        { message: "$and/$or/$nor must be a nonempty array" }
+        { message: "$and must be a nonempty array" }
       );
     });
 
@@ -610,7 +610,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $or: { a: 1 } } as never).toArray(),
-        { message: "$and/$or/$nor must be a nonempty array" }
+        { message: "$or must be a nonempty array" }
       );
     });
 
@@ -621,7 +621,7 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () =>
           await collection.find({ $nor: null } as never).toArray(),
-        { message: "$and/$or/$nor must be a nonempty array" }
+        { message: "$nor must be a nonempty array" }
       );
     });
 

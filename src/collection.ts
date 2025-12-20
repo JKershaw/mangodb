@@ -540,7 +540,7 @@ export class MongoneCollection<T extends Document = Document> {
       // Handle top-level logical operators
       if (key === "$and") {
         if (!Array.isArray(filterValue) || filterValue.length === 0) {
-          throw new Error("$and/$or/$nor must be a nonempty array");
+          throw new Error("$and must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
         // All conditions must match
@@ -552,7 +552,7 @@ export class MongoneCollection<T extends Document = Document> {
 
       if (key === "$or") {
         if (!Array.isArray(filterValue) || filterValue.length === 0) {
-          throw new Error("$and/$or/$nor must be a nonempty array");
+          throw new Error("$or must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
         // At least one condition must match
@@ -564,7 +564,7 @@ export class MongoneCollection<T extends Document = Document> {
 
       if (key === "$nor") {
         if (!Array.isArray(filterValue) || filterValue.length === 0) {
-          throw new Error("$and/$or/$nor must be a nonempty array");
+          throw new Error("$nor must be a nonempty array");
         }
         const conditions = filterValue as Filter<T>[];
         // No condition may match
