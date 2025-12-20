@@ -5,6 +5,34 @@ import { join, dirname } from "node:path";
 
 type Document = Record<string, unknown>;
 
+/**
+ * Query operators supported by Mongone.
+ */
+interface QueryOperators {
+  $eq?: unknown;
+  $ne?: unknown;
+  $gt?: unknown;
+  $gte?: unknown;
+  $lt?: unknown;
+  $lte?: unknown;
+  $in?: unknown[];
+  $nin?: unknown[];
+}
+
+/**
+ * A filter value can be a direct value or an object with query operators.
+ */
+type FilterValue = unknown | QueryOperators;
+
+/**
+ * Filter type for queries.
+ */
+type Filter<T> = {
+  [P in keyof T]?: FilterValue;
+} & {
+  [key: string]: FilterValue;
+};
+
 interface InsertOneResult {
   acknowledged: boolean;
   insertedId: ObjectId;
@@ -59,22 +87,26 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Serialize a document for JSON storage.
-   * Converts ObjectId to a special format that can be restored.
+   * Converts ObjectId and Date to special formats that can be restored.
    */
   private serializeDocument(doc: T): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(doc)) {
       if (value instanceof ObjectId) {
         result[key] = { $oid: value.toHexString() };
+      } else if (value instanceof Date) {
+        result[key] = { $date: value.toISOString() };
       } else if (value && typeof value === "object" && !Array.isArray(value)) {
         result[key] = this.serializeDocument(value as T);
       } else if (Array.isArray(value)) {
         result[key] = value.map((item) =>
-          item && typeof item === "object" && !Array.isArray(item)
-            ? this.serializeDocument(item as T)
-            : item instanceof ObjectId
-              ? { $oid: item.toHexString() }
-              : item
+          item instanceof ObjectId
+            ? { $oid: item.toHexString() }
+            : item instanceof Date
+              ? { $date: item.toISOString() }
+              : item && typeof item === "object" && !Array.isArray(item)
+                ? this.serializeDocument(item as T)
+                : item
         );
       } else {
         result[key] = value;
@@ -85,7 +117,7 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Deserialize a document from JSON storage.
-   * Restores ObjectId from the special format.
+   * Restores ObjectId and Date from the special formats.
    */
   private deserializeDocument(doc: Record<string, unknown>): T {
     const result: Record<string, unknown> = {};
@@ -98,6 +130,14 @@ export class MongoneCollection<T extends Document = Document> {
         typeof (value as { $oid: unknown }).$oid === "string"
       ) {
         result[key] = new ObjectId((value as { $oid: string }).$oid);
+      } else if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "$date" in value &&
+        typeof (value as { $date: unknown }).$date === "string"
+      ) {
+        result[key] = new Date((value as { $date: string }).$date);
       } else if (value && typeof value === "object" && !Array.isArray(value)) {
         result[key] = this.deserializeDocument(value as Record<string, unknown>);
       } else if (Array.isArray(value)) {
@@ -110,6 +150,14 @@ export class MongoneCollection<T extends Document = Document> {
             typeof (item as { $oid: unknown }).$oid === "string"
           ) {
             return new ObjectId((item as { $oid: string }).$oid);
+          } else if (
+            item &&
+            typeof item === "object" &&
+            !Array.isArray(item) &&
+            "$date" in item &&
+            typeof (item as { $date: unknown }).$date === "string"
+          ) {
+            return new Date((item as { $date: string }).$date);
           } else if (item && typeof item === "object" && !Array.isArray(item)) {
             return this.deserializeDocument(item as Record<string, unknown>);
           }
@@ -123,22 +171,294 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
-   * Check if a document matches a filter.
-   * Currently supports empty filter and simple equality.
+   * Get all possible values from a document using dot notation.
+   * When traversing arrays with non-numeric path segments, returns values from all elements.
+   * This handles MongoDB's array element querying behavior.
    */
-  private matchesFilter(doc: T, filter: Partial<T>): boolean {
-    for (const [key, value] of Object.entries(filter)) {
-      const docValue = doc[key];
+  private getValuesByPath(doc: unknown, path: string): unknown[] {
+    const parts = path.split(".");
+    let currentValues: unknown[] = [doc];
 
-      // Handle ObjectId comparison
-      if (value instanceof ObjectId) {
-        if (!(docValue instanceof ObjectId)) {
-          return false;
+    for (const part of parts) {
+      const nextValues: unknown[] = [];
+
+      for (const current of currentValues) {
+        if (current === null || current === undefined) {
+          // Keep undefined to signal missing path
+          nextValues.push(undefined);
+          continue;
         }
-        if (!value.equals(docValue)) {
-          return false;
+
+        if (Array.isArray(current)) {
+          // Try to parse as array index
+          const index = parseInt(part, 10);
+          if (!isNaN(index) && index >= 0) {
+            // Numeric index - access specific element
+            nextValues.push(current[index]);
+          } else {
+            // Non-numeric - traverse into each array element
+            for (const elem of current) {
+              if (elem !== null && typeof elem === "object" && !Array.isArray(elem)) {
+                nextValues.push((elem as Record<string, unknown>)[part]);
+              } else if (Array.isArray(elem)) {
+                // Handle nested arrays - recurse into each element
+                for (const nested of elem) {
+                  if (nested !== null && typeof nested === "object") {
+                    nextValues.push((nested as Record<string, unknown>)[part]);
+                  }
+                }
+              }
+            }
+          }
+        } else if (typeof current === "object") {
+          nextValues.push((current as Record<string, unknown>)[part]);
+        } else {
+          nextValues.push(undefined);
         }
-      } else if (docValue !== value) {
+      }
+
+      currentValues = nextValues;
+    }
+
+    return currentValues;
+  }
+
+  /**
+   * Get a single value from a document using dot notation.
+   * For simple cases where array traversal isn't needed.
+   */
+  private getValueByPath(doc: unknown, path: string): unknown {
+    const values = this.getValuesByPath(doc, path);
+    // Return first non-undefined value, or undefined if all are undefined
+    return values.find((v) => v !== undefined) ?? values[0];
+  }
+
+  /**
+   * Check if an operator object contains query operators.
+   */
+  private isOperatorObject(value: unknown): value is QueryOperators {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+    const keys = Object.keys(value as object);
+    return keys.length > 0 && keys.every((k) => k.startsWith("$"));
+  }
+
+  /**
+   * Compare two values according to MongoDB comparison rules.
+   * Returns negative if a < b, positive if a > b, 0 if equal.
+   */
+  private compareValues(a: unknown, b: unknown): number {
+    // Handle ObjectId
+    if (a instanceof ObjectId && b instanceof ObjectId) {
+      return a.toHexString().localeCompare(b.toHexString());
+    }
+
+    // Handle Date
+    if (a instanceof Date && b instanceof Date) {
+      return a.getTime() - b.getTime();
+    }
+
+    // Handle same types
+    if (typeof a === typeof b) {
+      if (typeof a === "number" && typeof b === "number") {
+        return a - b;
+      }
+      if (typeof a === "string" && typeof b === "string") {
+        return a.localeCompare(b);
+      }
+      // Handle boolean comparison: false < true
+      if (typeof a === "boolean" && typeof b === "boolean") {
+        if (a === b) return 0;
+        return a ? 1 : -1; // false < true, so false returns -1, true returns 1
+      }
+    }
+
+    // Handle mixed types - return NaN to indicate incomparable
+    return NaN;
+  }
+
+  /**
+   * Check if two values are equal according to MongoDB rules.
+   */
+  private valuesEqual(a: unknown, b: unknown): boolean {
+    // Handle ObjectId
+    if (a instanceof ObjectId && b instanceof ObjectId) {
+      return a.equals(b);
+    }
+
+    // Handle Date
+    if (a instanceof Date && b instanceof Date) {
+      return a.getTime() === b.getTime();
+    }
+
+    // Handle arrays - must be exact match
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      return a.every((val, idx) => this.valuesEqual(val, b[idx]));
+    }
+
+    // Handle null
+    if (a === null && b === null) {
+      return true;
+    }
+
+    // Handle objects
+    if (
+      a !== null &&
+      b !== null &&
+      typeof a === "object" &&
+      typeof b === "object" &&
+      !Array.isArray(a) &&
+      !Array.isArray(b)
+    ) {
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      if (aKeys.length !== bKeys.length) return false;
+      return aKeys.every((key) =>
+        this.valuesEqual(
+          (a as Record<string, unknown>)[key],
+          (b as Record<string, unknown>)[key]
+        )
+      );
+    }
+
+    return a === b;
+  }
+
+  /**
+   * Check if a value matches query operators.
+   */
+  private matchesOperators(
+    docValue: unknown,
+    operators: QueryOperators
+  ): boolean {
+    for (const [op, opValue] of Object.entries(operators)) {
+      switch (op) {
+        case "$eq":
+          if (!this.matchesSingleValue(docValue, opValue)) return false;
+          break;
+
+        case "$ne":
+          if (this.matchesSingleValue(docValue, opValue)) return false;
+          break;
+
+        case "$gt": {
+          const cmp = this.compareValues(docValue, opValue);
+          if (isNaN(cmp) || cmp <= 0) return false;
+          break;
+        }
+
+        case "$gte": {
+          const cmp = this.compareValues(docValue, opValue);
+          if (isNaN(cmp) || cmp < 0) return false;
+          break;
+        }
+
+        case "$lt": {
+          const cmp = this.compareValues(docValue, opValue);
+          if (isNaN(cmp) || cmp >= 0) return false;
+          break;
+        }
+
+        case "$lte": {
+          const cmp = this.compareValues(docValue, opValue);
+          if (isNaN(cmp) || cmp > 0) return false;
+          break;
+        }
+
+        case "$in": {
+          const arr = opValue as unknown[];
+          if (!this.matchesIn(docValue, arr)) return false;
+          break;
+        }
+
+        case "$nin": {
+          const arr = opValue as unknown[];
+          if (this.matchesIn(docValue, arr)) return false;
+          break;
+        }
+
+        default:
+          // Unknown operator - ignore
+          break;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Check if a document value matches any value in the $in array.
+   */
+  private matchesIn(docValue: unknown, inValues: unknown[]): boolean {
+    // If docValue is an array, check if any element matches any in value
+    if (Array.isArray(docValue)) {
+      return docValue.some((dv) =>
+        inValues.some((iv) => this.valuesEqual(dv, iv))
+      );
+    }
+    // Otherwise check if docValue matches any in value
+    return inValues.some((iv) => this.valuesEqual(docValue, iv));
+  }
+
+  /**
+   * Check if a document value matches a single filter value.
+   * Handles array field matching (any element match).
+   */
+  private matchesSingleValue(docValue: unknown, filterValue: unknown): boolean {
+    // Handle null matching: matches null values and missing fields
+    if (filterValue === null) {
+      return docValue === null || docValue === undefined;
+    }
+
+    // Direct equality check
+    if (this.valuesEqual(docValue, filterValue)) {
+      return true;
+    }
+
+    // Array field matching: if doc field is array and filter is single value,
+    // match if any array element equals the filter value
+    if (Array.isArray(docValue) && !Array.isArray(filterValue)) {
+      return docValue.some((elem) => this.valuesEqual(elem, filterValue));
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if ANY of the values matches a filter condition.
+   */
+  private anyValueMatches(
+    values: unknown[],
+    filterValue: unknown,
+    isOperator: boolean
+  ): boolean {
+    if (isOperator) {
+      // For operators, check if ANY value matches
+      return values.some((v) =>
+        this.matchesOperators(v, filterValue as QueryOperators)
+      );
+    } else {
+      // For direct values, check if ANY value matches
+      return values.some((v) => this.matchesSingleValue(v, filterValue));
+    }
+  }
+
+  /**
+   * Check if a document matches a filter.
+   * Supports:
+   * - Empty filter (matches all)
+   * - Simple equality
+   * - Dot notation for nested fields (including array element traversal)
+   * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin)
+   * - Array field matching
+   */
+  private matchesFilter(doc: T, filter: Filter<T>): boolean {
+    for (const [key, filterValue] of Object.entries(filter)) {
+      const docValues = this.getValuesByPath(doc, key);
+      const isOperator = this.isOperatorObject(filterValue);
+
+      if (!this.anyValueMatches(docValues, filterValue, isOperator)) {
         return false;
       }
     }
@@ -193,7 +513,7 @@ export class MongoneCollection<T extends Document = Document> {
   /**
    * Find a single document matching the filter.
    */
-  async findOne(filter: Partial<T> = {}): Promise<T | null> {
+  async findOne(filter: Filter<T> = {}): Promise<T | null> {
     const documents = await this.readDocuments();
 
     for (const doc of documents) {
@@ -209,7 +529,7 @@ export class MongoneCollection<T extends Document = Document> {
    * Find documents matching the filter.
    * Returns a cursor for further operations.
    */
-  find(filter: Partial<T> = {}): MongoneCursor<T> {
+  find(filter: Filter<T> = {}): MongoneCursor<T> {
     return new MongoneCursor<T>(async () => {
       const documents = await this.readDocuments();
       return documents.filter((doc) => this.matchesFilter(doc, filter));
@@ -219,7 +539,7 @@ export class MongoneCollection<T extends Document = Document> {
   /**
    * Delete a single document matching the filter.
    */
-  async deleteOne(filter: Partial<T>): Promise<DeleteResult> {
+  async deleteOne(filter: Filter<T>): Promise<DeleteResult> {
     const documents = await this.readDocuments();
     let deletedCount = 0;
 
@@ -246,7 +566,7 @@ export class MongoneCollection<T extends Document = Document> {
   /**
    * Delete all documents matching the filter.
    */
-  async deleteMany(filter: Partial<T>): Promise<DeleteResult> {
+  async deleteMany(filter: Filter<T>): Promise<DeleteResult> {
     const documents = await this.readDocuments();
     const remaining = documents.filter((doc) => !this.matchesFilter(doc, filter));
     const deletedCount = documents.length - remaining.length;

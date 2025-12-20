@@ -2,11 +2,11 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 1 - Foundation
+## Current Phase: Phase 3 - Updates
 
 ---
 
-## Phase 1: Foundation (Current)
+## Phase 1: Foundation (Complete)
 
 **Goal**: Establish core abstractions and basic CRUD operations.
 
@@ -34,26 +34,28 @@ This document outlines the implementation phases for Mongone. Each phase builds 
 
 ---
 
-## Phase 2: Basic Queries
+## Phase 2: Basic Queries (Complete)
 
 **Goal**: Support common query operators for filtering documents.
 
 ### Operations
-- [ ] Equality matching (`{field: value}`)
-- [ ] Dot notation for nested fields (`{"a.b.c": value}`)
-- [ ] `$eq` - Explicit equality
-- [ ] `$ne` - Not equal
-- [ ] `$gt` - Greater than
-- [ ] `$gte` - Greater than or equal
-- [ ] `$lt` - Less than
-- [ ] `$lte` - Less than or equal
-- [ ] `$in` - Match any value in array
-- [ ] `$nin` - Match none of values in array
+- [x] Equality matching (`{field: value}`)
+- [x] Dot notation for nested fields (`{"a.b.c": value}`)
+- [x] `$eq` - Explicit equality
+- [x] `$ne` - Not equal
+- [x] `$gt` - Greater than
+- [x] `$gte` - Greater than or equal
+- [x] `$lt` - Less than
+- [x] `$lte` - Less than or equal
+- [x] `$in` - Match any value in array
+- [x] `$nin` - Match none of values in array
+- [x] Array field matching (any element match)
+- [x] Date serialization and comparison
 
-### Considerations
-- Type coercion behavior (or lack thereof)
-- null vs undefined vs missing field handling
-- Date comparison
+### Considerations (Resolved)
+- No type coercion - exact type matching
+- null matches both null values and missing fields
+- Date comparison uses getTime() for accurate comparisons
 
 ---
 

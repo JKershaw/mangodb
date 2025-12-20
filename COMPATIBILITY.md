@@ -127,19 +127,114 @@ This document records MongoDB behaviors discovered through dual-target testing. 
 - `{ field: value }` matches documents where `field === value`
 - Exact match required (no type coercion)
 
-### Null Matching (To Be Tested)
+### Null Matching (Tested)
 - `{ field: null }` matches:
   - Documents where `field` is `null`
   - Documents where `field` does not exist
 - This is different from `{ field: { $exists: false } }`
 
-### Array Field Matching (To Be Tested)
+**Example**:
+```typescript
+// Given documents:
+// { value: null }
+// { value: "something" }
+// { other: "field" }  // value is missing
+
+await collection.find({ value: null }).toArray();
+// Returns 2 documents: the one with null and the one with missing field
+```
+
+### Array Field Matching (Tested)
 - `{ tags: "red" }` matches `{ tags: ["red", "blue"] }`
 - Any array element matching the value is a match
+- Exact array matching: `{ tags: ["a", "b"] }` only matches arrays with exact same elements in order
 
-### Nested Field Matching (To Be Tested)
+**Example**:
+```typescript
+// Given: { tags: ["red", "blue"] }
+await collection.find({ tags: "red" }).toArray();  // Matches
+await collection.find({ tags: ["red", "blue"] }).toArray();  // Matches (exact)
+await collection.find({ tags: ["blue", "red"] }).toArray();  // Does NOT match (order matters)
+```
+
+### Nested Field Matching (Tested)
 - `{ "a.b.c": 1 }` accesses nested field
 - Works with both objects and array indices
+
+**Example**:
+```typescript
+// Given: { user: { name: "Alice", scores: [10, 20, 30] } }
+await collection.find({ "user.name": "Alice" }).toArray();  // Matches
+await collection.find({ "user.scores.0": 10 }).toArray();   // Matches (array index)
+```
+
+### Array Element Dot Notation (Tested)
+- `{ "items.name": "value" }` matches if ANY array element's nested field equals the value
+- Works with comparison operators
+- Supports multiple levels of nesting
+
+**Example**:
+```typescript
+// Given: { items: [{ name: "Alice" }, { name: "Bob" }] }
+await collection.find({ "items.name": "Alice" }).toArray();  // Matches
+await collection.find({ "items.name": "Charlie" }).toArray();  // No match
+
+// With comparison operators:
+// Given: { scores: [{ value: 50 }, { value: 80 }] }
+await collection.find({ "scores.value": { $gte: 80 } }).toArray();  // Matches
+```
+
+---
+
+## Comparison Operators
+
+### $eq - Equality
+- Explicit equality: `{ field: { $eq: value } }` same as `{ field: value }`
+- Uses same matching logic as implicit equality
+
+### $ne - Not Equal
+- `{ field: { $ne: value } }` matches documents where field does not equal value
+- Also matches documents where the field is missing
+
+**Example**:
+```typescript
+// Given: [{ value: 10 }, { other: "field" }]
+await collection.find({ value: { $ne: 10 } }).toArray();
+// Returns the document with missing field
+```
+
+### $gt, $gte, $lt, $lte - Comparison
+- Work with numbers, strings (lexicographic), dates, and booleans
+- No type coercion - types must be comparable
+- Date comparison uses timestamp values
+- Boolean comparison: `false < true`
+
+**Example**:
+```typescript
+await collection.find({ age: { $gte: 18, $lt: 65 } }).toArray();
+await collection.find({ name: { $gt: "M" } }).toArray();  // Names after "M"
+await collection.find({ createdAt: { $gte: new Date("2024-01-01") } }).toArray();
+
+// Boolean comparison:
+// Given: [{ active: false }, { active: true }]
+await collection.find({ active: { $gt: false } }).toArray();  // Matches only true
+await collection.find({ active: { $lte: false } }).toArray();  // Matches only false
+```
+
+### $in - Match Any
+- `{ field: { $in: [value1, value2] } }` matches if field equals any value
+- If field is an array, matches if any array element is in the $in array
+
+**Example**:
+```typescript
+await collection.find({ color: { $in: ["red", "blue"] } }).toArray();
+// Given: { tags: ["a", "b"] }
+await collection.find({ tags: { $in: ["a", "x"] } }).toArray();  // Matches (has "a")
+```
+
+### $nin - Match None
+- `{ field: { $nin: [value1, value2] } }` matches if field does not equal any value
+- Also matches documents where field is missing
 
 ---
 
