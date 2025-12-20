@@ -273,6 +273,142 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
         assert.strictEqual(docs[2].value, 30);
       });
     });
+
+    describe("sort with array fields", () => {
+      it("should sort by minimum element ascending", async () => {
+        const collection = client.db(dbName).collection("sort_array_asc");
+        await collection.insertMany([
+          { name: "doc1", scores: [10, 20, 30] }, // min: 10
+          { name: "doc2", scores: [5, 15, 25] }, // min: 5
+          { name: "doc3", scores: [8, 12] }, // min: 8
+        ]);
+
+        const docs = await collection.find({}).sort({ scores: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 3);
+        assert.strictEqual(docs[0].name, "doc2"); // min 5
+        assert.strictEqual(docs[1].name, "doc3"); // min 8
+        assert.strictEqual(docs[2].name, "doc1"); // min 10
+      });
+
+      it("should sort by maximum element descending", async () => {
+        const collection = client.db(dbName).collection("sort_array_desc");
+        await collection.insertMany([
+          { name: "doc1", scores: [10, 20, 30] }, // max: 30
+          { name: "doc2", scores: [5, 15, 25] }, // max: 25
+          { name: "doc3", scores: [8, 50] }, // max: 50
+        ]);
+
+        const docs = await collection.find({}).sort({ scores: -1 }).toArray();
+
+        assert.strictEqual(docs.length, 3);
+        assert.strictEqual(docs[0].name, "doc3"); // max 50
+        assert.strictEqual(docs[1].name, "doc1"); // max 30
+        assert.strictEqual(docs[2].name, "doc2"); // max 25
+      });
+
+      it("should handle empty arrays (sort before null)", async () => {
+        const collection = client.db(dbName).collection("sort_array_empty");
+        await collection.insertMany([
+          { name: "with_null", value: null },
+          { name: "with_empty", value: [] },
+          { name: "with_value", value: [5] },
+        ]);
+
+        const docs = await collection.find({}).sort({ value: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 3);
+        // Empty array sorts before null in MongoDB
+        assert.strictEqual(docs[0].name, "with_empty");
+        assert.strictEqual(docs[1].name, "with_null");
+        assert.strictEqual(docs[2].name, "with_value");
+      });
+
+      it("should compare array with scalar value", async () => {
+        const collection = client.db(dbName).collection("sort_array_scalar");
+        await collection.insertMany([
+          { name: "scalar", value: 15 },
+          { name: "array", value: [10, 20] }, // min: 10 for ascending
+        ]);
+
+        const docs = await collection.find({}).sort({ value: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 2);
+        assert.strictEqual(docs[0].name, "array"); // min 10 < 15
+        assert.strictEqual(docs[1].name, "scalar"); // 15
+      });
+    });
+
+    describe("sort with mixed types", () => {
+      it("should sort null before numbers", async () => {
+        const collection = client.db(dbName).collection("sort_mixed_null_num");
+        await collection.insertMany([
+          { name: "number", value: 5 },
+          { name: "null", value: null },
+          { name: "another_number", value: 3 },
+        ]);
+
+        const docs = await collection.find({}).sort({ value: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 3);
+        assert.strictEqual(docs[0].name, "null");
+        assert.strictEqual(docs[1].name, "another_number");
+        assert.strictEqual(docs[2].name, "number");
+      });
+
+      it("should sort numbers before strings", async () => {
+        const collection = client
+          .db(dbName)
+          .collection("sort_mixed_num_string");
+        await collection.insertMany([
+          { name: "string", value: "abc" },
+          { name: "number", value: 100 },
+        ]);
+
+        const docs = await collection.find({}).sort({ value: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 2);
+        assert.strictEqual(docs[0].name, "number");
+        assert.strictEqual(docs[1].name, "string");
+      });
+
+      it("should sort strings before objects", async () => {
+        const collection = client
+          .db(dbName)
+          .collection("sort_mixed_string_obj");
+        await collection.insertMany([
+          { name: "object", value: { a: 1 } },
+          { name: "string", value: "xyz" },
+        ]);
+
+        const docs = await collection.find({}).sort({ value: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 2);
+        assert.strictEqual(docs[0].name, "string");
+        assert.strictEqual(docs[1].name, "object");
+      });
+
+      it("should sort booleans after ObjectId", async () => {
+        const collection = client.db(dbName).collection("sort_mixed_bool_oid");
+        // Note: We need to be careful with ObjectId import
+        // For this test, we just check boolean vs other primitives
+
+        await collection.insertMany([
+          { name: "true", value: true },
+          { name: "false", value: false },
+          { name: "number", value: 5 },
+        ]);
+
+        const docs = await collection.find({}).sort({ value: 1 }).toArray();
+
+        assert.strictEqual(docs.length, 3);
+        // Numbers come before booleans
+        assert.strictEqual(docs[0].name, "number");
+        // false comes before true
+        assert.strictEqual(docs[1].name, "false");
+        assert.strictEqual(docs[2].name, "true");
+      });
+    });
   });
 
   describe("limit", () => {

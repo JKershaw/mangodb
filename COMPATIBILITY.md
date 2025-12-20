@@ -353,16 +353,39 @@ await collection.updateOne(
 - Supports dot notation for nested fields: `cursor.sort({ "user.name": 1 })`
 
 **Type Ordering in Sort (Implemented)**:
-MongoDB sorts different types in a specific order. For ascending sort:
-1. Undefined/Missing fields
-2. Null
+Based on [MongoDB BSON Type Comparison Order](https://www.mongodb.com/docs/manual/reference/bson-type-comparison-order/). For ascending sort:
+1. Empty arrays
+2. Null / Undefined / Missing fields
 3. Numbers
 4. Strings
 5. Objects
-6. Arrays
+6. Arrays (non-empty)
 7. ObjectId
 8. Boolean
 9. Date
+
+**Array Field Sorting**:
+When sorting by a field that contains an array:
+- **Ascending sort**: Uses the minimum element of the array as the sort key
+- **Descending sort**: Uses the maximum element of the array as the sort key
+- Empty arrays sort before null
+
+```typescript
+// Example: sorting by array field
+await collection.insertMany([
+  { name: "doc1", scores: [10, 20, 30] },  // min: 10, max: 30
+  { name: "doc2", scores: [5, 15, 25] },   // min: 5, max: 25
+  { name: "doc3", scores: [8, 50] },       // min: 8, max: 50
+]);
+
+// Ascending: uses minimum element
+await collection.find({}).sort({ scores: 1 }).toArray();
+// Returns: doc2 (min 5), doc3 (min 8), doc1 (min 10)
+
+// Descending: uses maximum element
+await collection.find({}).sort({ scores: -1 }).toArray();
+// Returns: doc3 (max 50), doc1 (max 30), doc2 (max 25)
+```
 
 **Null/Missing Behavior**:
 ```typescript
