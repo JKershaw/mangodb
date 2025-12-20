@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 5 - Logical Operators
+## Current Phase: Phase 6 - Array Handling
 
 ---
 
@@ -98,16 +98,16 @@ This document outlines the implementation phases for Mongone. Each phase builds 
 
 ---
 
-## Phase 5: Logical Operators
+## Phase 5: Logical Operators (Complete)
 
 **Goal**: Support complex query logic.
 
 ### Operations
-- [ ] `$exists` - Field existence check
-- [ ] `$and` - Logical AND (explicit)
-- [ ] `$or` - Logical OR
-- [ ] `$not` - Logical NOT (operator negation)
-- [ ] `$nor` - Logical NOR
+- [x] `$exists` - Field existence check
+- [x] `$and` - Logical AND (explicit)
+- [x] `$or` - Logical OR
+- [x] `$not` - Logical NOT (operator negation)
+- [x] `$nor` - Logical NOR
 
 ### Implementation Plan
 

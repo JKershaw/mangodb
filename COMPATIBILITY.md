@@ -469,6 +469,88 @@ await collection.countDocuments({ value: { $gte: 10 } });  // Works with operato
 
 ---
 
+## Logical Operators
+
+### $exists
+
+```typescript
+await collection.find({ age: { $exists: true } }).toArray();
+await collection.find({ deleted: { $exists: false } }).toArray();
+```
+
+**Behaviors**:
+- `$exists: true` matches documents where the field exists (including null values)
+- `$exists: false` matches documents where the field does not exist
+- Works with dot notation for nested fields: `{ "user.email": { $exists: true } }`
+
+### $and
+
+```typescript
+// Explicit AND - useful when same field has multiple conditions
+await collection.find({
+  $and: [{ score: { $gte: 50 } }, { score: { $lte: 100 } }]
+}).toArray();
+
+// Can combine with field conditions
+await collection.find({
+  type: "A",
+  $and: [{ status: "active" }]
+}).toArray();
+```
+
+**Behaviors**:
+- All conditions in the array must match
+- Empty array `$and: []` matches all documents (vacuous truth)
+- Can be nested with other logical operators
+
+### $or
+
+```typescript
+await collection.find({
+  $or: [{ status: "active" }, { priority: "high" }]
+}).toArray();
+
+// Combines with field conditions via implicit AND
+await collection.find({
+  type: "A",
+  $or: [{ status: "active" }, { status: "pending" }]
+}).toArray();
+```
+
+**Behaviors**:
+- At least one condition must match
+- Empty array `$or: []` matches no documents
+- Field conditions are AND'd with the $or result
+
+### $not
+
+```typescript
+// Invert operator result
+await collection.find({ age: { $not: { $gt: 30 } } }).toArray();
+await collection.find({ status: { $not: { $in: ["deleted", "archived"] } } }).toArray();
+```
+
+**Behaviors**:
+- Wraps another operator expression and inverts its result
+- **IMPORTANT**: `$not` does NOT match documents where the field is missing
+- This differs from `$ne`, which does match missing fields
+- Example: `{ value: { $not: { $gt: 25 } } }` on `{ other: "field" }` does NOT match
+
+### $nor
+
+```typescript
+await collection.find({
+  $nor: [{ status: "deleted" }, { status: "archived" }]
+}).toArray();
+```
+
+**Behaviors**:
+- No condition in the array may match (opposite of $or)
+- Matches documents where the queried field is missing
+- Empty array `$nor: []` matches all documents
+
+---
+
 ## Notes
 
 This document will be updated as more behaviors are discovered through testing. Each entry should include:

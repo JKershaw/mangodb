@@ -18,6 +18,8 @@ interface QueryOperators {
   $lte?: unknown;
   $in?: unknown[];
   $nin?: unknown[];
+  $exists?: boolean;
+  $not?: QueryOperators;
 }
 
 /**
@@ -27,11 +29,16 @@ type FilterValue = unknown | QueryOperators;
 
 /**
  * Filter type for queries.
+ * Supports field conditions and logical operators ($and, $or, $nor).
  */
 type Filter<T> = {
   [P in keyof T]?: FilterValue;
 } & {
   [key: string]: FilterValue;
+} & {
+  $and?: Filter<T>[];
+  $or?: Filter<T>[];
+  $nor?: Filter<T>[];
 };
 
 interface InsertOneResult {
@@ -405,6 +412,23 @@ export class MongoneCollection<T extends Document = Document> {
           break;
         }
 
+        case "$exists": {
+          const shouldExist = opValue as boolean;
+          const exists = docValue !== undefined;
+          if (shouldExist !== exists) return false;
+          break;
+        }
+
+        case "$not": {
+          // $not does NOT match documents where the field is missing
+          if (docValue === undefined) return false;
+          // Invert the result of the nested operators
+          if (this.matchesOperators(docValue, opValue as QueryOperators)) {
+            return false;
+          }
+          break;
+        }
+
         default:
           // Unknown operator - ignore
           break;
@@ -476,11 +500,47 @@ export class MongoneCollection<T extends Document = Document> {
    * - Empty filter (matches all)
    * - Simple equality
    * - Dot notation for nested fields (including array element traversal)
-   * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin)
+   * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $exists, $not)
+   * - Logical operators ($and, $or, $nor)
    * - Array field matching
    */
   private matchesFilter(doc: T, filter: Filter<T>): boolean {
     for (const [key, filterValue] of Object.entries(filter)) {
+      // Handle top-level logical operators
+      if (key === "$and") {
+        const conditions = filterValue as Filter<T>[];
+        // Empty $and is vacuously true (matches all)
+        if (conditions.length === 0) continue;
+        // All conditions must match
+        if (!conditions.every((cond) => this.matchesFilter(doc, cond))) {
+          return false;
+        }
+        continue;
+      }
+
+      if (key === "$or") {
+        const conditions = filterValue as Filter<T>[];
+        // Empty $or matches nothing
+        if (conditions.length === 0) return false;
+        // At least one condition must match
+        if (!conditions.some((cond) => this.matchesFilter(doc, cond))) {
+          return false;
+        }
+        continue;
+      }
+
+      if (key === "$nor") {
+        const conditions = filterValue as Filter<T>[];
+        // Empty $nor is vacuously true (matches all - none of zero conditions are true)
+        if (conditions.length === 0) continue;
+        // No condition may match
+        if (conditions.some((cond) => this.matchesFilter(doc, cond))) {
+          return false;
+        }
+        continue;
+      }
+
+      // Regular field condition
       const docValues = this.getValuesByPath(doc, key);
       const isOperator = this.isOperatorObject(filterValue);
 
