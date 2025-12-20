@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.mongone-data/
+*.log
+.DS_Store
+.env
+.env.local
+coverage/

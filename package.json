@@ -1,0 +1,32 @@
+{
+  "name": "mongone",
+  "version": "0.1.0",
+  "description": "File-based MongoDB drop-in replacement for TypeScript/Node.js. SQLite is to SQL as Mongone is to MongoDB.",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "node --experimental-strip-types --test test/**/*.test.ts",
+    "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts"
+  },
+  "keywords": [
+    "mongodb",
+    "database",
+    "file-based",
+    "drop-in",
+    "local",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "mongodb": "^6.12.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
