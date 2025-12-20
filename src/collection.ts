@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { MongoneCursor } from "./cursor.ts";
+import { applyProjection, type ProjectionSpec } from "./utils.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 
@@ -58,6 +59,10 @@ interface UpdateResult {
 
 interface UpdateOptions {
   upsert?: boolean;
+}
+
+interface FindOptions {
+  projection?: ProjectionSpec;
 }
 
 /**
@@ -740,11 +745,17 @@ export class MongoneCollection<T extends Document = Document> {
   /**
    * Find a single document matching the filter.
    */
-  async findOne(filter: Filter<T> = {}): Promise<T | null> {
+  async findOne(
+    filter: Filter<T> = {},
+    options: FindOptions = {}
+  ): Promise<T | null> {
     const documents = await this.readDocuments();
 
     for (const doc of documents) {
       if (this.matchesFilter(doc, filter)) {
+        if (options.projection) {
+          return applyProjection(doc, options.projection);
+        }
         return doc;
       }
     }
@@ -756,11 +767,22 @@ export class MongoneCollection<T extends Document = Document> {
    * Find documents matching the filter.
    * Returns a cursor for further operations.
    */
-  find(filter: Filter<T> = {}): MongoneCursor<T> {
-    return new MongoneCursor<T>(async () => {
-      const documents = await this.readDocuments();
-      return documents.filter((doc) => this.matchesFilter(doc, filter));
-    });
+  find(filter: Filter<T> = {}, options: FindOptions = {}): MongoneCursor<T> {
+    return new MongoneCursor<T>(
+      async () => {
+        const documents = await this.readDocuments();
+        return documents.filter((doc) => this.matchesFilter(doc, filter));
+      },
+      options.projection || null
+    );
+  }
+
+  /**
+   * Count documents matching the filter.
+   */
+  async countDocuments(filter: Filter<T> = {}): Promise<number> {
+    const documents = await this.readDocuments();
+    return documents.filter((doc) => this.matchesFilter(doc, filter)).length;
   }
 
   /**

@@ -340,22 +340,132 @@ await collection.updateOne(
 
 ---
 
-## Type Ordering in Sort (To Be Tested)
+## Cursor Operations
 
-MongoDB has specific ordering for mixed types:
-1. MinKey
-2. Null
-3. Numbers (int, long, double, decimal)
-4. Symbol, String
-5. Object
-6. Array
-7. BinData
-8. ObjectId
-9. Boolean
-10. Date
-11. Timestamp
-12. Regular Expression
-13. MaxKey
+### sort
+
+**Behaviors**:
+- Cursor methods can be chained in any order in code
+- Execution order is always: sort → skip → limit (regardless of calling order)
+- Supports single field sort: `cursor.sort({ name: 1 })`
+- Supports compound sort: `cursor.sort({ category: 1, name: -1 })`
+- `1` = ascending, `-1` = descending
+- Supports dot notation for nested fields: `cursor.sort({ "user.name": 1 })`
+
+**Type Ordering in Sort (Implemented)**:
+Based on [MongoDB BSON Type Comparison Order](https://www.mongodb.com/docs/manual/reference/bson-type-comparison-order/). For ascending sort:
+1. Empty arrays
+2. Null / Undefined / Missing fields
+3. Numbers
+4. Strings
+5. Objects
+6. Arrays (non-empty)
+7. ObjectId
+8. Boolean
+9. Date
+
+**Array Field Sorting**:
+When sorting by a field that contains an array:
+- **Ascending sort**: Uses the minimum element of the array as the sort key
+- **Descending sort**: Uses the maximum element of the array as the sort key
+- Empty arrays sort before null
+
+```typescript
+// Example: sorting by array field
+await collection.insertMany([
+  { name: "doc1", scores: [10, 20, 30] },  // min: 10, max: 30
+  { name: "doc2", scores: [5, 15, 25] },   // min: 5, max: 25
+  { name: "doc3", scores: [8, 50] },       // min: 8, max: 50
+]);
+
+// Ascending: uses minimum element
+await collection.find({}).sort({ scores: 1 }).toArray();
+// Returns: doc2 (min 5), doc3 (min 8), doc1 (min 10)
+
+// Descending: uses maximum element
+await collection.find({}).sort({ scores: -1 }).toArray();
+// Returns: doc3 (max 50), doc1 (max 30), doc2 (max 25)
+```
+
+**Null/Missing Behavior**:
+```typescript
+// Given: [{ value: 20 }, { value: null }, { value: 10 }]
+await collection.find({}).sort({ value: 1 }).toArray();
+// Returns: [{ value: null }, { value: 10 }, { value: 20 }]
+
+// Missing fields behave like null
+// Given: [{ value: 20 }, { other: "field" }, { value: 10 }]
+await collection.find({}).sort({ value: 1 }).toArray();
+// Returns: [{ other: "field" }, { value: 10 }, { value: 20 }]
+```
+
+### limit
+
+**Behaviors**:
+- Returns at most n documents
+- If fewer documents exist, returns all available
+- `limit(0)` means no limit (returns all documents)
+- Negative values are treated as their absolute value
+
+### skip
+
+**Behaviors**:
+- Skips first n documents
+- Applied after sort but before limit
+- If skip exceeds document count, returns empty array
+
+### Chaining Example
+
+```typescript
+// These all produce the same result:
+await collection.find({}).sort({ value: 1 }).skip(2).limit(3).toArray();
+await collection.find({}).limit(3).sort({ value: 1 }).skip(2).toArray();
+await collection.find({}).skip(2).limit(3).sort({ value: 1 }).toArray();
+// Order is always: sort, then skip, then limit
+```
+
+---
+
+## Projection
+
+### Inclusion Mode
+
+```typescript
+await collection.find({}, { projection: { name: 1, age: 1 } }).toArray();
+// Returns only _id, name, age (\_id included by default)
+
+await collection.find({}, { projection: { name: 1, _id: 0 } }).toArray();
+// Returns only name (\_id explicitly excluded)
+```
+
+### Exclusion Mode
+
+```typescript
+await collection.find({}, { projection: { password: 0, secret: 0 } }).toArray();
+// Returns all fields except password and secret
+```
+
+### Rules
+
+- Cannot mix inclusion (1) and exclusion (0) in the same projection
+- Exception: `_id: 0` can be combined with inclusion
+- Nested fields supported with dot notation: `{ "address.city": 1 }`
+- Works with both `find()` and `findOne()`
+
+---
+
+## countDocuments
+
+```typescript
+await collection.countDocuments({});  // Count all documents
+await collection.countDocuments({ status: "active" });  // Count matching
+await collection.countDocuments({ value: { $gte: 10 } });  // Works with operators
+```
+
+**Behaviors**:
+- Returns number (not an object)
+- Empty collection returns 0
+- No matches returns 0
 
 ---
 

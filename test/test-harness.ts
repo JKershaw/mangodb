@@ -36,6 +36,10 @@ export interface UpdateOptions {
   upsert?: boolean;
 }
 
+export interface FindOptions {
+  projection?: Document;
+}
+
 export interface TestCollection<T extends Document = Document> {
   insertOne(
     doc: T
@@ -43,8 +47,8 @@ export interface TestCollection<T extends Document = Document> {
   insertMany(
     docs: T[]
   ): Promise<{ acknowledged: boolean; insertedIds: Record<number, unknown> }>;
-  findOne(filter?: Partial<T>): Promise<T | null>;
-  find(filter?: Partial<T>): TestCursor<T>;
+  findOne(filter?: Partial<T>, options?: FindOptions): Promise<T | null>;
+  find(filter?: Partial<T>, options?: FindOptions): TestCursor<T>;
   deleteOne(
     filter: Partial<T>
   ): Promise<{ acknowledged: boolean; deletedCount: number }>;
@@ -61,9 +65,13 @@ export interface TestCollection<T extends Document = Document> {
     update: Document,
     options?: UpdateOptions
   ): Promise<UpdateResult>;
+  countDocuments(filter?: Partial<T>): Promise<number>;
 }
 
 export interface TestCursor<T> {
+  sort(spec: Document): TestCursor<T>;
+  limit(n: number): TestCursor<T>;
+  skip(n: number): TestCursor<T>;
   toArray(): Promise<T[]>;
 }
 
