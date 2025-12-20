@@ -420,17 +420,39 @@ export class MongoneCollection<T extends Document = Document> {
         }
 
         case "$not": {
+          // $not requires an operator expression, not a plain value
+          if (
+            opValue === null ||
+            typeof opValue !== "object" ||
+            Array.isArray(opValue)
+          ) {
+            throw new Error("$not requires an operator expression");
+          }
+          const notOps = opValue as QueryOperators;
+          const notKeys = Object.keys(notOps);
+          if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith("$"))) {
+            throw new Error("$not requires an operator expression");
+          }
           // $not does NOT match documents where the field is missing
           if (docValue === undefined) return false;
           // Invert the result of the nested operators
-          if (this.matchesOperators(docValue, opValue as QueryOperators)) {
+          if (this.matchesOperators(docValue, notOps)) {
             return false;
           }
           break;
         }
 
+        case "$and":
+          throw new Error("$and is not allowed as a field-level operator");
+
+        case "$or":
+          throw new Error("$or is not allowed as a field-level operator");
+
+        case "$nor":
+          throw new Error("$nor is not allowed as a field-level operator");
+
         default:
-          // Unknown operator - ignore
+          // Unknown operator - ignore for forward compatibility
           break;
       }
     }

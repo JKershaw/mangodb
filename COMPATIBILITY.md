@@ -540,6 +540,7 @@ await collection.find({ status: { $not: { $in: ["deleted", "archived"] } } }).to
 - **IMPORTANT**: `$not` does NOT match documents where the field is missing
 - This differs from `$ne`, which does match missing fields
 - Example: `{ value: { $not: { $gt: 25 } } }` on `{ other: "field" }` does NOT match
+- Throws error if value is not an operator expression (e.g., `{ $not: "value" }`)
 
 ### $nor
 
@@ -554,6 +555,19 @@ await collection.find({
 - Matches documents where the queried field is missing
 - Empty array `$nor: []` matches all documents
 - Throws error if value is not an array
+
+### Field-Level Logical Operator Errors
+
+Logical operators (`$and`, `$or`, `$nor`) are only valid at the top level of a filter, not inside field conditions:
+
+```typescript
+// VALID - top level
+await collection.find({ $and: [{ a: 1 }, { b: 2 }] }).toArray();
+
+// INVALID - throws error
+await collection.find({ field: { $and: [{ a: 1 }] } }).toArray();
+// Error: "$and is not allowed as a field-level operator"
+```
 
 ---
 

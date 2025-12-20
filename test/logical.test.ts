@@ -623,5 +623,61 @@ describe(`Logical Operator Tests (${getTestModeName()})`, () => {
         { message: "$nor must be an array" }
       );
     });
+
+    it("should throw error when $and is used at field level", async () => {
+      const collection = client.db(dbName).collection("error_field_and");
+      await collection.insertMany([{ a: 1 }]);
+
+      await assert.rejects(
+        async () =>
+          await collection
+            // @ts-expect-error - intentionally passing invalid usage
+            .find({ field: { $and: [{ a: 1 }] } })
+            .toArray(),
+        { message: "$and is not allowed as a field-level operator" }
+      );
+    });
+
+    it("should throw error when $or is used at field level", async () => {
+      const collection = client.db(dbName).collection("error_field_or");
+      await collection.insertMany([{ a: 1 }]);
+
+      await assert.rejects(
+        async () =>
+          await collection
+            // @ts-expect-error - intentionally passing invalid usage
+            .find({ field: { $or: [{ a: 1 }] } })
+            .toArray(),
+        { message: "$or is not allowed as a field-level operator" }
+      );
+    });
+
+    it("should throw error when $nor is used at field level", async () => {
+      const collection = client.db(dbName).collection("error_field_nor");
+      await collection.insertMany([{ a: 1 }]);
+
+      await assert.rejects(
+        async () =>
+          await collection
+            // @ts-expect-error - intentionally passing invalid usage
+            .find({ field: { $nor: [{ a: 1 }] } })
+            .toArray(),
+        { message: "$nor is not allowed as a field-level operator" }
+      );
+    });
+
+    it("should throw error when $not wraps a non-operator value", async () => {
+      const collection = client.db(dbName).collection("error_not_value");
+      await collection.insertMany([{ field: "value" }]);
+
+      await assert.rejects(
+        async () =>
+          await collection
+            // @ts-expect-error - intentionally passing invalid usage
+            .find({ field: { $not: "value" } })
+            .toArray(),
+        { message: "$not requires an operator expression" }
+      );
+    });
   });
 });
