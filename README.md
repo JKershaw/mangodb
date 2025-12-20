@@ -71,15 +71,21 @@ await client.connect();
 
 See [PROGRESS.md](./PROGRESS.md) for detailed status.
 
-### Phase 1: Foundation (Current)
+### Phase 1: Foundation (Complete)
 - [x] Client and database abstractions
 - [x] Collection access
 - [x] `insertOne`, `insertMany`
 - [x] `findOne`, `find` with empty filter
 - [x] `deleteOne`, `deleteMany` with simple equality
 
+### Phase 2: Basic Queries (Complete)
+- [x] Equality matching and dot notation for nested fields
+- [x] Comparison operators: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`
+- [x] Array operators: `$in`, `$nin`
+- [x] Array field matching (any element match)
+- [x] Date serialization and comparison
+
 ### Planned
-- Basic queries ($eq, $gt, $lt, $in, etc.)
 - Update operations ($set, $unset, $inc)
 - Cursor operations (sort, limit, skip)
 - Logical operators ($and, $or, $not)

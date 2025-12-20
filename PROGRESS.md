@@ -4,12 +4,37 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 1 - Foundation
+**Phase**: 2 - Basic Queries
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2024-12-20 - Phase 2: Basic Queries
+
+#### Added
+- Query operators for filtering documents:
+  - `$eq` - Explicit equality matching
+  - `$ne` - Not equal matching
+  - `$gt` - Greater than comparison
+  - `$gte` - Greater than or equal comparison
+  - `$lt` - Less than comparison
+  - `$lte` - Less than or equal comparison
+  - `$in` - Match any value in array
+  - `$nin` - Match none of values in array
+- Dot notation for nested field access (`{"a.b.c": value}`)
+- Array field matching (any element in array matches query value)
+- Date serialization and deserialization for JSON storage
+- Range queries by combining operators (`{ value: { $gte: 10, $lte: 20 } }`)
+
+#### Behaviors Implemented
+- null matching: `{ field: null }` matches both null values and missing fields
+- Array index access via dot notation: `{ "items.0": "value" }`
+- Lexicographic string comparison for $gt/$lt operators
+- Date comparison using timestamp values
+
+---
 
 ### 2024-12-20 - Initial Implementation
 
@@ -55,7 +80,7 @@ See [COMPATIBILITY.md](./COMPATIBILITY.md) for detailed documentation of MongoDB
 Current implementation has these intentional limitations:
 
 1. **No indexing** - All queries scan full collection
-2. **No query operators** - Only empty filter and exact equality supported
+2. **No logical operators** - No $and, $or, $not, $nor (coming in Phase 5)
 3. **No update operations** - Coming in Phase 3
 4. **No cursor operations** - No sort/limit/skip, coming in Phase 4
 5. **No projection** - Returns full documents only
