@@ -1,6 +1,6 @@
-# Mongone: Remaining Work Roadmap
+# MangoDB: Remaining Work Roadmap
 
-This document outlines the remaining implementation phases for Mongone, following the established project methodology.
+This document outlines the remaining implementation phases for MangoDB, following the established project methodology.
 
 ---
 
@@ -9,8 +9,8 @@ This document outlines the remaining implementation phases for Mongone, followin
 The project follows a rigorous development process:
 
 1. **Phase-Based Development**: Work organized into focused phases with clear goals
-2. **Test-Driven Development (TDD)**: Write tests against real MongoDB first, then implement in Mongone
-3. **Dual-Target Testing**: Tests run against both MongoDB and Mongone via the test harness
+2. **Test-Driven Development (TDD)**: Write tests against real MongoDB first, then implement in MangoDB
+3. **Dual-Target Testing**: Tests run against both MongoDB and MangoDB via the test harness
 4. **Detailed Planning**: Each phase has comprehensive planning with test cases, edge cases, and error formats
 5. **Behavior Documentation**: Discovered behaviors recorded in COMPATIBILITY.md
 6. **Incremental Progress**: Each phase builds on previous work; complexity increases gradually
@@ -24,9 +24,9 @@ The codebase has been refactored into focused modules:
 ```
 src/
 ├── index.ts              # Public API exports
-├── client.ts             # MongoneClient entry point
+├── client.ts             # MangoDBClient entry point
 ├── db.ts                 # Database abstraction
-├── collection.ts         # MongoneCollection (uses modules below)
+├── collection.ts         # MangoDBCollection (uses modules below)
 ├── cursor.ts             # Query cursor with sort/limit/skip/projection
 ├── types.ts              # All type definitions (QueryOperators, Filter, etc.)
 ├── query-matcher.ts      # Query matching logic (matchesFilter, matchesOperators)
@@ -274,7 +274,7 @@ export interface PipelineStage {
 
 export class AggregationCursor<T extends Document> {
   private pipeline: PipelineStage[];
-  private collection: MongoneCollection<T>;
+  private collection: MangoDBCollection<T>;
 
   async toArray(): Promise<T[]> {
     let documents = await this.collection.find({}).toArray();
@@ -1178,7 +1178,7 @@ These behaviors were verified from official MongoDB documentation and must be im
 
 ### MongoDB Feature Coverage
 
-| MongoDB Feature | Mongone Status | Notes |
+| MongoDB Feature | MangoDB Status | Notes |
 |-----------------|----------------|-------|
 | CRUD Operations | ✅ Full | Phases 1-3 |
 | Query Operators | ✅ Full | Phases 2, 5, 11, 12 |
@@ -1266,7 +1266,7 @@ The aggregation pipeline is the most impactful remaining feature:
 - **Phase 9**: Basic stages ($match, $project, $sort, $limit, $skip, $count, $unwind)
 - **Phase 10**: Advanced stages ($group, $lookup, $addFields, expressions)
 
-These two phases will bring Mongone to approximately **85-90% coverage** of common MongoDB usage.
+These two phases will bring MangoDB to approximately **85-90% coverage** of common MongoDB usage.
 
 ### Medium-Term (Phases 11-13)
 
@@ -1290,7 +1290,7 @@ Extended features for completeness:
 | Estimated Code Lines | 1,500-2,000 |
 | Estimated Time | Varies based on scope per phase |
 
-After completing all phases, Mongone will be a comprehensive file-based MongoDB replacement suitable for:
+After completing all phases, MangoDB will be a comprehensive file-based MongoDB replacement suitable for:
 - Local development
 - Integration testing
 - CI pipelines without MongoDB

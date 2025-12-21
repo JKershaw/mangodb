@@ -1,6 +1,6 @@
 node_modules/
 dist/
-.mongone-data/
+.mangodb-data/
 *.log
 .DS_Store
 .env

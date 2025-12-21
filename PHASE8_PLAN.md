@@ -491,7 +491,7 @@ interface BulkWriteResult {
 }
 ```
 
-Add methods to `MongoneCollection`:
+Add methods to `MangoDBCollection`:
 
 1. `findOneAndDelete(filter, options?)` - ~30 lines
 2. `findOneAndReplace(filter, replacement, options?)` - ~50 lines

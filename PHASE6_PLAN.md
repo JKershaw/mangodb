@@ -1,10 +1,10 @@
 # Phase 6: Array Handling - Implementation Plan
 
-This document outlines the detailed implementation plan for Phase 6 of Mongone, following TDD principles. All tests will run against both MongoDB and Mongone to ensure behavioral compatibility.
+This document outlines the detailed implementation plan for Phase 6 of MangoDB, following TDD principles. All tests will run against both MongoDB and MangoDB to ensure behavioral compatibility.
 
 ## Overview
 
-Phase 6 adds array-specific query operators and array update operators to Mongone.
+Phase 6 adds array-specific query operators and array update operators to MangoDB.
 
 ### Query Operators
 1. `$elemMatch` - Match array element with multiple conditions

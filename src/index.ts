@@ -1,8 +1,8 @@
-export { MongoneClient } from "./client.ts";
-export { MongoneDb } from "./db.ts";
-export { MongoneCollection } from "./collection.ts";
+export { MangoDBClient } from "./client.ts";
+export { MangoDBDb } from "./db.ts";
+export { MangoDBCollection } from "./collection.ts";
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo } from "./collection.ts";
-export { MongoneCursor, IndexCursor } from "./cursor.ts";
+export { MangoDBCursor, IndexCursor } from "./cursor.ts";
 export { AggregationCursor } from "./aggregation.ts";
 export {
   MongoDuplicateKeyError,

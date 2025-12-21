@@ -1,5 +1,5 @@
 /**
- * MongoDB-compatible error classes for Mongone.
+ * MongoDB-compatible error classes for MangoDB.
  */
 
 /**

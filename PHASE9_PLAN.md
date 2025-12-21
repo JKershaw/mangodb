@@ -81,7 +81,7 @@ export interface ProjectExpression {
 
 Create a new module containing:
 
-1. **`AggregationCursor<T>` class** - Similar to MongoneCursor but for pipelines
+1. **`AggregationCursor<T>` class** - Similar to MangoDBCursor but for pipelines
    - Constructor takes pipeline stages and a document source function
    - `toArray()` - Execute pipeline and return results
    - `next()` - Get next document (optional, for future)
@@ -337,7 +337,7 @@ Add the aggregate method:
 import { AggregationCursor } from "./aggregation.ts";
 import type { PipelineStage, AggregateOptions } from "./types.ts";
 
-// In MongoneCollection class:
+// In MangoDBCollection class:
 
 /**
  * Execute an aggregation pipeline on the collection.
@@ -576,7 +576,7 @@ test/aggregation.test.ts
 ## Test Execution
 
 ```bash
-# Run only aggregation tests (Mongone)
+# Run only aggregation tests (MangoDB)
 npm test -- --test-name-pattern "Aggregation"
 
 # Run against real MongoDB

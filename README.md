@@ -1,6 +1,6 @@
-# Mongone
+# MangoDB
 
-File-based MongoDB drop-in replacement for TypeScript/Node.js. **SQLite is to SQL as Mongone is to MongoDB.**
+File-based MongoDB drop-in replacement for TypeScript/Node.js. **SQLite is to SQL as MangoDB is to MongoDB.**
 
 ## What Problem Does This Solve?
 
@@ -9,7 +9,7 @@ Developing with MongoDB often means:
 - Setting up Docker containers or cloud databases for CI
 - Managing connection strings and database state between test runs
 
-Mongone lets you develop and test locally using only the filesystem, then deploy to a real MongoDB server without changing your code. Just swap the connection string.
+MangoDB lets you develop and test locally using only the filesystem, then deploy to a real MongoDB server without changing your code. Just swap the connection string.
 
 ## Status
 
@@ -19,12 +19,12 @@ See [ROADMAP.md](./ROADMAP.md) for implementation phases and [PROGRESS.md](./PRO
 
 ## Usage
 
-### With Mongone (local development/testing)
+### With MangoDB (local development/testing)
 
 ```typescript
-import { MongoneClient } from 'mongone';
+import { MangoDBClient } from 'mangodb';
 
-const client = new MongoneClient('./data');
+const client = new MangoDBClient('./data');
 await client.connect();
 
 const db = client.db('myapp');
@@ -57,11 +57,11 @@ await client.close();
 
 ```typescript
 import { MongoClient } from 'mongodb';
-import { MongoneClient } from 'mongone';
+import { MangoDBClient } from 'mangodb';
 
 const client = process.env.MONGODB_URI
   ? new MongoClient(process.env.MONGODB_URI)
-  : new MongoneClient('./data');
+  : new MangoDBClient('./data');
 
 await client.connect();
 // ... rest of your code works identically
@@ -133,10 +133,10 @@ See [PROGRESS.md](./PROGRESS.md) for detailed status.
 
 ## Running Tests
 
-Tests run against both real MongoDB and Mongone to ensure compatibility.
+Tests run against both real MongoDB and MangoDB to ensure compatibility.
 
 ```bash
-# Run tests against Mongone only
+# Run tests against MangoDB only
 npm test
 
 # Run tests against MongoDB (requires MongoDB instance)
@@ -154,7 +154,7 @@ For CI, both modes must pass.
 ## Contributing
 
 1. Write failing tests first using real MongoDB
-2. Implement minimum code to pass tests in Mongone
+2. Implement minimum code to pass tests in MangoDB
 3. Run tests against both targets
 4. Document any discovered MongoDB behaviors in [COMPATIBILITY.md](./COMPATIBILITY.md)
 

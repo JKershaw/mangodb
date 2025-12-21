@@ -1,4 +1,4 @@
-# Mongone Progress
+# MangoDB Progress
 
 This document tracks implementation progress and notable discoveries.
 
@@ -108,7 +108,7 @@ const result = await collection.bulkWrite([
 #### Design Decision
 - Indexes are NOT used for query optimization (full scans remain)
 - Only API surface and unique constraint enforcement implemented
-- This keeps Mongone lightweight for dev/test use cases
+- This keeps MangoDB lightweight for dev/test use cases
 
 #### Examples
 ```typescript
@@ -309,16 +309,16 @@ await collection.find({ $nor: [{ deleted: true }, { archived: true }] }).toArray
 
 #### Added
 - Project structure with TypeScript configuration
-- `MongoneClient` class with `connect()` and `close()` methods
-- `MongoneDb` class with `collection()` method
-- `MongoneCollection` class with basic CRUD operations:
+- `MangoDBClient` class with `connect()` and `close()` methods
+- `MangoDBDb` class with `collection()` method
+- `MangoDBCollection` class with basic CRUD operations:
   - `insertOne(doc)` - Insert single document
   - `insertMany(docs)` - Insert multiple documents
   - `findOne(filter)` - Find single document
   - `find(filter)` - Find documents, returns cursor
   - `deleteOne(filter)` - Delete single document
   - `deleteMany(filter)` - Delete multiple documents
-- `MongoneCursor` class with `toArray()` method
+- `MangoDBCursor` class with `toArray()` method
 - File-based storage (JSON per collection)
 - ObjectId generation using MongoDB's BSON library
 - Dual-target test infrastructure

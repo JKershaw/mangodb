@@ -64,7 +64,7 @@ export class IndexCursor {
 }
 
 /**
- * MongoneCursor represents a cursor over query results.
+ * MangoDBCursor represents a cursor over query results.
  * It mirrors the Cursor API from the official MongoDB driver, providing chainable methods
  * for sorting, limiting, skipping, and projecting query results.
  *
@@ -80,7 +80,7 @@ export class IndexCursor {
  *   .toArray();
  * ```
  */
-export class MongoneCursor<T extends Document = Document> {
+export class MangoDBCursor<T extends Document = Document> {
   private readonly fetchDocuments: () => Promise<T[]>;
   private sortSpec: SortSpec | null = null;
   private limitValue: number | null = null;
@@ -88,7 +88,7 @@ export class MongoneCursor<T extends Document = Document> {
   private projectionSpec: ProjectionSpec | null = null;
 
   /**
-   * Creates a new MongoneCursor instance.
+   * Creates a new MangoDBCursor instance.
    *
    * @param fetchDocuments - Function that returns a promise resolving to an array of documents
    * @param projection - Optional projection specification to apply to all results
@@ -118,7 +118,7 @@ export class MongoneCursor<T extends Document = Document> {
    * cursor.sort({ createdAt: -1 });
    * ```
    */
-  sort(spec: SortSpec): MongoneCursor<T> {
+  sort(spec: SortSpec): MangoDBCursor<T> {
     this.sortSpec = spec;
     return this;
   }
@@ -144,7 +144,7 @@ export class MongoneCursor<T extends Document = Document> {
    * cursor.limit(-5); // Same as limit(5)
    * ```
    */
-  limit(n: number): MongoneCursor<T> {
+  limit(n: number): MangoDBCursor<T> {
     const absN = Math.abs(n);
     // limit(0) means no limit in MongoDB
     this.limitValue = absN === 0 ? null : absN;
@@ -171,7 +171,7 @@ export class MongoneCursor<T extends Document = Document> {
    * cursor.skip((page - 1) * pageSize).limit(pageSize);
    * ```
    */
-  skip(n: number): MongoneCursor<T> {
+  skip(n: number): MangoDBCursor<T> {
     if (n < 0) {
       throw new Error("Skip value must be non-negative");
     }

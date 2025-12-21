@@ -1,7 +1,7 @@
 /**
  * Phase 7: Index Tests
  *
- * These tests run against both real MongoDB and Mongone to ensure compatibility.
+ * These tests run against both real MongoDB and MangoDB to ensure compatibility.
  * Set MONGODB_URI environment variable to run against MongoDB.
  */
 
@@ -124,7 +124,7 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("nonexistent_1");
         },
         (err: Error) => {
-          // Both MongoDB and Mongone use "index not found with name [...]"
+          // Both MongoDB and MangoDB use "index not found with name [...]"
           assert(
             err.message.includes("index not found with name"),
             `Expected "index not found with name" error, got: ${err.message}`
@@ -145,7 +145,7 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("_id_");
         },
         (err: Error) => {
-          // Both MongoDB and Mongone use "cannot drop _id index"
+          // Both MongoDB and MangoDB use "cannot drop _id index"
           assert(
             err.message.includes("cannot drop _id index"),
             `Expected "cannot drop _id index" error, got: ${err.message}`
@@ -166,7 +166,7 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex({ _id: 1 });
         },
         (err: Error) => {
-          // Both MongoDB and Mongone use "cannot drop _id index"
+          // Both MongoDB and MangoDB use "cannot drop _id index"
           assert(
             err.message.includes("cannot drop _id index"),
             `Expected "cannot drop _id index" error, got: ${err.message}`
