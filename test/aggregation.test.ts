@@ -538,7 +538,7 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => collection.aggregate([{ $limit: 0 }]).toArray(),
-        (err: Error) => err.message.includes("positive")
+        (err: Error) => err.message.includes("the limit must be positive")
       );
     });
 
@@ -548,11 +548,7 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => collection.aggregate([{ $limit: 2.5 }]).toArray(),
-        (err: Error) => {
-          const msg = err.message.toLowerCase();
-          // MongoDB: "Expected an integer", Mongone: "the limit must be positive"
-          return msg.includes("integer") || msg.includes("positive");
-        }
+        (err: Error) => err.message.includes("Expected an integer")
       );
     });
 
@@ -562,11 +558,7 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
 
       await assert.rejects(
         async () => collection.aggregate([{ $limit: -1 }]).toArray(),
-        (err: Error) => {
-          const msg = err.message.toLowerCase();
-          // MongoDB: "Expected a non-negative number", Mongone: "the limit must be positive"
-          return msg.includes("negative") || msg.includes("positive");
-        }
+        (err: Error) => err.message.includes("Expected a non-negative number")
       );
     });
   });
