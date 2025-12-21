@@ -393,7 +393,7 @@ describe(`Array Query Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 1);
     });
 
-    it("should handle empty $elemMatch object (matches any element)", async () => {
+    it("should handle empty $elemMatch object (matches nothing)", async () => {
       const collection = client.db(dbName).collection("elemmatch_empty_cond");
       await collection.insertMany([
         { items: [1, 2, 3] },
@@ -405,8 +405,8 @@ describe(`Array Query Tests (${getTestModeName()})`, () => {
         .find({ items: { $elemMatch: {} } })
         .toArray();
 
-      // Matches non-empty arrays
-      assert.strictEqual(docs.length, 1);
+      // Empty $elemMatch matches nothing (per MongoDB behavior)
+      assert.strictEqual(docs.length, 0);
     });
 
     it("should work with $not inside $elemMatch", async () => {

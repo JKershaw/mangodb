@@ -530,8 +530,8 @@ export class MongoneCollection<T extends Document = Document> {
           if (!Array.isArray(docValue)) return false;
           if (docValue.length === 0) return false;
           const elemMatchCond = opValue as Record<string, unknown>;
-          // Empty condition matches any non-empty array
-          if (Object.keys(elemMatchCond).length === 0) break;
+          // Empty condition matches nothing (per MongoDB behavior)
+          if (Object.keys(elemMatchCond).length === 0) return false;
           // Check if any element matches all conditions
           const hasMatchingElement = docValue.some((elem) =>
             this.matchesElemMatchCondition(elem, elemMatchCond)

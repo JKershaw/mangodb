@@ -615,7 +615,7 @@ await collection.find({ scores: { $elemMatch: { $gte: 25, $lt: 35 } } }).toArray
 - Matches if ANY array element satisfies ALL conditions
 - Key difference from implicit AND: all conditions must be met by the SAME element
 - Works with both primitive arrays and arrays of objects
-- Empty `$elemMatch: {}` matches any non-empty array
+- Empty `$elemMatch: {}` matches nothing (returns no documents)
 - Does not match non-array fields
 - Does not match empty arrays
 
