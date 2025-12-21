@@ -115,6 +115,9 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
 
     it("should throw for non-existent index", async () => {
       const collection = client.db(dbName).collection("idx_drop_nonexist");
+      // Ensure collection exists first (MongoDB throws "ns not found" otherwise)
+      await collection.insertOne({ test: true });
+      await collection.deleteMany({});
 
       await assert.rejects(
         async () => {
@@ -133,6 +136,9 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
 
     it("should throw when dropping _id index by name", async () => {
       const collection = client.db(dbName).collection("idx_drop_id_name");
+      // Ensure collection exists first (MongoDB throws "ns not found" otherwise)
+      await collection.insertOne({ test: true });
+      await collection.deleteMany({});
 
       await assert.rejects(
         async () => {
@@ -151,6 +157,9 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
 
     it("should throw when dropping _id index by spec", async () => {
       const collection = client.db(dbName).collection("idx_drop_id_spec");
+      // Ensure collection exists first (MongoDB throws "ns not found" otherwise)
+      await collection.insertOne({ test: true });
+      await collection.deleteMany({});
 
       await assert.rejects(
         async () => {
