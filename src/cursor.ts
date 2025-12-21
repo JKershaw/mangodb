@@ -22,17 +22,41 @@ interface IndexInfo {
 
 /**
  * IndexCursor represents a cursor over index information.
- * Provides a minimal cursor API for listIndexes() compatibility.
+ * Provides a minimal cursor API for listIndexes() compatibility with the MongoDB driver.
+ * Used to iterate over database indexes returned by collection.listIndexes().
+ *
+ * @example
+ * ```typescript
+ * const indexCursor = collection.listIndexes();
+ * const indexes = await indexCursor.toArray();
+ * console.log(indexes); // [{ v: 2, key: { _id: 1 }, name: '_id_' }, ...]
+ * ```
  */
 export class IndexCursor {
   private readonly fetchIndexes: () => Promise<IndexInfo[]>;
 
+  /**
+   * Creates a new IndexCursor instance.
+   *
+   * @param fetchIndexes - Function that returns a promise resolving to an array of index information
+   */
   constructor(fetchIndexes: () => Promise<IndexInfo[]>) {
     this.fetchIndexes = fetchIndexes;
   }
 
   /**
-   * Return all indexes as an array.
+   * Returns all indexes as an array.
+   * Executes the fetch operation and returns the complete list of indexes.
+   *
+   * @returns Promise resolving to an array of index information objects
+   *
+   * @example
+   * ```typescript
+   * const indexes = await indexCursor.toArray();
+   * indexes.forEach(index => {
+   *   console.log(`Index: ${index.name}, Keys: ${JSON.stringify(index.key)}`);
+   * });
+   * ```
    */
   async toArray(): Promise<IndexInfo[]> {
     return this.fetchIndexes();
@@ -41,7 +65,20 @@ export class IndexCursor {
 
 /**
  * MongoneCursor represents a cursor over query results.
- * It mirrors the Cursor API from the official MongoDB driver.
+ * It mirrors the Cursor API from the official MongoDB driver, providing chainable methods
+ * for sorting, limiting, skipping, and projecting query results.
+ *
+ * @template T - The document type (defaults to generic Document)
+ *
+ * @example
+ * ```typescript
+ * const cursor = collection.find({ status: 'active' });
+ * const results = await cursor
+ *   .sort({ createdAt: -1 })
+ *   .skip(10)
+ *   .limit(5)
+ *   .toArray();
+ * ```
  */
 export class MongoneCursor<T extends Document = Document> {
   private readonly fetchDocuments: () => Promise<T[]>;
@@ -50,6 +87,12 @@ export class MongoneCursor<T extends Document = Document> {
   private skipValue: number | null = null;
   private projectionSpec: ProjectionSpec | null = null;
 
+  /**
+   * Creates a new MongoneCursor instance.
+   *
+   * @param fetchDocuments - Function that returns a promise resolving to an array of documents
+   * @param projection - Optional projection specification to apply to all results
+   */
   constructor(
     fetchDocuments: () => Promise<T[]>,
     projection?: ProjectionSpec | null
@@ -59,8 +102,21 @@ export class MongoneCursor<T extends Document = Document> {
   }
 
   /**
-   * Sort the results by the specified fields.
+   * Sorts the query results by the specified fields.
+   * Multiple fields can be specified for multi-level sorting.
    * Returns this cursor for chaining.
+   *
+   * @param spec - Sort specification where keys are field names and values are 1 (ascending) or -1 (descending)
+   * @returns This cursor instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Sort by age descending, then name ascending
+   * cursor.sort({ age: -1, name: 1 });
+   *
+   * // Sort by single field
+   * cursor.sort({ createdAt: -1 });
+   * ```
    */
   sort(spec: SortSpec): MongoneCursor<T> {
     this.sortSpec = spec;
@@ -68,10 +124,25 @@ export class MongoneCursor<T extends Document = Document> {
   }
 
   /**
-   * Limit the number of results returned.
-   * Returns this cursor for chaining.
+   * Limits the number of documents returned by the query.
    * Negative values are treated as positive (MongoDB 3.2+ behavior).
-   * limit(0) means no limit (returns all documents).
+   * A limit of 0 means no limit and returns all documents.
+   * Returns this cursor for chaining.
+   *
+   * @param n - Maximum number of documents to return (0 for no limit)
+   * @returns This cursor instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Return at most 10 documents
+   * cursor.limit(10);
+   *
+   * // Remove any previous limit (return all)
+   * cursor.limit(0);
+   *
+   * // Negative values are treated as positive
+   * cursor.limit(-5); // Same as limit(5)
+   * ```
    */
   limit(n: number): MongoneCursor<T> {
     const absN = Math.abs(n);
@@ -81,9 +152,24 @@ export class MongoneCursor<T extends Document = Document> {
   }
 
   /**
-   * Skip the first n results.
+   * Skips the first n documents in the query results.
+   * Useful for pagination when combined with limit().
    * Returns this cursor for chaining.
-   * @throws Error if n is negative (MongoDB behavior).
+   *
+   * @param n - Number of documents to skip (must be non-negative)
+   * @returns This cursor instance for method chaining
+   * @throws Error if n is negative (matches MongoDB behavior)
+   *
+   * @example
+   * ```typescript
+   * // Skip the first 20 documents (e.g., for pagination)
+   * cursor.skip(20).limit(10);
+   *
+   * // Page 3 with 10 items per page
+   * const page = 3;
+   * const pageSize = 10;
+   * cursor.skip((page - 1) * pageSize).limit(pageSize);
+   * ```
    */
   skip(n: number): MongoneCursor<T> {
     if (n < 0) {
@@ -94,8 +180,35 @@ export class MongoneCursor<T extends Document = Document> {
   }
 
   /**
-   * Return all documents as an array.
-   * Applies sort, skip, and limit in that order.
+   * Executes the query and returns all matching documents as an array.
+   * Applies all cursor modifiers in the following order:
+   * 1. Sort - Orders documents by specified fields
+   * 2. Skip - Skips the first n documents
+   * 3. Limit - Restricts the number of documents returned
+   * 4. Projection - Shapes the documents by including/excluding fields
+   *
+   * @returns Promise resolving to an array of documents matching the query and cursor options
+   *
+   * @example
+   * ```typescript
+   * // Simple query
+   * const users = await collection.find({ active: true }).toArray();
+   *
+   * // With cursor modifiers
+   * const recentPosts = await collection
+   *   .find({ published: true })
+   *   .sort({ createdAt: -1 })
+   *   .limit(10)
+   *   .toArray();
+   *
+   * // Pagination example
+   * const page2 = await collection
+   *   .find({})
+   *   .sort({ _id: 1 })
+   *   .skip(20)
+   *   .limit(20)
+   *   .toArray();
+   * ```
    */
   async toArray(): Promise<T[]> {
     let docs = await this.fetchDocuments();

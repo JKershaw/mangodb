@@ -4,13 +4,35 @@ import { join } from "node:path";
 
 /**
  * MongoneDb represents a database in Mongone.
- * It mirrors the Db API from the official MongoDB driver.
+ * It mirrors the Db API from the official MongoDB driver,
+ * providing methods to work with collections and manage the database.
+ *
+ * @example
+ * ```typescript
+ * const client = new MongoneClient('./data');
+ * await client.connect();
+ * const db = client.db('myDatabase');
+ * const collection = db.collection('users');
+ * ```
  */
 export class MongoneDb {
   private readonly dataDir: string;
   private readonly name: string;
   private collections = new Map<string, MongoneCollection<Document>>();
 
+  /**
+   * Create a new MongoneDb instance.
+   * Note: Typically you don't create this directly; use MongoneClient.db() instead.
+   *
+   * @param dataDir - Base directory for storing database files
+   * @param name - Database name
+   *
+   * @example
+   * ```typescript
+   * // Usually obtained via client.db()
+   * const db = client.db('myDatabase');
+   * ```
+   */
   constructor(dataDir: string, name: string) {
     this.dataDir = dataDir;
     this.name = name;
@@ -18,7 +40,25 @@ export class MongoneDb {
 
   /**
    * Get a collection instance.
+   * Collection instances are cached and reused for the same name.
+   * The generic type parameter T allows for typed document operations.
+   *
    * @param name - Collection name
+   * @returns A MongoneCollection instance typed to T
+   *
+   * @example
+   * ```typescript
+   * // Untyped collection
+   * const users = db.collection('users');
+   *
+   * // Typed collection
+   * interface User {
+   *   _id?: ObjectId;
+   *   name: string;
+   *   email: string;
+   * }
+   * const typedUsers = db.collection<User>('users');
+   * ```
    */
   collection<T extends Document = Document>(name: string): MongoneCollection<T> {
     if (!this.collections.has(name)) {
@@ -32,6 +72,13 @@ export class MongoneDb {
 
   /**
    * Drop the database.
+   * Permanently deletes the database directory and all its collections.
+   * Clears all cached collection instances.
+   *
+   * @example
+   * ```typescript
+   * await db.dropDatabase();
+   * ```
    */
   async dropDatabase(): Promise<void> {
     const dbPath = join(this.dataDir, this.name);
