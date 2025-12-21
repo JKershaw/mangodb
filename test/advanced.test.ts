@@ -106,6 +106,58 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
       const remaining = await collection.find({ type: "fruit" }).toArray();
       assert.strictEqual(remaining.length, 1);
     });
+
+    it("should sort by array field using minimum element (ascending)", async () => {
+      const collection = client.db(dbName).collection("foad_array_sort");
+      await collection.insertMany([
+        { name: "A", scores: [5, 10, 15] }, // min: 5
+        { name: "B", scores: [1, 20, 30] }, // min: 1
+        { name: "C", scores: [8, 9, 10] }, // min: 8
+      ]);
+
+      // Ascending sort should use minimum element
+      const result = await collection.findOneAndDelete(
+        {},
+        { sort: { scores: 1 } }
+      );
+
+      assert.strictEqual(result.value?.name, "B"); // min score 1
+    });
+
+    it("should sort by array field using maximum element (descending)", async () => {
+      const collection = client.db(dbName).collection("foad_array_sort_desc");
+      await collection.insertMany([
+        { name: "A", scores: [5, 10, 15] }, // max: 15
+        { name: "B", scores: [1, 20, 30] }, // max: 30
+        { name: "C", scores: [8, 9, 10] }, // max: 10
+      ]);
+
+      // Descending sort should use maximum element
+      const result = await collection.findOneAndDelete(
+        {},
+        { sort: { scores: -1 } }
+      );
+
+      assert.strictEqual(result.value?.name, "B"); // max score 30
+    });
+
+    it("should sort by boolean field correctly", async () => {
+      const collection = client.db(dbName).collection("foad_bool_sort");
+      await collection.insertMany([
+        { name: "A", active: true },
+        { name: "B", active: false },
+        { name: "C", active: true },
+      ]);
+
+      // Ascending: false < true
+      const result = await collection.findOneAndDelete(
+        {},
+        { sort: { active: 1 } }
+      );
+
+      assert.strictEqual(result.value?.name, "B"); // false comes first
+      assert.strictEqual(result.value?.active, false);
+    });
   });
 
   describe("findOneAndReplace", () => {
@@ -233,6 +285,22 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
 
       assert.strictEqual(result.value?.name, "high");
       assert.strictEqual(result.value?.priority, 3);
+    });
+
+    it("should apply projection to returned document", async () => {
+      const collection = client.db(dbName).collection("foar_projection");
+      await collection.insertOne({ name: "Alice", age: 30, secret: "hidden" });
+
+      const result = await collection.findOneAndReplace(
+        { name: "Alice" },
+        { name: "Alice", age: 31, secret: "stillHidden" },
+        { projection: { name: 1, age: 1, _id: 0 }, returnDocument: "after" }
+      );
+
+      assert.strictEqual(result.value?.name, "Alice");
+      assert.strictEqual(result.value?.age, 31);
+      assert.strictEqual(result.value?.secret, undefined);
+      assert.strictEqual(result.value?._id, undefined);
     });
   });
 

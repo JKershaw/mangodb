@@ -1,6 +1,10 @@
 import { ObjectId } from "mongodb";
 import { MongoneCursor, IndexCursor } from "./cursor.ts";
-import { applyProjection, type ProjectionSpec } from "./utils.ts";
+import {
+  applyProjection,
+  compareValuesForSort,
+  type ProjectionSpec,
+} from "./utils.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import {
@@ -1707,6 +1711,7 @@ export class MongoneCollection<T extends Document = Document> {
   /**
    * Sort documents by the given specification and return them.
    * Used by findOneAnd* methods to determine which document to modify.
+   * Uses the same comparison logic as MongoneCursor for consistency.
    */
   private sortDocuments(docs: T[], sortSpec: Record<string, 1 | -1>): T[] {
     const sortFields = Object.entries(sortSpec) as [string, 1 | -1][];
@@ -1714,42 +1719,14 @@ export class MongoneCollection<T extends Document = Document> {
       for (const [field, direction] of sortFields) {
         const aValue = this.getValueByPath(a, field);
         const bValue = this.getValueByPath(b, field);
-        const comparison = this.compareForSort(aValue, bValue);
+        // Use shared comparison that handles arrays, type ordering, etc.
+        const comparison = compareValuesForSort(aValue, bValue, direction);
         if (comparison !== 0) {
           return direction === 1 ? comparison : -comparison;
         }
       }
       return 0;
     });
-  }
-
-  /**
-   * Compare two values for sorting purposes.
-   */
-  private compareForSort(a: unknown, b: unknown): number {
-    // Handle null/undefined - they sort first
-    if (a === null || a === undefined) {
-      if (b === null || b === undefined) return 0;
-      return -1;
-    }
-    if (b === null || b === undefined) return 1;
-
-    // Same type comparisons
-    if (typeof a === "number" && typeof b === "number") {
-      return a - b;
-    }
-    if (typeof a === "string" && typeof b === "string") {
-      return a.localeCompare(b);
-    }
-    if (a instanceof Date && b instanceof Date) {
-      return a.getTime() - b.getTime();
-    }
-    if (a instanceof ObjectId && b instanceof ObjectId) {
-      return a.toHexString().localeCompare(b.toHexString());
-    }
-
-    // Fallback to string comparison
-    return String(a).localeCompare(String(b));
   }
 
   /**
@@ -1778,10 +1755,16 @@ export class MongoneCollection<T extends Document = Document> {
     const docToDelete = matches[0];
     const docId = (docToDelete as { _id?: ObjectId })._id;
 
-    // Remove from documents array
+    // Safety check: all documents should have _id after insertion
+    if (!docId) {
+      throw new Error("Cannot delete document without _id");
+    }
+
+    // Remove the document by _id
     const remaining = documents.filter((doc) => {
       const id = (doc as { _id?: ObjectId })._id;
-      return !id || !docId || !id.equals(docId);
+      // Keep documents that don't match the target _id
+      return !id || !id.equals(docId);
     });
 
     await this.writeDocuments(remaining);
