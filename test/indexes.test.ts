@@ -124,10 +124,10 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("nonexistent_1");
         },
         (err: Error) => {
-          // Both MongoDB and Mongone use "can't find index with name [...]"
+          // Both MongoDB and Mongone use "index not found with name [...]"
           assert(
-            err.message.includes("can't find index with name"),
-            `Expected "can't find index with name" error, got: ${err.message}`
+            err.message.includes("index not found with name"),
+            `Expected "index not found with name" error, got: ${err.message}`
           );
           return true;
         }

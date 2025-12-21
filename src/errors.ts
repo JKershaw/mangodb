@@ -45,8 +45,8 @@ export class IndexNotFoundError extends Error {
   readonly codeName = "IndexNotFound";
 
   constructor(indexName: string) {
-    // MongoDB uses "can't find index with name [indexName]"
-    super(`can't find index with name [${indexName}]`);
+    // MongoDB uses "index not found with name [indexName]"
+    super(`index not found with name [${indexName}]`);
     this.name = "IndexNotFoundError";
   }
 }
