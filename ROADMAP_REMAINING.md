@@ -17,6 +17,39 @@ The project follows a rigorous development process:
 
 ---
 
+## Current Codebase Structure (Post-Refactoring)
+
+The codebase has been refactored into focused modules:
+
+```
+src/
+├── index.ts              # Public API exports
+├── client.ts             # MongoneClient entry point
+├── db.ts                 # Database abstraction
+├── collection.ts         # MongoneCollection (uses modules below)
+├── cursor.ts             # Query cursor with sort/limit/skip/projection
+├── types.ts              # All type definitions (QueryOperators, Filter, etc.)
+├── query-matcher.ts      # Query matching logic (matchesFilter, matchesOperators)
+├── update-operators.ts   # Update operator application (applyUpdateOperators)
+├── index-manager.ts      # IndexManager class (createIndex, uniqueness checks)
+├── document-utils.ts     # Document utilities (getValueByPath, cloneDocument, etc.)
+├── errors.ts             # Error classes (MongoDuplicateKeyError, etc.)
+└── utils.ts              # Sorting and projection utilities
+```
+
+**Where to implement new features:**
+
+| Feature Type | Target Module |
+|--------------|---------------|
+| Query operators ($regex, $type, $mod) | `query-matcher.ts` + `types.ts` |
+| Update operators ($min, $max, $mul) | `update-operators.ts` + `types.ts` |
+| Aggregation pipeline | New `aggregation.ts` module |
+| Error classes | `errors.ts` |
+| Index features (sparse, TTL, partial) | `index-manager.ts` + `types.ts` |
+| Admin operations (distinct, drop) | `collection.ts` / `db.ts` |
+
+---
+
 ## Current State (Phases 1-8 Complete)
 
 | Phase | Feature | Status | Test Cases |
@@ -78,9 +111,14 @@ const results = await collection.aggregate([
 - [ ] Stage validation
 
 #### Step 2: `$match` Stage
-- [ ] Filter documents using query syntax (reuse existing matching logic)
+- [ ] Filter documents using query syntax (reuse existing `matchesFilter` from `query-matcher.ts`)
 - [ ] Support all existing query operators
 - [ ] Works identically to `find()` filter
+
+**Restrictions (from MongoDB docs)**:
+- Cannot use raw aggregation expressions - must wrap in `$expr`
+- Cannot use `$where` operator in `$match`
+- `$text` operator must be first stage if used
 
 **Test Cases**:
 ```typescript
@@ -101,6 +139,21 @@ await collection.aggregate([{ $match: { $or: [{ a: 1 }, { b: 2 }] } }]).toArray(
 - [ ] Computed fields with expressions (basic)
 - [ ] Nested field projection
 
+**Critical Restrictions (from MongoDB docs)**:
+- **Cannot mix inclusion (1) and exclusion (0)** except for `_id`
+- `_id` is ALWAYS included by default unless explicitly set to 0
+- Use `$literal` for numeric/boolean literals: `{ value: { $literal: 1 } }`
+- Empty `$project: {}` returns an error
+
+**Error Cases**:
+```typescript
+// ERROR - mixing include and exclude
+{ $project: { name: 1, age: 0 } }  // Invalid!
+
+// OK - _id exception
+{ $project: { name: 1, _id: 0 } }  // Valid
+```
+
 **Test Cases**:
 ```typescript
 // Include fields
@@ -109,7 +162,7 @@ await collection.aggregate([{ $project: { name: 1, age: 1 } }]).toArray();
 // Exclude _id
 await collection.aggregate([{ $project: { _id: 0, name: 1 } }]).toArray();
 
-// Rename field
+// Rename field using $ prefix
 await collection.aggregate([{ $project: { fullName: "$name" } }]).toArray();
 
 // Nested fields
@@ -142,6 +195,12 @@ await collection.aggregate([{ $skip: 10 }, { $limit: 5 }]).toArray();
 - [ ] Returns count as specified field name
 - [ ] `{ $count: "totalDocs" }` → `{ totalDocs: 123 }`
 
+**Critical Behavior (from MongoDB docs)**:
+- Field name must be **non-empty string**
+- Field name must **NOT start with `$`**
+- Field name must **NOT contain `.` (dot)**
+- **If input is empty, $count returns NO document** (not `{ count: 0 }`)
+
 **Test Cases**:
 ```typescript
 await collection.aggregate([
@@ -149,12 +208,28 @@ await collection.aggregate([
   { $count: "activeCount" }
 ]).toArray();
 // Returns: [{ activeCount: 42 }]
+
+// Empty collection - returns empty array, NOT [{ count: 0 }]
+await emptyCollection.aggregate([{ $count: "total" }]).toArray();
+// Returns: []
 ```
 
 #### Step 7: `$unwind` Stage
 - [ ] Deconstruct array field into multiple documents
 - [ ] `preserveNullAndEmptyArrays` option
 - [ ] `includeArrayIndex` option
+
+**Behavior by Input Type (from MongoDB docs)**:
+
+| Input Type | Default Behavior | With `preserveNullAndEmptyArrays: true` |
+|------------|------------------|----------------------------------------|
+| Populated array | One doc per element | Same |
+| **Non-array value** | **Treated as single-element array** | Same |
+| null | No output (doc excluded) | Doc included (field is null) |
+| Missing field | No output (doc excluded) | Doc included (field missing) |
+| Empty array `[]` | No output (doc excluded) | Doc included |
+
+**Important**: Non-array operands are treated as single-element arrays (MongoDB 3.2+)
 
 **Test Cases**:
 ```typescript
@@ -170,13 +245,34 @@ await collection.aggregate([{
     includeArrayIndex: "idx"
   }
 }]).toArray();
+
+// Non-array treated as single-element array
+// Given: { value: "scalar" }
+await collection.aggregate([{ $unwind: "$value" }]).toArray();
+// Returns: [{ value: "scalar" }]
 ```
 
 ### Implementation Notes
 
+**New file: `src/aggregation.ts`**
+
 ```typescript
-// New file: src/aggregation.ts
-export class AggregationCursor<T> {
+// src/aggregation.ts - New module for aggregation pipeline
+import { matchesFilter } from "./query-matcher.ts";
+import { sortDocuments, applyProjection } from "./utils.ts";
+import type { Document, Filter } from "./types.ts";
+
+export interface PipelineStage {
+  $match?: Filter<Document>;
+  $project?: Record<string, 0 | 1 | string>;
+  $sort?: Record<string, 1 | -1>;
+  $limit?: number;
+  $skip?: number;
+  $count?: string;
+  $unwind?: string | { path: string; preserveNullAndEmptyArrays?: boolean; includeArrayIndex?: string };
+}
+
+export class AggregationCursor<T extends Document> {
   private pipeline: PipelineStage[];
   private collection: MongoneCollection<T>;
 
@@ -189,15 +285,27 @@ export class AggregationCursor<T> {
   }
 
   private async executeStage(stage: PipelineStage, docs: T[]): Promise<T[]> {
-    if ('$match' in stage) return this.execMatch(stage.$match, docs);
-    if ('$project' in stage) return this.execProject(stage.$project, docs);
-    if ('$sort' in stage) return this.execSort(stage.$sort, docs);
+    if ('$match' in stage) {
+      // Reuse existing matchesFilter from query-matcher.ts
+      return docs.filter(doc => matchesFilter(doc, stage.$match!));
+    }
+    if ('$project' in stage) return this.execProject(stage.$project!, docs);
+    if ('$sort' in stage) {
+      // Reuse existing sortDocuments from utils.ts
+      return sortDocuments(docs, stage.$sort!);
+    }
     if ('$limit' in stage) return docs.slice(0, stage.$limit);
     if ('$skip' in stage) return docs.slice(stage.$skip);
-    // ... etc
+    if ('$count' in stage) return this.execCount(stage.$count!, docs);
+    if ('$unwind' in stage) return this.execUnwind(stage.$unwind!, docs);
+    throw new Error(`Unrecognized pipeline stage name: '${Object.keys(stage)[0]}'`);
   }
 }
 ```
+
+**Types to add to `src/types.ts`**:
+- `PipelineStage` interface
+- `AggregationOptions` interface
 
 ### Test File Structure
 
@@ -949,7 +1057,7 @@ test/admin.test.ts
 
 ## Appendix A: Error Messages Reference
 
-All error messages should match MongoDB's format exactly.
+All error messages should match MongoDB's format exactly. These have been verified against official MongoDB documentation.
 
 ### Query Errors
 
@@ -957,32 +1065,118 @@ All error messages should match MongoDB's format exactly.
 |----------|-----------|---------------|
 | `$regex` | Invalid pattern | `$regex has to be a string` |
 | `$options` | Without $regex | `$options needs a $regex` |
+| `$options` | Invalid flag | `invalid flag in regex options: <flag>` |
 | `$type` | Unknown type | `unknown type code: X` |
-| `$mod` | Invalid array | `malformed mod, not enough elements` |
-| `$mod` | Non-numeric | `$mod must have two numbers` |
+| `$mod` | Wrong array length | Array must have exactly 2 elements (error varies) |
+| `$mod` | NaN/Infinity value | Error in MongoDB 5.1+ |
+| `$regexMatch` | Non-string input | `$regexMatch needs 'input' to be of type string` |
 
 ### Aggregation Errors
 
 | Stage | Condition | Error Message |
 |-------|-----------|---------------|
-| `$group` | Missing _id | `a]group specification must include an _id` |
+| `$group` | Missing _id | `a group specification must include an _id` |
 | `$lookup` | Missing from | `$lookup requires 'from' field` |
-| `$out` | Not last stage | `$out can only be the final stage` |
+| `$out` | Not last stage | `$out can only be the final stage in the pipeline` |
+| `$replaceRoot` | Missing/null newRoot | `$replaceRoot` errors and fails |
+| `$concat` | Non-string arg | `$concat only supports strings, not <type>` |
 | Pipeline | Unknown stage | `Unrecognized pipeline stage name: '$unknown'` |
+| `$count` | Empty field name | Field name must be non-empty |
+| `$count` | Field starts with $ | Field name cannot start with $ |
+| `$count` | Field contains . | Field name cannot contain . |
 
 ### Update Errors
 
 | Operator | Condition | Error Message |
 |----------|-----------|---------------|
 | `$rename` | Same field | `$rename source and dest can't be the same` |
-| `$mul` | Non-numeric | `Cannot apply $mul to a non-numeric value` |
-| `$` | No match | `The positional operator did not find the match needed` |
+| `$mul` | Non-numeric field | `Cannot apply $mul to a non-numeric value` |
+| `$mul` | Missing field | Creates field with value 0 (not an error!) |
+| `$` | No array in query | `The positional operator did not find the match needed` |
+| `$[identifier]` | Spaces in identifier | Operation fails |
+| `$position` | Without $each | Error - must use with $each |
+| `$slice` | Without $each | Error - must use with $each |
+| `$sort` | Without $each | Error - must use with $each |
+
+### Index Errors
+
+| Operation | Condition | Error Message |
+|-----------|-----------|---------------|
+| `dropIndex` | _id index | `cannot drop _id index` |
+| `dropIndex` | Not found | `index not found with name [indexName]` |
+| `hint()` | Invalid index | `planner returned error: bad hint` |
+| `rename` | Source not found | `source namespace does not exist` (Code 26) |
+| Sparse + Partial | Both specified | Cannot use both options |
 
 ---
 
-## Appendix B: Feature Comparison
+## Appendix B: Critical Edge Cases and Surprising Behaviors
 
-### After All Phases Complete
+These behaviors were verified from official MongoDB documentation and must be implemented correctly.
+
+### Aggregation Pipeline
+
+| Behavior | Details |
+|----------|---------|
+| `$count` on empty input | Returns **NO document** (empty array), not `{ count: 0 }` |
+| `$unwind` on non-array | Treats as single-element array (MongoDB 3.2+) |
+| `$project` mixing | Cannot mix 1 and 0 except for `_id` exclusion |
+| `$concat` with null | Returns **null** (null propagates) |
+| `$concat` with non-string | **Throws error** |
+| `$replaceRoot` missing field | **Errors and fails** (use `$mergeObjects` or `$ifNull` to handle) |
+| `$lookup` no match | Returns **empty array** in output field (left outer join) |
+| `$group` with `_id: null` | Groups ALL documents into single group |
+| `$out` position | Must be **last stage** (throws error otherwise) |
+| `$merge` failures | Does **NOT** rollback previous writes (unlike `$out`) |
+
+### Regular Expressions
+
+| Behavior | Details |
+|----------|---------|
+| Array field matching | Matches if **ANY** element matches (not all) |
+| Non-string fields | **Silently skipped** (no match, no error) |
+| `$regex` in `$in` | Only JavaScript regex objects allowed (`/pattern/`), not `{ $regex: ... }` |
+| Options `x` and `s` | Require `$regex` operator syntax, not inline `/pattern/` |
+| `$regexMatch` null input | **Throws error** (use `$ifNull` to handle) |
+
+### Query Operators
+
+| Behavior | Details |
+|----------|---------|
+| `$type: "number"` | Matches `double`, `int`, `long`, AND `decimal` |
+| `$type` on arrays | Checks **element types** (not array type itself pre-3.6) |
+| `$mod` with decimals | **Rounds** towards zero |
+| `$mod` negative dividend | Returns **negative** remainder (e.g., -5 % 4 = -1) |
+| `$expr` index usage | Only for field-to-**constant** comparisons |
+
+### Update Operators
+
+| Behavior | Details |
+|----------|---------|
+| `$mul` missing field | Creates field with **0** (not the multiplied value!) |
+| `$min`/`$max` missing field | Creates field with specified value |
+| `$rename` missing old field | **No-op** (no error) |
+| `$rename` existing new field | **Removes** existing field first |
+| `$setOnInsert` without upsert | **Ignored** |
+| `$` positional | Requires array field **in query** |
+| `$[identifier]` format | Must be lowercase letter + alphanumeric, no spaces |
+| `$push` modifiers order | Always: position → sort → slice (regardless of spec order) |
+
+### Indexes
+
+| Behavior | Details |
+|----------|---------|
+| Sparse indexes | DO index `null` values, only skip **missing** fields |
+| TTL deletion | Asynchronous, ~60 second intervals (not immediate) |
+| Partial + Sparse | **Cannot combine** both options |
+| `estimatedDocumentCount()` | May be **inaccurate** on sharded clusters |
+| `distinct()` on arrays | Treats **each element** as separate value |
+
+---
+
+## Appendix C: Feature Comparison (After All Phases)
+
+### MongoDB Feature Coverage
 
 | MongoDB Feature | Mongone Status | Notes |
 |-----------------|----------------|-------|
@@ -1000,7 +1194,7 @@ All error messages should match MongoDB's format exactly.
 
 ---
 
-## Appendix C: Implementation Checklist Template
+## Appendix D: Implementation Checklist Template
 
 For each new phase, create a PHASE*_PLAN.md with:
 
