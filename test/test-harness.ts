@@ -40,6 +40,24 @@ export interface FindOptions {
   projection?: Document;
 }
 
+export interface IndexInfo {
+  v: number;
+  key: Record<string, 1 | -1>;
+  name: string;
+  unique?: boolean;
+  sparse?: boolean;
+}
+
+export interface CreateIndexOptions {
+  unique?: boolean;
+  name?: string;
+  sparse?: boolean;
+}
+
+export interface IndexCursor {
+  toArray(): Promise<IndexInfo[]>;
+}
+
 export interface TestCollection<T extends Document = Document> {
   insertOne(
     doc: T
@@ -66,6 +84,13 @@ export interface TestCollection<T extends Document = Document> {
     options?: UpdateOptions
   ): Promise<UpdateResult>;
   countDocuments(filter?: Partial<T>): Promise<number>;
+  createIndex(
+    keySpec: Record<string, 1 | -1>,
+    options?: CreateIndexOptions
+  ): Promise<string>;
+  dropIndex(indexNameOrSpec: string | Record<string, 1 | -1>): Promise<void>;
+  indexes(): Promise<IndexInfo[]>;
+  listIndexes(): IndexCursor;
 }
 
 export interface TestCursor<T> {

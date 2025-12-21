@@ -1,8 +1,13 @@
 import { ObjectId } from "mongodb";
-import { MongoneCursor } from "./cursor.ts";
+import { MongoneCursor, IndexCursor } from "./cursor.ts";
 import { applyProjection, type ProjectionSpec } from "./utils.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
+import {
+  MongoDuplicateKeyError,
+  IndexNotFoundError,
+  CannotDropIdIndexError,
+} from "./errors.ts";
 
 type Document = Record<string, unknown>;
 
@@ -91,14 +96,55 @@ interface UpdateOperators {
 }
 
 /**
+ * Index key specification.
+ * Keys are field names (can use dot notation).
+ * Values are 1 for ascending, -1 for descending.
+ */
+export type IndexKeySpec = Record<string, 1 | -1>;
+
+/**
+ * Options for creating an index.
+ */
+export interface CreateIndexOptions {
+  /** If true, the index enforces uniqueness */
+  unique?: boolean;
+  /** Custom name for the index */
+  name?: string;
+  /** If true, index only documents with the indexed field */
+  sparse?: boolean;
+}
+
+/**
+ * Information about an index.
+ */
+export interface IndexInfo {
+  /** Index version */
+  v: number;
+  /** The indexed field(s) and sort order */
+  key: IndexKeySpec;
+  /** The name of the index */
+  name: string;
+  /** Whether the index enforces uniqueness (only present if true) */
+  unique?: boolean;
+  /** Whether the index is sparse (only present if true) */
+  sparse?: boolean;
+}
+
+/**
  * MongoneCollection represents a collection in Mongone.
  * It mirrors the Collection API from the official MongoDB driver.
  */
 export class MongoneCollection<T extends Document = Document> {
   private readonly filePath: string;
+  private readonly indexFilePath: string;
+  private readonly dbName: string;
+  private readonly collectionName: string;
 
   constructor(dataDir: string, dbName: string, collectionName: string) {
     this.filePath = join(dataDir, dbName, `${collectionName}.json`);
+    this.indexFilePath = join(dataDir, dbName, `${collectionName}.indexes.json`);
+    this.dbName = dbName;
+    this.collectionName = collectionName;
   }
 
   /**
@@ -125,6 +171,227 @@ export class MongoneCollection<T extends Document = Document> {
     await mkdir(dirname(this.filePath), { recursive: true });
     const serialized = documents.map((doc) => this.serializeDocument(doc));
     await writeFile(this.filePath, JSON.stringify(serialized, null, 2));
+  }
+
+  /**
+   * Read index metadata from the index file.
+   * Returns the default _id index if no index file exists.
+   */
+  private async loadIndexes(): Promise<IndexInfo[]> {
+    try {
+      const content = await readFile(this.indexFilePath, "utf-8");
+      const parsed = JSON.parse(content);
+      return parsed.indexes || [];
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        // Return default _id index
+        return [{ v: 2, key: { _id: 1 }, name: "_id_" }];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Write index metadata to the index file.
+   */
+  private async saveIndexes(indexes: IndexInfo[]): Promise<void> {
+    await mkdir(dirname(this.indexFilePath), { recursive: true });
+    await writeFile(
+      this.indexFilePath,
+      JSON.stringify({ indexes }, null, 2)
+    );
+  }
+
+  /**
+   * Generate an index name from the key specification.
+   * Format: field1_1_field2_-1
+   */
+  private generateIndexName(keySpec: IndexKeySpec): string {
+    return Object.entries(keySpec)
+      .map(([field, direction]) => `${field}_${direction}`)
+      .join("_");
+  }
+
+  /**
+   * Check if two key specifications are equivalent.
+   */
+  private keySpecsEqual(a: IndexKeySpec, b: IndexKeySpec): boolean {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (let i = 0; i < aKeys.length; i++) {
+      if (aKeys[i] !== bKeys[i]) return false;
+      if (a[aKeys[i]] !== b[bKeys[i]]) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Create an index on the collection.
+   * Returns the index name.
+   */
+  async createIndex(
+    keySpec: IndexKeySpec,
+    options: CreateIndexOptions = {}
+  ): Promise<string> {
+    const indexes = await this.loadIndexes();
+    const indexName = options.name || this.generateIndexName(keySpec);
+
+    // Check if index with same key spec already exists
+    const existingBySpec = indexes.find((idx) =>
+      this.keySpecsEqual(idx.key, keySpec)
+    );
+    if (existingBySpec) {
+      // Index with same spec already exists - return its name (idempotent)
+      return existingBySpec.name;
+    }
+
+    // Create new index info
+    const newIndex: IndexInfo = {
+      v: 2,
+      key: keySpec,
+      name: indexName,
+    };
+
+    if (options.unique) {
+      newIndex.unique = true;
+    }
+
+    if (options.sparse) {
+      newIndex.sparse = true;
+    }
+
+    indexes.push(newIndex);
+    await this.saveIndexes(indexes);
+
+    return indexName;
+  }
+
+  /**
+   * Drop an index from the collection.
+   * Accepts either an index name or key specification.
+   */
+  async dropIndex(indexNameOrSpec: string | IndexKeySpec): Promise<void> {
+    const indexes = await this.loadIndexes();
+
+    // Determine the index name
+    let indexName: string;
+    if (typeof indexNameOrSpec === "string") {
+      indexName = indexNameOrSpec;
+    } else {
+      indexName = this.generateIndexName(indexNameOrSpec);
+    }
+
+    // Cannot drop _id index
+    if (indexName === "_id_") {
+      throw new CannotDropIdIndexError();
+    }
+
+    // Check for key spec matching _id: 1
+    if (
+      typeof indexNameOrSpec === "object" &&
+      this.keySpecsEqual(indexNameOrSpec, { _id: 1 })
+    ) {
+      throw new CannotDropIdIndexError();
+    }
+
+    // Find and remove the index
+    const indexIdx = indexes.findIndex((idx) => idx.name === indexName);
+    if (indexIdx === -1) {
+      throw new IndexNotFoundError(indexName);
+    }
+
+    indexes.splice(indexIdx, 1);
+    await this.saveIndexes(indexes);
+  }
+
+  /**
+   * List all indexes on the collection.
+   * Convenience method that returns an array directly.
+   */
+  async indexes(): Promise<IndexInfo[]> {
+    return this.loadIndexes();
+  }
+
+  /**
+   * List all indexes on the collection.
+   * Returns a cursor for consistency with MongoDB driver API.
+   */
+  listIndexes(): IndexCursor {
+    return new IndexCursor(() => this.loadIndexes());
+  }
+
+  /**
+   * Check unique constraints for documents being inserted or updated.
+   * Throws MongoDuplicateKeyError if a duplicate is found.
+   *
+   * @param docs - Documents to check
+   * @param existingDocs - Current documents in the collection
+   * @param excludeIds - ObjectIds to exclude from duplicate check (for updates)
+   */
+  private async checkUniqueConstraints(
+    docs: T[],
+    existingDocs: T[],
+    excludeIds: Set<string> = new Set()
+  ): Promise<void> {
+    const indexes = await this.loadIndexes();
+    const uniqueIndexes = indexes.filter((idx) => idx.unique);
+
+    if (uniqueIndexes.length === 0) {
+      return; // No unique indexes to check
+    }
+
+    // Build a set of existing values for each unique index (excluding specified IDs)
+    const existingValues = new Map<string, Map<string, T>>();
+    for (const idx of uniqueIndexes) {
+      const valueMap = new Map<string, T>();
+      for (const doc of existingDocs) {
+        const docId = (doc as { _id?: ObjectId })._id;
+        if (docId && excludeIds.has(docId.toHexString())) {
+          continue; // Skip excluded documents
+        }
+        const keyValue = this.extractKeyValue(doc, idx.key);
+        const keyStr = JSON.stringify(keyValue);
+        valueMap.set(keyStr, doc);
+      }
+      existingValues.set(idx.name, valueMap);
+    }
+
+    // Check each document against unique indexes
+    for (const doc of docs) {
+      for (const idx of uniqueIndexes) {
+        const keyValue = this.extractKeyValue(doc, idx.key);
+        const keyStr = JSON.stringify(keyValue);
+        const valueMap = existingValues.get(idx.name)!;
+
+        if (valueMap.has(keyStr)) {
+          throw new MongoDuplicateKeyError(
+            this.dbName,
+            this.collectionName,
+            idx.name,
+            idx.key,
+            keyValue
+          );
+        }
+
+        // Add to value map to catch duplicates within the batch
+        valueMap.set(keyStr, doc);
+      }
+    }
+  }
+
+  /**
+   * Extract the key value from a document for a given index key specification.
+   */
+  private extractKeyValue(
+    doc: T,
+    keySpec: IndexKeySpec
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const field of Object.keys(keySpec)) {
+      result[field] = this.getValueByPath(doc, field);
+    }
+    return result;
   }
 
   /**
@@ -1154,6 +1421,9 @@ export class MongoneCollection<T extends Document = Document> {
       (docWithId as Record<string, unknown>)._id = new ObjectId();
     }
 
+    // Check unique constraints before inserting
+    await this.checkUniqueConstraints([docWithId], documents);
+
     documents.push(docWithId);
     await this.writeDocuments(documents);
 
@@ -1169,16 +1439,23 @@ export class MongoneCollection<T extends Document = Document> {
   async insertMany(docs: T[]): Promise<InsertManyResult> {
     const documents = await this.readDocuments();
     const insertedIds: Record<number, ObjectId> = {};
+    const docsWithIds: T[] = [];
 
+    // Prepare all documents with _ids first
     for (let i = 0; i < docs.length; i++) {
       const docWithId = { ...docs[i] };
       if (!("_id" in docWithId)) {
         (docWithId as Record<string, unknown>)._id = new ObjectId();
       }
-      documents.push(docWithId);
+      docsWithIds.push(docWithId);
       insertedIds[i] = (docWithId as unknown as { _id: ObjectId })._id;
     }
 
+    // Check unique constraints before inserting
+    await this.checkUniqueConstraints(docsWithIds, documents);
+
+    // Add all documents
+    documents.push(...docsWithIds);
     await this.writeDocuments(documents);
 
     return {
@@ -1288,13 +1565,17 @@ export class MongoneCollection<T extends Document = Document> {
     let upsertedCount = 0;
 
     let matchFound = false;
+    let matchedDocId: string | null = null;
     const updatedDocuments: T[] = [];
+    let updatedDoc: T | null = null;
 
     for (const doc of documents) {
       if (!matchFound && this.matchesFilter(doc, filter)) {
         matchFound = true;
         matchedCount = 1;
-        const updatedDoc = this.applyUpdateOperators(doc, update);
+        updatedDoc = this.applyUpdateOperators(doc, update);
+        const docId = (doc as { _id?: ObjectId })._id;
+        matchedDocId = docId ? docId.toHexString() : null;
 
         // Check if document actually changed
         if (!this.documentsEqual(doc, updatedDoc)) {
@@ -1302,6 +1583,7 @@ export class MongoneCollection<T extends Document = Document> {
           updatedDocuments.push(updatedDoc);
         } else {
           updatedDocuments.push(doc);
+          updatedDoc = null; // No need to check constraints if not modified
         }
       } else {
         updatedDocuments.push(doc);
@@ -1311,16 +1593,27 @@ export class MongoneCollection<T extends Document = Document> {
     // Handle upsert
     if (!matchFound && options.upsert) {
       const baseDoc = this.createDocumentFromFilter(filter);
-      const newDoc = this.applyUpdateOperators(baseDoc, update);
+      updatedDoc = this.applyUpdateOperators(baseDoc, update);
 
       // Add _id if not present
-      if (!("_id" in newDoc)) {
-        (newDoc as Record<string, unknown>)._id = new ObjectId();
+      if (!("_id" in updatedDoc)) {
+        (updatedDoc as Record<string, unknown>)._id = new ObjectId();
       }
 
-      upsertedId = (newDoc as unknown as { _id: ObjectId })._id;
+      upsertedId = (updatedDoc as unknown as { _id: ObjectId })._id;
       upsertedCount = 1;
-      updatedDocuments.push(newDoc);
+      updatedDocuments.push(updatedDoc);
+    }
+
+    // Check unique constraints for the modified/upserted document
+    if (updatedDoc) {
+      const excludeIds = matchedDocId ? new Set([matchedDocId]) : new Set<string>();
+      // Check against all documents except the one being updated
+      const otherDocs = documents.filter((doc) => {
+        const docId = (doc as { _id?: ObjectId })._id;
+        return !docId || !excludeIds.has(docId.toHexString());
+      });
+      await this.checkUniqueConstraints([updatedDoc], otherDocs);
     }
 
     await this.writeDocuments(updatedDocuments);
@@ -1349,20 +1642,30 @@ export class MongoneCollection<T extends Document = Document> {
     let upsertedCount = 0;
 
     const updatedDocuments: T[] = [];
+    const modifiedDocs: T[] = [];
+    const modifiedDocIds = new Set<string>();
+    const unchangedDocs: T[] = [];
 
     for (const doc of documents) {
       if (this.matchesFilter(doc, filter)) {
         matchedCount++;
         const updatedDoc = this.applyUpdateOperators(doc, update);
+        const docId = (doc as { _id?: ObjectId })._id;
 
         // Check if document actually changed
         if (!this.documentsEqual(doc, updatedDoc)) {
           modifiedCount++;
+          modifiedDocs.push(updatedDoc);
+          if (docId) {
+            modifiedDocIds.add(docId.toHexString());
+          }
           updatedDocuments.push(updatedDoc);
         } else {
+          unchangedDocs.push(doc);
           updatedDocuments.push(doc);
         }
       } else {
+        unchangedDocs.push(doc);
         updatedDocuments.push(doc);
       }
     }
@@ -1379,7 +1682,14 @@ export class MongoneCollection<T extends Document = Document> {
 
       upsertedId = (newDoc as unknown as { _id: ObjectId })._id;
       upsertedCount = 1;
+      modifiedDocs.push(newDoc);
       updatedDocuments.push(newDoc);
+    }
+
+    // Check unique constraints for modified/upserted documents
+    if (modifiedDocs.length > 0) {
+      // Check against all non-modified documents
+      await this.checkUniqueConstraints(modifiedDocs, unchangedDocs);
     }
 
     await this.writeDocuments(updatedDocuments);

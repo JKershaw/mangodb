@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 7 - Indexes
+## Current Phase: Phase 8 - Advanced
 
 ---
 
@@ -261,20 +261,27 @@ await collection.find({ active: true, $nor: [{ error: true }, { suspended: true 
 
 ---
 
-## Phase 7: Indexes
+## Phase 7: Indexes (Complete)
 
-**Goal**: Support index creation and optimization.
+**Goal**: Support index management and unique constraints.
 
 ### Operations
-- [ ] `collection.createIndex(spec)`
-- [ ] `collection.dropIndex(name)`
-- [ ] `collection.indexes()`
-- [ ] Unique index constraint
+- [x] `collection.createIndex(keySpec, options)` - Create index with optional unique/name
+- [x] `collection.dropIndex(nameOrSpec)` - Drop index by name or key spec
+- [x] `collection.indexes()` - List all indexes (returns array)
+- [x] `collection.listIndexes()` - List all indexes (returns cursor)
+- [x] Unique index constraint enforcement
 
 ### Implementation
-- Index metadata stored alongside collection data
-- Use indexes to speed up queries on indexed fields
-- Enforce uniqueness on write operations
+- Index metadata stored in `{collection}.indexes.json`
+- Default `_id_` index always exists
+- Unique constraints enforced on insert/update operations
+- E11000 duplicate key errors match MongoDB format
+
+### Design Decision
+- Indexes are NOT used for query optimization (full scans remain)
+- Only API surface and unique constraint enforcement implemented
+- This keeps Mongone lightweight for dev/test use cases
 
 ---
 

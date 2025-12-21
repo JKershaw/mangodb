@@ -4,12 +4,71 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 6 - Array Handling
+**Phase**: 7 - Indexes
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-21 - Phase 7: Indexes
+
+#### Added
+- Index management methods:
+  - `collection.createIndex(keySpec, options)` - Create an index
+  - `collection.dropIndex(indexNameOrSpec)` - Drop an index by name or key spec
+  - `collection.indexes()` - List all indexes (returns array)
+  - `collection.listIndexes()` - List all indexes (returns cursor)
+
+- Unique constraint enforcement:
+  - Unique indexes prevent duplicate values on `insertOne`/`insertMany`
+  - Unique indexes prevent duplicates on `updateOne`/`updateMany`
+  - E11000 duplicate key error with MongoDB-compatible format
+
+- Error classes:
+  - `MongoDuplicateKeyError` - Error code 11000 for duplicate keys
+  - `IndexNotFoundError` - When dropping non-existent index
+  - `CannotDropIdIndexError` - When trying to drop `_id` index
+
+#### Behaviors Implemented
+- Default `_id_` index always exists (cannot be dropped)
+- Index names auto-generated from key spec: `field1_1_field2_-1`
+- `createIndex` is idempotent (same spec returns existing name)
+- Unique constraint checks on nested fields with dot notation
+- Compound unique indexes enforce uniqueness across field combination
+- Error messages match MongoDB format: `E11000 duplicate key error collection: db.coll index: name dup key: { field: "value" }`
+
+#### Storage Format
+- Index metadata stored in `{collection}.indexes.json` alongside data
+- Format: `{ "indexes": [{ v: 2, key: {...}, name: "...", unique?: true }] }`
+
+#### Design Decision
+- Indexes are NOT used for query optimization (full scans remain)
+- Only API surface and unique constraint enforcement implemented
+- This keeps Mongone lightweight for dev/test use cases
+
+#### Examples
+```typescript
+// Create indexes
+await collection.createIndex({ email: 1 }, { unique: true });
+await collection.createIndex({ lastName: 1, firstName: 1 });
+await collection.createIndex({ createdAt: -1 }, { name: "idx_created" });
+
+// List indexes
+const indexes = await collection.indexes();
+// [{ v: 2, key: { _id: 1 }, name: "_id_" }, { v: 2, key: { email: 1 }, name: "email_1", unique: true }, ...]
+
+// Drop index
+await collection.dropIndex("email_1");
+await collection.dropIndex({ lastName: 1, firstName: 1 });
+
+// Unique constraint enforcement
+await collection.createIndex({ email: 1 }, { unique: true });
+await collection.insertOne({ email: "alice@test.com" });
+await collection.insertOne({ email: "alice@test.com" }); // Throws E11000
+```
+
+---
 
 ### 2025-12-21 - Phase 6: Array Handling
 
@@ -226,7 +285,7 @@ See [COMPATIBILITY.md](./COMPATIBILITY.md) for detailed documentation of MongoDB
 
 Current implementation has these intentional limitations:
 
-1. **No indexing** - All queries scan full collection
+1. **No query optimization** - Indexes are for unique constraints only, queries still scan full collection
 2. **Single-threaded** - No concurrent write protection
 
 These will be addressed in future phases as documented in [ROADMAP.md](./ROADMAP.md).
