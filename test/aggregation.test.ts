@@ -287,6 +287,20 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
         assert.strictEqual(results[0].c, undefined);
         assert.strictEqual(results[0].d, 4);
       });
+
+      it("should handle { _id: 0 } alone as exclusion mode", async () => {
+        const collection = client.db(dbName).collection("agg_proj_id_only");
+        await collection.insertOne({ name: "Alice", age: 25 });
+
+        const results = await collection
+          .aggregate([{ $project: { _id: 0 } }])
+          .toArray();
+
+        // All fields except _id should be included
+        assert.strictEqual(results[0]._id, undefined);
+        assert.strictEqual(results[0].name, "Alice");
+        assert.strictEqual(results[0].age, 25);
+      });
     });
 
     describe("Field Renaming", () => {
@@ -519,6 +533,36 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
 
       assert.strictEqual(results.length, 0);
     });
+
+    it("should throw for non-integer limit", async () => {
+      const collection = client.db(dbName).collection("agg_limit_float");
+      await collection.insertOne({ value: 1 });
+
+      await assert.rejects(
+        async () => {
+          await collection.aggregate([{ $limit: 2.5 }]).toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes("integer"));
+          return true;
+        }
+      );
+    });
+
+    it("should throw for negative limit", async () => {
+      const collection = client.db(dbName).collection("agg_limit_neg");
+      await collection.insertOne({ value: 1 });
+
+      await assert.rejects(
+        async () => {
+          await collection.aggregate([{ $limit: -1 }]).toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes("non-negative"));
+          return true;
+        }
+      );
+    });
   });
 
   // ==================== $skip Stage ====================
@@ -578,6 +622,36 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       const results = await collection.aggregate([{ $skip: 0 }]).toArray();
 
       assert.strictEqual(results.length, 3);
+    });
+
+    it("should throw for non-integer skip", async () => {
+      const collection = client.db(dbName).collection("agg_skip_float");
+      await collection.insertOne({ value: 1 });
+
+      await assert.rejects(
+        async () => {
+          await collection.aggregate([{ $skip: 1.5 }]).toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes("integer"));
+          return true;
+        }
+      );
+    });
+
+    it("should throw for negative skip", async () => {
+      const collection = client.db(dbName).collection("agg_skip_neg");
+      await collection.insertOne({ value: 1 });
+
+      await assert.rejects(
+        async () => {
+          await collection.aggregate([{ $skip: -5 }]).toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes("non-negative"));
+          return true;
+        }
+      );
     });
   });
 

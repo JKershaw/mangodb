@@ -173,7 +173,12 @@ export class AggregationCursor<T extends Document = Document> {
       throw new Error("Cannot mix inclusion and exclusion in projection");
     }
 
-    return docs.map((doc) => this.projectDocument(doc, projection, hasExclusion));
+    // Special case: { _id: 0 } alone means exclusion mode (exclude only _id)
+    // When nonIdKeys is empty and _id is explicitly 0, treat as exclusion mode
+    const isExclusionMode = hasExclusion ||
+      (nonIdKeys.length === 0 && projection._id === 0);
+
+    return docs.map((doc) => this.projectDocument(doc, projection, isExclusionMode));
   }
 
   /**
@@ -285,8 +290,11 @@ export class AggregationCursor<T extends Document = Document> {
    * $limit stage - Limit output to first n documents.
    */
   private execLimit(limit: number, docs: Document[]): Document[] {
-    if (typeof limit !== "number" || limit < 0) {
-      throw new Error("$limit must be a non-negative number");
+    if (typeof limit !== "number" || !Number.isFinite(limit) || limit < 0) {
+      throw new Error("$limit must be a non-negative integer");
+    }
+    if (!Number.isInteger(limit)) {
+      throw new Error("$limit must be a non-negative integer");
     }
     return docs.slice(0, limit);
   }
@@ -295,8 +303,11 @@ export class AggregationCursor<T extends Document = Document> {
    * $skip stage - Skip first n documents.
    */
   private execSkip(skip: number, docs: Document[]): Document[] {
-    if (typeof skip !== "number" || skip < 0) {
-      throw new Error("$skip must be a non-negative number");
+    if (typeof skip !== "number" || !Number.isFinite(skip) || skip < 0) {
+      throw new Error("$skip must be a non-negative integer");
+    }
+    if (!Number.isInteger(skip)) {
+      throw new Error("$skip must be a non-negative integer");
     }
     return docs.slice(skip);
   }
