@@ -12,6 +12,45 @@ import {
 type Document = Record<string, unknown>;
 
 /**
+ * Type guard for serialized ObjectId format.
+ */
+function isSerializedObjectId(value: unknown): value is { $oid: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "$oid" in value &&
+    typeof (value as { $oid: unknown }).$oid === "string"
+  );
+}
+
+/**
+ * Type guard for serialized Date format.
+ */
+function isSerializedDate(value: unknown): value is { $date: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "$date" in value &&
+    typeof (value as { $date: unknown }).$date === "string"
+  );
+}
+
+/**
+ * Check if a value is a plain object (not null, not array, not special type).
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    !(value instanceof ObjectId) &&
+    !(value instanceof Date)
+  );
+}
+
+/**
  * Query operators supported by Mongone.
  */
 interface QueryOperators {
@@ -395,33 +434,58 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
+   * Transform a single value for serialization or deserialization.
+   * @param value - The value to transform
+   * @param mode - 'serialize' converts ObjectId/Date to JSON format, 'deserialize' does the reverse
+   */
+  private transformValue(value: unknown, mode: "serialize" | "deserialize"): unknown {
+    if (mode === "serialize") {
+      if (value instanceof ObjectId) {
+        return { $oid: value.toHexString() };
+      }
+      if (value instanceof Date) {
+        return { $date: value.toISOString() };
+      }
+    } else {
+      if (isSerializedObjectId(value)) {
+        return new ObjectId(value.$oid);
+      }
+      if (isSerializedDate(value)) {
+        return new Date(value.$date);
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.transformValue(item, mode));
+    }
+
+    if (isPlainObject(value)) {
+      return this.transformDocument(value, mode);
+    }
+
+    return value;
+  }
+
+  /**
+   * Transform all values in a document for serialization or deserialization.
+   */
+  private transformDocument(
+    doc: Record<string, unknown>,
+    mode: "serialize" | "deserialize"
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(doc)) {
+      result[key] = this.transformValue(value, mode);
+    }
+    return result;
+  }
+
+  /**
    * Serialize a document for JSON storage.
    * Converts ObjectId and Date to special formats that can be restored.
    */
   private serializeDocument(doc: T): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(doc)) {
-      if (value instanceof ObjectId) {
-        result[key] = { $oid: value.toHexString() };
-      } else if (value instanceof Date) {
-        result[key] = { $date: value.toISOString() };
-      } else if (value && typeof value === "object" && !Array.isArray(value)) {
-        result[key] = this.serializeDocument(value as T);
-      } else if (Array.isArray(value)) {
-        result[key] = value.map((item) =>
-          item instanceof ObjectId
-            ? { $oid: item.toHexString() }
-            : item instanceof Date
-              ? { $date: item.toISOString() }
-              : item && typeof item === "object" && !Array.isArray(item)
-                ? this.serializeDocument(item as T)
-                : item
-        );
-      } else {
-        result[key] = value;
-      }
-    }
-    return result;
+    return this.transformDocument(doc, "serialize");
   }
 
   /**
@@ -429,54 +493,7 @@ export class MongoneCollection<T extends Document = Document> {
    * Restores ObjectId and Date from the special formats.
    */
   private deserializeDocument(doc: Record<string, unknown>): T {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(doc)) {
-      if (
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        "$oid" in value &&
-        typeof (value as { $oid: unknown }).$oid === "string"
-      ) {
-        result[key] = new ObjectId((value as { $oid: string }).$oid);
-      } else if (
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        "$date" in value &&
-        typeof (value as { $date: unknown }).$date === "string"
-      ) {
-        result[key] = new Date((value as { $date: string }).$date);
-      } else if (value && typeof value === "object" && !Array.isArray(value)) {
-        result[key] = this.deserializeDocument(value as Record<string, unknown>);
-      } else if (Array.isArray(value)) {
-        result[key] = value.map((item) => {
-          if (
-            item &&
-            typeof item === "object" &&
-            !Array.isArray(item) &&
-            "$oid" in item &&
-            typeof (item as { $oid: unknown }).$oid === "string"
-          ) {
-            return new ObjectId((item as { $oid: string }).$oid);
-          } else if (
-            item &&
-            typeof item === "object" &&
-            !Array.isArray(item) &&
-            "$date" in item &&
-            typeof (item as { $date: unknown }).$date === "string"
-          ) {
-            return new Date((item as { $date: string }).$date);
-          } else if (item && typeof item === "object" && !Array.isArray(item)) {
-            return this.deserializeDocument(item as Record<string, unknown>);
-          }
-          return item;
-        });
-      } else {
-        result[key] = value;
-      }
-    }
-    return result as T;
+    return this.transformDocument(doc, "deserialize") as T;
   }
 
   /**
@@ -938,49 +955,40 @@ export class MongoneCollection<T extends Document = Document> {
    * - Logical operators ($and, $or, $nor)
    * - Array field matching
    */
+  /**
+   * Evaluate a logical operator ($and, $or, $nor) against a document.
+   * @returns true if the logical condition passes, false otherwise
+   */
+  private evaluateLogicalOperator(
+    doc: T,
+    operator: string,
+    conditions: unknown
+  ): boolean {
+    if (!Array.isArray(conditions)) {
+      throw new Error(`${operator} argument must be an array`);
+    }
+    if (conditions.length === 0) {
+      throw new Error(`${operator} argument must be a non-empty array`);
+    }
+    const filters = conditions as Filter<T>[];
+
+    switch (operator) {
+      case "$and":
+        return filters.every((cond) => this.matchesFilter(doc, cond));
+      case "$or":
+        return filters.some((cond) => this.matchesFilter(doc, cond));
+      case "$nor":
+        return !filters.some((cond) => this.matchesFilter(doc, cond));
+      default:
+        return true;
+    }
+  }
+
   private matchesFilter(doc: T, filter: Filter<T>): boolean {
     for (const [key, filterValue] of Object.entries(filter)) {
       // Handle top-level logical operators
-      if (key === "$and") {
-        if (!Array.isArray(filterValue)) {
-          throw new Error("$and argument must be an array");
-        }
-        if (filterValue.length === 0) {
-          throw new Error("$and argument must be a non-empty array");
-        }
-        const conditions = filterValue as Filter<T>[];
-        // All conditions must match
-        if (!conditions.every((cond) => this.matchesFilter(doc, cond))) {
-          return false;
-        }
-        continue;
-      }
-
-      if (key === "$or") {
-        if (!Array.isArray(filterValue)) {
-          throw new Error("$or argument must be an array");
-        }
-        if (filterValue.length === 0) {
-          throw new Error("$or argument must be a non-empty array");
-        }
-        const conditions = filterValue as Filter<T>[];
-        // At least one condition must match
-        if (!conditions.some((cond) => this.matchesFilter(doc, cond))) {
-          return false;
-        }
-        continue;
-      }
-
-      if (key === "$nor") {
-        if (!Array.isArray(filterValue)) {
-          throw new Error("$nor argument must be an array");
-        }
-        if (filterValue.length === 0) {
-          throw new Error("$nor argument must be a non-empty array");
-        }
-        const conditions = filterValue as Filter<T>[];
-        // No condition may match
-        if (conditions.some((cond) => this.matchesFilter(doc, cond))) {
+      if (key === "$and" || key === "$or" || key === "$nor") {
+        if (!this.evaluateLogicalOperator(doc, key, filterValue)) {
           return false;
         }
         continue;
@@ -1129,6 +1137,59 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
+   * Helper for $push and $addToSet operators.
+   * @param doc - Document to modify
+   * @param path - Path to the array field
+   * @param value - Value to add (may contain $each modifier)
+   * @param unique - If true, only add values not already present (for $addToSet)
+   */
+  private applyArrayPush(
+    doc: Record<string, unknown>,
+    path: string,
+    value: unknown,
+    unique: boolean
+  ): void {
+    const currentValue = this.getValueAtPath(doc, path);
+    const valuesToAdd = this.isPushEachModifier(value)
+      ? (value as { $each: unknown[] }).$each
+      : [value];
+
+    if (currentValue === undefined) {
+      // Field doesn't exist - create new array
+      if (unique) {
+        // Deduplicate for $addToSet
+        const uniqueValues: unknown[] = [];
+        for (const v of valuesToAdd) {
+          if (!uniqueValues.some((existing) => this.valuesEqual(existing, v, true))) {
+            uniqueValues.push(v);
+          }
+        }
+        this.setValueByPath(doc, path, uniqueValues);
+      } else {
+        this.setValueByPath(doc, path, [...valuesToAdd]);
+      }
+    } else if (Array.isArray(currentValue)) {
+      // Field is an array - push to it
+      for (const v of valuesToAdd) {
+        if (unique) {
+          // Only add if not present (BSON-style comparison with strict key order)
+          if (!currentValue.some((existing) => this.valuesEqual(existing, v, true))) {
+            currentValue.push(v);
+          }
+        } else {
+          currentValue.push(v);
+        }
+      }
+    } else {
+      // Field exists but is not an array
+      const fieldType = currentValue === null ? "null" : typeof currentValue;
+      throw new Error(
+        `The field '${path}' must be an array but is of type ${fieldType}`
+      );
+    }
+  }
+
+  /**
    * Apply update operators to a document.
    * Returns a new document with the updates applied.
    */
@@ -1169,86 +1230,14 @@ export class MongoneCollection<T extends Document = Document> {
     // Apply $push
     if (update.$push) {
       for (const [path, value] of Object.entries(update.$push)) {
-        const currentValue = this.getValueAtPath(
-          result as Record<string, unknown>,
-          path
-        );
-
-        if (currentValue === undefined) {
-          // Field doesn't exist - create new array
-          if (this.isPushEachModifier(value)) {
-            this.setValueByPath(
-              result as Record<string, unknown>,
-              path,
-              [...(value as { $each: unknown[] }).$each]
-            );
-          } else {
-            this.setValueByPath(result as Record<string, unknown>, path, [value]);
-          }
-        } else if (Array.isArray(currentValue)) {
-          // Field is an array - push to it
-          if (this.isPushEachModifier(value)) {
-            currentValue.push(...(value as { $each: unknown[] }).$each);
-          } else {
-            currentValue.push(value);
-          }
-        } else {
-          // Field exists but is not an array
-          const fieldType = currentValue === null ? "null" : typeof currentValue;
-          throw new Error(
-            `The field '${path}' must be an array but is of type ${fieldType}`
-          );
-        }
+        this.applyArrayPush(result as Record<string, unknown>, path, value, false);
       }
     }
 
     // Apply $addToSet
     if (update.$addToSet) {
       for (const [path, value] of Object.entries(update.$addToSet)) {
-        const currentValue = this.getValueAtPath(
-          result as Record<string, unknown>,
-          path
-        );
-
-        if (currentValue === undefined) {
-          // Field doesn't exist - create new array with unique values
-          if (this.isPushEachModifier(value)) {
-            // Deduplicate values from $each (since $addToSet is for unique values)
-            const uniqueValues: unknown[] = [];
-            for (const v of (value as { $each: unknown[] }).$each) {
-              if (!uniqueValues.some((existing) => this.valuesEqual(existing, v, true))) {
-                uniqueValues.push(v);
-              }
-            }
-            this.setValueByPath(
-              result as Record<string, unknown>,
-              path,
-              uniqueValues
-            );
-          } else {
-            this.setValueByPath(result as Record<string, unknown>, path, [value]);
-          }
-        } else if (Array.isArray(currentValue)) {
-          // Field is an array - add unique values
-          // Use strictKeyOrder=true for BSON-style object comparison (key order matters)
-          if (this.isPushEachModifier(value)) {
-            for (const v of (value as { $each: unknown[] }).$each) {
-              if (!currentValue.some((existing) => this.valuesEqual(existing, v, true))) {
-                currentValue.push(v);
-              }
-            }
-          } else {
-            if (!currentValue.some((existing) => this.valuesEqual(existing, value, true))) {
-              currentValue.push(value);
-            }
-          }
-        } else {
-          // Field exists but is not an array
-          const fieldType = currentValue === null ? "null" : typeof currentValue;
-          throw new Error(
-            `The field '${path}' must be an array but is of type ${fieldType}`
-          );
-        }
+        this.applyArrayPush(result as Record<string, unknown>, path, value, true);
       }
     }
 
@@ -1346,33 +1335,13 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Check if an array element matches a $pull object condition.
+   * Reuses matchesElemMatchCondition since the logic is equivalent for object conditions.
    */
   private matchesPullCondition(
     element: unknown,
     condition: Record<string, unknown>
   ): boolean {
-    // Element must be an object
-    if (element === null || typeof element !== "object" || Array.isArray(element)) {
-      return false;
-    }
-
-    const elemObj = element as Record<string, unknown>;
-
-    for (const [key, value] of Object.entries(condition)) {
-      const fieldValue = this.getValueByPath(elemObj, key);
-
-      if (this.isOperatorObject(value)) {
-        if (!this.matchesOperators(fieldValue, value as QueryOperators)) {
-          return false;
-        }
-      } else {
-        if (!this.valuesEqual(fieldValue, value)) {
-          return false;
-        }
-      }
-    }
-
-    return true;
+    return this.matchesElemMatchCondition(element, condition);
   }
 
   /**
@@ -1551,89 +1520,17 @@ export class MongoneCollection<T extends Document = Document> {
   }
 
   /**
-   * Update a single document matching the filter.
+   * Internal update implementation shared by updateOne and updateMany.
+   * @param filter - Query filter
+   * @param update - Update operators
+   * @param options - Update options
+   * @param limitOne - If true, only update first matching document
    */
-  async updateOne(
+  private async performUpdate(
     filter: Filter<T>,
     update: UpdateOperators,
-    options: UpdateOptions = {}
-  ): Promise<UpdateResult> {
-    const documents = await this.readDocuments();
-    let matchedCount = 0;
-    let modifiedCount = 0;
-    let upsertedId: ObjectId | null = null;
-    let upsertedCount = 0;
-
-    let matchFound = false;
-    let matchedDocId: string | null = null;
-    const updatedDocuments: T[] = [];
-    let updatedDoc: T | null = null;
-
-    for (const doc of documents) {
-      if (!matchFound && this.matchesFilter(doc, filter)) {
-        matchFound = true;
-        matchedCount = 1;
-        updatedDoc = this.applyUpdateOperators(doc, update);
-        const docId = (doc as { _id?: ObjectId })._id;
-        matchedDocId = docId ? docId.toHexString() : null;
-
-        // Check if document actually changed
-        if (!this.documentsEqual(doc, updatedDoc)) {
-          modifiedCount = 1;
-          updatedDocuments.push(updatedDoc);
-        } else {
-          updatedDocuments.push(doc);
-          updatedDoc = null; // No need to check constraints if not modified
-        }
-      } else {
-        updatedDocuments.push(doc);
-      }
-    }
-
-    // Handle upsert
-    if (!matchFound && options.upsert) {
-      const baseDoc = this.createDocumentFromFilter(filter);
-      updatedDoc = this.applyUpdateOperators(baseDoc, update);
-
-      // Add _id if not present
-      if (!("_id" in updatedDoc)) {
-        (updatedDoc as Record<string, unknown>)._id = new ObjectId();
-      }
-
-      upsertedId = (updatedDoc as unknown as { _id: ObjectId })._id;
-      upsertedCount = 1;
-      updatedDocuments.push(updatedDoc);
-    }
-
-    // Check unique constraints for the modified/upserted document
-    if (updatedDoc) {
-      const excludeIds = matchedDocId ? new Set([matchedDocId]) : new Set<string>();
-      // Check against all documents except the one being updated
-      const otherDocs = documents.filter((doc) => {
-        const docId = (doc as { _id?: ObjectId })._id;
-        return !docId || !excludeIds.has(docId.toHexString());
-      });
-      await this.checkUniqueConstraints([updatedDoc], otherDocs);
-    }
-
-    await this.writeDocuments(updatedDocuments);
-
-    return {
-      acknowledged: true,
-      matchedCount,
-      modifiedCount,
-      upsertedCount,
-      upsertedId,
-    };
-  }
-
-  /**
-   * Update all documents matching the filter.
-   */
-  async updateMany(
-    filter: Filter<T>,
-    update: UpdateOperators,
-    options: UpdateOptions = {}
+    options: UpdateOptions,
+    limitOne: boolean
   ): Promise<UpdateResult> {
     const documents = await this.readDocuments();
     let matchedCount = 0;
@@ -1643,22 +1540,19 @@ export class MongoneCollection<T extends Document = Document> {
 
     const updatedDocuments: T[] = [];
     const modifiedDocs: T[] = [];
-    const modifiedDocIds = new Set<string>();
     const unchangedDocs: T[] = [];
 
     for (const doc of documents) {
-      if (this.matchesFilter(doc, filter)) {
+      const shouldMatch = limitOne ? matchedCount === 0 : true;
+
+      if (shouldMatch && this.matchesFilter(doc, filter)) {
         matchedCount++;
         const updatedDoc = this.applyUpdateOperators(doc, update);
-        const docId = (doc as { _id?: ObjectId })._id;
 
         // Check if document actually changed
         if (!this.documentsEqual(doc, updatedDoc)) {
           modifiedCount++;
           modifiedDocs.push(updatedDoc);
-          if (docId) {
-            modifiedDocIds.add(docId.toHexString());
-          }
           updatedDocuments.push(updatedDoc);
         } else {
           unchangedDocs.push(doc);
@@ -1688,7 +1582,6 @@ export class MongoneCollection<T extends Document = Document> {
 
     // Check unique constraints for modified/upserted documents
     if (modifiedDocs.length > 0) {
-      // Check against all non-modified documents
       await this.checkUniqueConstraints(modifiedDocs, unchangedDocs);
     }
 
@@ -1701,5 +1594,27 @@ export class MongoneCollection<T extends Document = Document> {
       upsertedCount,
       upsertedId,
     };
+  }
+
+  /**
+   * Update a single document matching the filter.
+   */
+  async updateOne(
+    filter: Filter<T>,
+    update: UpdateOperators,
+    options: UpdateOptions = {}
+  ): Promise<UpdateResult> {
+    return this.performUpdate(filter, update, options, true);
+  }
+
+  /**
+   * Update all documents matching the filter.
+   */
+  async updateMany(
+    filter: Filter<T>,
+    update: UpdateOperators,
+    options: UpdateOptions = {}
+  ): Promise<UpdateResult> {
+    return this.performUpdate(filter, update, options, false);
   }
 }
