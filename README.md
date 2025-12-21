@@ -106,9 +106,25 @@ See [PROGRESS.md](./PROGRESS.md) for detailed status.
 - [x] `$not` - Operator negation
 - [x] `$nor` - Logical NOR
 
+### Phase 6: Array Handling (Complete)
+- [x] `$size` - Match arrays by exact length
+- [x] `$all` - Match arrays containing all specified elements
+- [x] `$elemMatch` - Match array elements satisfying conditions
+- [x] `$push` - Append element(s) to array (with `$each`)
+- [x] `$pull` - Remove elements matching condition
+- [x] `$addToSet` - Add unique elements (with `$each`)
+- [x] `$pop` - Remove first or last element
+
+### Phase 7: Indexes (Complete)
+- [x] `collection.createIndex(keySpec, options)` - Create index
+- [x] `collection.dropIndex(nameOrSpec)` - Drop index
+- [x] `collection.indexes()` / `listIndexes()` - List indexes
+- [x] Unique constraint enforcement on insert/update
+- [x] E11000 duplicate key errors matching MongoDB format
+
 ### Planned
-- Array handling ($elemMatch, $push, $pull)
-- Indexes
+- Basic aggregation pipeline
+- `findOneAndUpdate`, `findOneAndDelete`, `bulkWrite`
 
 ## Running Tests
 

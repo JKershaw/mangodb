@@ -134,6 +134,37 @@ function compareValuesForSort(
 }
 
 /**
+ * Information about an index.
+ * Duplicated here to avoid circular imports.
+ */
+interface IndexInfo {
+  v: number;
+  key: Record<string, 1 | -1>;
+  name: string;
+  unique?: boolean;
+  sparse?: boolean;
+}
+
+/**
+ * IndexCursor represents a cursor over index information.
+ * Provides a minimal cursor API for listIndexes() compatibility.
+ */
+export class IndexCursor {
+  private readonly fetchIndexes: () => Promise<IndexInfo[]>;
+
+  constructor(fetchIndexes: () => Promise<IndexInfo[]>) {
+    this.fetchIndexes = fetchIndexes;
+  }
+
+  /**
+   * Return all indexes as an array.
+   */
+  async toArray(): Promise<IndexInfo[]> {
+    return this.fetchIndexes();
+  }
+}
+
+/**
  * MongoneCursor represents a cursor over query results.
  * It mirrors the Cursor API from the official MongoDB driver.
  */

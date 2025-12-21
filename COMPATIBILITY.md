@@ -710,6 +710,76 @@ await collection.updateOne({}, { $pop: { items: -1 } });  // Remove first
 
 ---
 
+## Indexes
+
+### createIndex
+
+```typescript
+await collection.createIndex({ email: 1 });  // Returns "email_1"
+await collection.createIndex({ lastName: 1, firstName: 1 });  // Returns "lastName_1_firstName_1"
+await collection.createIndex({ email: 1 }, { name: "idx_email" });  // Custom name
+await collection.createIndex({ email: 1 }, { unique: true });  // Unique index
+```
+
+**Behaviors**:
+- Returns index name as a string
+- Name auto-generated from key spec: `field1_dir_field2_dir...`
+- Idempotent: same key spec returns existing name without error
+- Default `_id_` index always exists
+
+### dropIndex
+
+```typescript
+await collection.dropIndex("email_1");  // By name
+await collection.dropIndex({ email: 1 });  // By key spec
+```
+
+**Behaviors**:
+- Can drop by name or key specification
+- Throws error if index not found: `"index not found with name [indexName]"`
+- Cannot drop `_id_` index: `"cannot drop _id index"`
+
+### indexes / listIndexes
+
+```typescript
+const indexes = await collection.indexes();
+const cursor = collection.listIndexes();
+const indexes = await cursor.toArray();
+```
+
+**Behaviors**:
+- Always includes `_id_` index: `{ v: 2, key: { _id: 1 }, name: "_id_" }`
+- Index info structure: `{ v, key, name, unique?, sparse? }`
+- `listIndexes()` returns cursor for consistency with MongoDB API
+
+### Unique Constraint Errors
+
+```typescript
+await collection.createIndex({ email: 1 }, { unique: true });
+await collection.insertOne({ email: "alice@test.com" });
+await collection.insertOne({ email: "alice@test.com" });  // Throws!
+```
+
+**Error Format**:
+- Error code: 11000
+- Message: `E11000 duplicate key error collection: db.collection index: email_1 dup key: { email: "alice@test.com" }`
+- Error object has `code: 11000`, `keyPattern`, `keyValue` properties
+
+**Enforcement Points**:
+- `insertOne` / `insertMany` - checks before inserting
+- `updateOne` / `updateMany` - checks when modifying unique-indexed fields
+- Upsert operations - checks new/updated document
+
+**Compound Unique Indexes**:
+```typescript
+await collection.createIndex({ firstName: 1, lastName: 1 }, { unique: true });
+await collection.insertOne({ firstName: "John", lastName: "Doe" });
+await collection.insertOne({ firstName: "John", lastName: "Smith" });  // OK - different combo
+await collection.insertOne({ firstName: "John", lastName: "Doe" });  // Error!
+```
+
+---
+
 ## Notes
 
 This document will be updated as more behaviors are discovered through testing. Each entry should include:
