@@ -122,9 +122,14 @@ See [PROGRESS.md](./PROGRESS.md) for detailed status.
 - [x] Unique constraint enforcement on insert/update
 - [x] E11000 duplicate key errors matching MongoDB format
 
+### Phase 8: Advanced Operations (Complete)
+- [x] `collection.findOneAndDelete(filter, options)` - Find and delete
+- [x] `collection.findOneAndReplace(filter, replacement, options)` - Find and replace
+- [x] `collection.findOneAndUpdate(filter, update, options)` - Find and update
+- [x] `collection.bulkWrite(operations, options)` - Bulk write operations
+
 ### Planned
 - Basic aggregation pipeline
-- `findOneAndUpdate`, `findOneAndDelete`, `bulkWrite`
 
 ## Running Tests
 

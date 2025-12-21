@@ -58,6 +58,48 @@ export interface IndexCursor {
   toArray(): Promise<IndexInfo[]>;
 }
 
+// Phase 8: FindOneAnd* types
+// Note: Driver 6.0+ returns document directly, not wrapped in ModifyResult
+
+export interface FindOneAndDeleteOptions {
+  projection?: Document;
+  sort?: Document;
+}
+
+export interface FindOneAndReplaceOptions {
+  projection?: Document;
+  sort?: Document;
+  upsert?: boolean;
+  returnDocument?: "before" | "after";
+}
+
+export interface FindOneAndUpdateOptions {
+  projection?: Document;
+  sort?: Document;
+  upsert?: boolean;
+  returnDocument?: "before" | "after";
+}
+
+export interface BulkWriteOperation {
+  insertOne?: { document: Document };
+  updateOne?: { filter: Document; update: Document; upsert?: boolean };
+  updateMany?: { filter: Document; update: Document; upsert?: boolean };
+  deleteOne?: { filter: Document };
+  deleteMany?: { filter: Document };
+  replaceOne?: { filter: Document; replacement: Document; upsert?: boolean };
+}
+
+export interface BulkWriteResult {
+  acknowledged?: boolean; // May not be present in driver 6.x
+  insertedCount: number;
+  matchedCount: number;
+  modifiedCount: number;
+  deletedCount: number;
+  upsertedCount: number;
+  insertedIds: Record<number, unknown>;
+  upsertedIds: Record<number, unknown>;
+}
+
 export interface TestCollection<T extends Document = Document> {
   insertOne(
     doc: T
@@ -91,6 +133,26 @@ export interface TestCollection<T extends Document = Document> {
   dropIndex(indexNameOrSpec: string | Record<string, 1 | -1>): Promise<void>;
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;
+  // Phase 8: FindOneAnd* and bulkWrite
+  // Driver 6.0+ returns document directly (not wrapped in { value, ok })
+  findOneAndDelete(
+    filter: Partial<T>,
+    options?: FindOneAndDeleteOptions
+  ): Promise<T | null>;
+  findOneAndReplace(
+    filter: Partial<T>,
+    replacement: T,
+    options?: FindOneAndReplaceOptions
+  ): Promise<T | null>;
+  findOneAndUpdate(
+    filter: Partial<T>,
+    update: Document,
+    options?: FindOneAndUpdateOptions
+  ): Promise<T | null>;
+  bulkWrite(
+    operations: BulkWriteOperation[],
+    options?: { ordered?: boolean }
+  ): Promise<BulkWriteResult>;
 }
 
 export interface TestCursor<T> {

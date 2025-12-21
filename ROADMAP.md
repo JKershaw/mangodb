@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 8 - Advanced
+## Current Phase: Phase 8 - Advanced (Complete)
 
 ---
 
@@ -285,17 +285,17 @@ await collection.find({ active: true, $nor: [{ error: true }, { suspended: true 
 
 ---
 
-## Phase 8: Advanced (As Needed)
+## Phase 8: Advanced (Complete)
 
 **Goal**: Support additional commonly-used operations.
 
 ### Operations
-- [ ] `collection.findOneAndUpdate(filter, update, options)`
-- [ ] `collection.findOneAndDelete(filter, options)`
-- [ ] `collection.findOneAndReplace(filter, replacement, options)`
-- [ ] `collection.bulkWrite(operations)`
+- [x] `collection.findOneAndUpdate(filter, update, options)`
+- [x] `collection.findOneAndDelete(filter, options)`
+- [x] `collection.findOneAndReplace(filter, replacement, options)`
+- [x] `collection.bulkWrite(operations)`
 
-### Basic Aggregation Pipeline
+### Basic Aggregation Pipeline (Future)
 - [ ] `collection.aggregate(pipeline)`
 - [ ] `$match` stage
 - [ ] `$project` stage
