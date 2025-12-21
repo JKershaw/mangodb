@@ -2044,7 +2044,7 @@ export class MongoneCollection<T extends Document = Document> {
             documents.push(newDoc);
             await this.writeDocuments(documents);
             result.upsertedCount++;
-            result.upsertedIds[i] = (newDoc as { _id: ObjectId })._id;
+            result.upsertedIds[i] = (newDoc as Record<string, unknown>)._id as ObjectId;
           } else if (matches.length > 0) {
             // Replace first match
             const docToReplace = matches[0];

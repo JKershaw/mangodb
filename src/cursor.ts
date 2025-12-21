@@ -6,6 +6,7 @@ import {
 } from "./utils.ts";
 
 type Document = Record<string, unknown>;
+type SortSpec = Record<string, 1 | -1>;
 
 /**
  * Information about an index.
