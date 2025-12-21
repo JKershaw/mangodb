@@ -13,6 +13,16 @@ import { isOperatorObject, matchesOperators, matchesPullCondition } from "./quer
 
 /**
  * Check if a value is a $push/$addToSet $each modifier.
+ *
+ * The $each modifier is used with $push and $addToSet to append multiple values
+ * to an array in a single operation.
+ *
+ * @param value - The value to check
+ * @returns True if the value is an object containing a $each property with an array value
+ * @example
+ * isPushEachModifier({ $each: [1, 2, 3] }) // true
+ * isPushEachModifier([1, 2, 3]) // false
+ * isPushEachModifier({ $each: "not an array" }) // false
  */
 export function isPushEachModifier(value: unknown): value is { $each: unknown[] } {
   return (
@@ -26,6 +36,15 @@ export function isPushEachModifier(value: unknown): value is { $each: unknown[] 
 
 /**
  * Helper for $push and $addToSet operators.
+ *
+ * Adds values to an array field. If the field doesn't exist, it creates a new array.
+ * Supports the $each modifier to add multiple values at once.
+ *
+ * @param doc - The document to modify
+ * @param path - The dot-notation path to the array field
+ * @param value - The value to push (can be a single value or a $each modifier object)
+ * @param unique - If true, only adds values that don't already exist in the array ($addToSet behavior)
+ * @throws Error if the target field exists but is not an array
  */
 function applyArrayPush(
   doc: Record<string, unknown>,
@@ -69,8 +88,37 @@ function applyArrayPush(
 }
 
 /**
- * Apply update operators to a document.
- * Returns a new document with the updates applied.
+ * Apply MongoDB update operators to a document.
+ *
+ * Creates a new document with the specified update operators applied. Supports
+ * $set, $unset, $inc, $push, $addToSet, $pop, and $pull operators. The original
+ * document is not modified.
+ *
+ * @param doc - The original document to update
+ * @param update - Update operators object containing one or more of: $set, $unset, $inc, $push, $addToSet, $pop, $pull
+ * @returns A new document with all updates applied
+ * @throws Error if $pop receives a value other than 1 or -1
+ * @throws Error if $push, $addToSet, $pop, or $pull target a field that is not an array
+ * @example
+ * // Increment a counter
+ * applyUpdateOperators({ count: 1 }, { $inc: { count: 1 } })
+ * // Returns: { count: 2 }
+ *
+ * @example
+ * // Set and push values
+ * applyUpdateOperators(
+ *   { name: "Alice", tags: ["user"] },
+ *   { $set: { name: "Bob" }, $push: { tags: "admin" } }
+ * )
+ * // Returns: { name: "Bob", tags: ["user", "admin"] }
+ *
+ * @example
+ * // Use $each modifier to push multiple values
+ * applyUpdateOperators(
+ *   { items: [1] },
+ *   { $push: { items: { $each: [2, 3, 4] } } }
+ * )
+ * // Returns: { items: [1, 2, 3, 4] }
  */
 export function applyUpdateOperators<T extends Document>(
   doc: T,
@@ -178,8 +226,34 @@ export function applyUpdateOperators<T extends Document>(
 }
 
 /**
- * Create a document from filter for upsert.
- * Extracts simple equality conditions and $eq values from the filter.
+ * Create a base document from a filter for upsert operations.
+ *
+ * Extracts simple equality conditions and $eq operators from the filter to create
+ * a starting document. This is used in upsert operations to initialize a new document
+ * with the values from the query filter. Only extracts safe, deterministic values
+ * (direct equality and $eq operators). Complex operators like $gt, $in, etc. are ignored.
+ *
+ * @param filter - The query filter to extract values from
+ * @returns A new document containing the extracted equality values
+ * @example
+ * // Simple equality
+ * createDocumentFromFilter({ name: "Alice", age: 30 })
+ * // Returns: { name: "Alice", age: 30 }
+ *
+ * @example
+ * // With $eq operator
+ * createDocumentFromFilter({ name: { $eq: "Bob" }, status: "active" })
+ * // Returns: { name: "Bob", status: "active" }
+ *
+ * @example
+ * // Dot notation paths
+ * createDocumentFromFilter({ "address.city": "NYC" })
+ * // Returns: { address: { city: "NYC" } }
+ *
+ * @example
+ * // Complex operators are ignored
+ * createDocumentFromFilter({ age: { $gt: 18 }, name: "Alice" })
+ * // Returns: { name: "Alice" }
  */
 export function createDocumentFromFilter<T extends Document>(
   filter: Filter<T>
@@ -213,6 +287,28 @@ export function createDocumentFromFilter<T extends Document>(
 
 /**
  * Validate that a replacement document doesn't contain update operators.
+ *
+ * Ensures that a document intended for replacement operations (like replaceOne)
+ * doesn't contain any update operator fields (keys starting with '$'). In MongoDB,
+ * replacement documents must be plain documents without operators, whereas update
+ * documents use operators like $set, $inc, etc.
+ *
+ * @param replacement - The replacement document to validate
+ * @throws Error if the document contains any keys starting with '$'
+ * @example
+ * // Valid replacement document
+ * validateReplacement({ name: "Alice", age: 30 })
+ * // No error thrown
+ *
+ * @example
+ * // Invalid - contains update operator
+ * validateReplacement({ $set: { name: "Alice" } })
+ * // Throws: "Replacement document must not contain update operators (keys starting with '$')"
+ *
+ * @example
+ * // Invalid - mixed content
+ * validateReplacement({ name: "Alice", $inc: { count: 1 } })
+ * // Throws: "Replacement document must not contain update operators (keys starting with '$')"
  */
 export function validateReplacement<T extends Document>(replacement: T): void {
   for (const key of Object.keys(replacement)) {

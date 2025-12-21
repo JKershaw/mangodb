@@ -6,6 +6,13 @@ import type { Document } from "./types.ts";
 
 /**
  * Type guard for serialized ObjectId format.
+ * @description Checks if a value matches the serialized ObjectId format ({ $oid: string }).
+ * This format is used when storing MongoDB ObjectIds as JSON.
+ * @param value - The value to check
+ * @returns True if the value is a serialized ObjectId, false otherwise
+ * @example
+ * isSerializedObjectId({ $oid: "507f1f77bcf86cd799439011" }) // true
+ * isSerializedObjectId({ id: "123" }) // false
  */
 export function isSerializedObjectId(value: unknown): value is { $oid: string } {
   return (
@@ -19,6 +26,13 @@ export function isSerializedObjectId(value: unknown): value is { $oid: string } 
 
 /**
  * Type guard for serialized Date format.
+ * @description Checks if a value matches the serialized Date format ({ $date: string }).
+ * This format is used when storing JavaScript Date objects as JSON.
+ * @param value - The value to check
+ * @returns True if the value is a serialized Date, false otherwise
+ * @example
+ * isSerializedDate({ $date: "2023-01-01T00:00:00.000Z" }) // true
+ * isSerializedDate({ timestamp: "2023-01-01" }) // false
  */
 export function isSerializedDate(value: unknown): value is { $date: string } {
   return (
@@ -32,6 +46,15 @@ export function isSerializedDate(value: unknown): value is { $date: string } {
 
 /**
  * Check if a value is a plain object (not null, not array, not special type).
+ * @description Determines if a value is a plain JavaScript object, excluding null, arrays,
+ * ObjectId instances, and Date instances.
+ * @param value - The value to check
+ * @returns True if the value is a plain object, false otherwise
+ * @example
+ * isPlainObject({ name: "John" }) // true
+ * isPlainObject([1, 2, 3]) // false
+ * isPlainObject(new Date()) // false
+ * isPlainObject(null) // false
  */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
@@ -45,6 +68,19 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 
 /**
  * Transform a single value for serialization or deserialization.
+ * @description Recursively transforms a value between MongoDB types (ObjectId, Date) and their
+ * JSON-serializable representations. Handles nested objects and arrays.
+ * @param value - The value to transform
+ * @param mode - Either "serialize" (to JSON format) or "deserialize" (from JSON format)
+ * @returns The transformed value
+ * @example
+ * // Serialize ObjectId to JSON
+ * transformValue(new ObjectId("507f1f77bcf86cd799439011"), "serialize")
+ * // { $oid: "507f1f77bcf86cd799439011" }
+ *
+ * // Deserialize from JSON to ObjectId
+ * transformValue({ $oid: "507f1f77bcf86cd799439011" }, "deserialize")
+ * // ObjectId("507f1f77bcf86cd799439011")
  */
 export function transformValue(
   value: unknown,
@@ -79,6 +115,14 @@ export function transformValue(
 
 /**
  * Transform all values in a document for serialization or deserialization.
+ * @description Transforms all fields in a document by applying transformValue to each field.
+ * Used internally by serializeDocument and deserializeDocument.
+ * @param doc - The document to transform
+ * @param mode - Either "serialize" (to JSON format) or "deserialize" (from JSON format)
+ * @returns A new document with all values transformed
+ * @example
+ * transformDocument({ _id: new ObjectId("..."), date: new Date() }, "serialize")
+ * // { _id: { $oid: "..." }, date: { $date: "2023-01-01T00:00:00.000Z" } }
  */
 export function transformDocument(
   doc: Record<string, unknown>,
@@ -93,6 +137,14 @@ export function transformDocument(
 
 /**
  * Serialize a document for JSON storage.
+ * @description Converts a MongoDB document to a JSON-serializable format by transforming
+ * ObjectIds to { $oid: string } and Dates to { $date: string }.
+ * @param doc - The document to serialize
+ * @returns The serialized document with all special types converted to JSON-safe format
+ * @example
+ * const doc = { _id: new ObjectId("507f1f77bcf86cd799439011"), createdAt: new Date() };
+ * serializeDocument(doc)
+ * // { _id: { $oid: "507f1f77bcf86cd799439011" }, createdAt: { $date: "..." } }
  */
 export function serializeDocument<T extends Document>(
   doc: T
@@ -102,6 +154,14 @@ export function serializeDocument<T extends Document>(
 
 /**
  * Deserialize a document from JSON storage.
+ * @description Converts a JSON-serialized document back to its original MongoDB format by
+ * transforming { $oid: string } to ObjectIds and { $date: string } to Dates.
+ * @param doc - The serialized document to deserialize
+ * @returns The deserialized document with all special types restored
+ * @example
+ * const serialized = { _id: { $oid: "507f1f77bcf86cd799439011" }, createdAt: { $date: "..." } };
+ * deserializeDocument(serialized)
+ * // { _id: ObjectId("507f1f77bcf86cd799439011"), createdAt: Date(...) }
  */
 export function deserializeDocument<T extends Document>(
   doc: Record<string, unknown>
@@ -111,7 +171,17 @@ export function deserializeDocument<T extends Document>(
 
 /**
  * Get all possible values from a document using dot notation.
- * When traversing arrays with non-numeric path segments, returns values from all elements.
+ * @description Retrieves all values matching a dot-notation path. When traversing arrays with
+ * non-numeric path segments, returns values from all matching elements. This matches MongoDB's
+ * query behavior for nested arrays.
+ * @param doc - The document to query
+ * @param path - Dot-notation path (e.g., "user.address.city", "items.0.name")
+ * @returns Array of all values found at the path (may include undefined)
+ * @example
+ * const doc = { items: [{ name: "A" }, { name: "B" }] };
+ * getValuesByPath(doc, "items.name") // ["A", "B"]
+ * getValuesByPath(doc, "items.0.name") // ["A"]
+ * getValuesByPath(doc, "user.email") // [undefined]
  */
 export function getValuesByPath(doc: unknown, path: string): unknown[] {
   const parts = path.split(".");
@@ -158,6 +228,16 @@ export function getValuesByPath(doc: unknown, path: string): unknown[] {
 
 /**
  * Get a single value from a document using dot notation (first non-undefined).
+ * @description Retrieves the first non-undefined value at the specified path. If all values
+ * are undefined, returns the first value (which will be undefined).
+ * @param doc - The document to query
+ * @param path - Dot-notation path (e.g., "user.address.city")
+ * @returns The first non-undefined value at the path, or undefined if not found
+ * @example
+ * const doc = { user: { name: "John", address: { city: "NYC" } } };
+ * getValueByPath(doc, "user.name") // "John"
+ * getValueByPath(doc, "user.address.city") // "NYC"
+ * getValueByPath(doc, "user.email") // undefined
  */
 export function getValueByPath(doc: unknown, path: string): unknown {
   const values = getValuesByPath(doc, path);
@@ -166,6 +246,19 @@ export function getValueByPath(doc: unknown, path: string): unknown {
 
 /**
  * Set a value at a given path using dot notation.
+ * @description Sets a value at the specified path, creating intermediate objects or arrays
+ * as needed. If a numeric segment follows, creates an array; otherwise creates an object.
+ * Mutates the document in place.
+ * @param doc - The document to modify
+ * @param path - Dot-notation path (e.g., "user.address.city")
+ * @param value - The value to set at the path
+ * @example
+ * const doc = {};
+ * setValueByPath(doc, "user.name", "John");
+ * // doc is now { user: { name: "John" } }
+ *
+ * setValueByPath(doc, "items.0.price", 10);
+ * // doc is now { user: { name: "John" }, items: [{ price: 10 }] }
  */
 export function setValueByPath(
   doc: Record<string, unknown>,
@@ -193,6 +286,18 @@ export function setValueByPath(
 
 /**
  * Delete a value at a given path using dot notation.
+ * @description Removes the property at the specified path from the document. If any intermediate
+ * path segment doesn't exist or isn't an object, the operation does nothing. Mutates the document
+ * in place.
+ * @param doc - The document to modify
+ * @param path - Dot-notation path (e.g., "user.address.city")
+ * @example
+ * const doc = { user: { name: "John", email: "john@example.com" } };
+ * deleteValueByPath(doc, "user.email");
+ * // doc is now { user: { name: "John" } }
+ *
+ * deleteValueByPath(doc, "user.nonexistent");
+ * // doc unchanged, no error thrown
  */
 export function deleteValueByPath(doc: Record<string, unknown>, path: string): void {
   const parts = path.split(".");
@@ -216,6 +321,17 @@ export function deleteValueByPath(doc: Record<string, unknown>, path: string): v
 
 /**
  * Get a value at a given path for updates (direct access, no array traversal).
+ * @description Retrieves a value using direct path traversal without expanding arrays.
+ * Unlike getValueByPath, this function only follows numeric indices for arrays and returns
+ * undefined for non-numeric access to arrays. Used for update operations.
+ * @param doc - The document to query
+ * @param path - Dot-notation path (e.g., "items.0.price")
+ * @returns The value at the path, or undefined if not found or path is invalid
+ * @example
+ * const doc = { items: [{ price: 10 }, { price: 20 }] };
+ * getValueAtPath(doc, "items.0.price") // 10
+ * getValueAtPath(doc, "items.price") // undefined (no array expansion)
+ * getValueAtPath(doc, "items.5") // undefined (index out of bounds)
  */
 export function getValueAtPath(doc: Record<string, unknown>, path: string): unknown {
   const parts = path.split(".");
@@ -244,6 +360,16 @@ export function getValueAtPath(doc: Record<string, unknown>, path: string): unkn
 
 /**
  * Compare two values according to MongoDB comparison rules.
+ * @description Compares two values following MongoDB's ordering rules. Supports ObjectIds,
+ * Dates, numbers, strings, and booleans. Returns a number indicating sort order.
+ * @param a - The first value to compare
+ * @param b - The second value to compare
+ * @returns Negative if a < b, positive if a > b, 0 if equal, NaN if incomparable
+ * @example
+ * compareValues(5, 10) // -5 (a < b)
+ * compareValues("apple", "banana") // negative (a < b)
+ * compareValues(new Date("2023-01-01"), new Date("2023-01-02")) // negative
+ * compareValues(5, "10") // NaN (different types)
  */
 export function compareValues(a: unknown, b: unknown): number {
   if (a instanceof ObjectId && b instanceof ObjectId) {
@@ -272,6 +398,18 @@ export function compareValues(a: unknown, b: unknown): number {
 
 /**
  * Check if two values are equal according to MongoDB rules.
+ * @description Performs deep equality comparison following MongoDB's equality rules. Handles
+ * ObjectIds, Dates, arrays, nested objects, and primitives. Optionally checks key order for objects.
+ * @param a - The first value to compare
+ * @param b - The second value to compare
+ * @param strictKeyOrder - If true, objects must have keys in the same order (default: false)
+ * @returns True if values are equal, false otherwise
+ * @example
+ * valuesEqual({ name: "John" }, { name: "John" }) // true
+ * valuesEqual([1, 2, 3], [1, 2, 3]) // true
+ * valuesEqual(new ObjectId("..."), new ObjectId("...")) // true if same ID
+ * valuesEqual({ a: 1, b: 2 }, { b: 2, a: 1 }) // true (key order ignored by default)
+ * valuesEqual({ a: 1, b: 2 }, { b: 2, a: 1 }, true) // false (key order matters)
  */
 export function valuesEqual(a: unknown, b: unknown, strictKeyOrder = false): boolean {
   if (a instanceof ObjectId && b instanceof ObjectId) {
@@ -333,6 +471,19 @@ export function valuesEqual(a: unknown, b: unknown, strictKeyOrder = false): boo
 
 /**
  * Deep clone a value.
+ * @description Creates a deep copy of any value, including ObjectIds, Dates, arrays, and
+ * nested objects. Preserves the type and structure of the original value.
+ * @param value - The value to clone
+ * @returns A deep clone of the value
+ * @example
+ * const obj = { name: "John", tags: ["a", "b"] };
+ * const clone = cloneValue(obj);
+ * clone.tags.push("c");
+ * // obj.tags is still ["a", "b"], clone.tags is ["a", "b", "c"]
+ *
+ * const id = new ObjectId();
+ * const clonedId = cloneValue(id);
+ * // clonedId is a new ObjectId instance with the same value
  */
 export function cloneValue(value: unknown): unknown {
   if (value instanceof ObjectId) {
@@ -349,6 +500,19 @@ export function cloneValue(value: unknown): unknown {
 
 /**
  * Deep clone a document.
+ * @description Creates a deep copy of a document, recursively cloning all nested values
+ * including ObjectIds, Dates, arrays, and nested objects.
+ * @param doc - The document to clone
+ * @returns A deep clone of the document
+ * @example
+ * const doc = {
+ *   _id: new ObjectId(),
+ *   user: { name: "John" },
+ *   tags: ["a", "b"]
+ * };
+ * const clone = cloneDocument(doc);
+ * clone.user.name = "Jane";
+ * // doc.user.name is still "John"
  */
 export function cloneDocument<T extends Document>(doc: T): T {
   const result: Record<string, unknown> = {};
@@ -360,6 +524,19 @@ export function cloneDocument<T extends Document>(doc: T): T {
 
 /**
  * Check if two documents are deeply equal.
+ * @description Performs deep equality comparison of two documents, comparing all fields and
+ * nested values according to MongoDB equality rules.
+ * @param a - The first document to compare
+ * @param b - The second document to compare
+ * @returns True if documents are equal, false otherwise
+ * @example
+ * const doc1 = { _id: new ObjectId("..."), name: "John" };
+ * const doc2 = { _id: new ObjectId("..."), name: "John" };
+ * documentsEqual(doc1, doc2) // true if ObjectIds match
+ *
+ * const doc3 = { name: "John", age: 30 };
+ * const doc4 = { age: 30, name: "John" };
+ * documentsEqual(doc3, doc4) // true (key order doesn't matter)
  */
 export function documentsEqual<T extends Document>(a: T, b: T): boolean {
   const aKeys = Object.keys(a);

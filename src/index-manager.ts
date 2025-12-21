@@ -13,13 +13,21 @@ import { MongoDuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError } fr
 const DEFAULT_ID_INDEX: IndexInfo = { v: 2, key: { _id: 1 }, name: "_id_" };
 
 /**
- * IndexManager handles index operations for a collection.
+ * IndexManager handles index operations for a Mongone collection.
+ * Stores index metadata in a separate JSON file and manages index creation,
+ * deletion, and unique constraint validation.
  */
 export class IndexManager {
   private readonly indexFilePath: string;
   private readonly dbName: string;
   private readonly collectionName: string;
 
+  /**
+   * Create an IndexManager for a collection.
+   * @param indexFilePath - Path to the index metadata file
+   * @param dbName - Database name (for error messages)
+   * @param collectionName - Collection name (for error messages)
+   */
   constructor(indexFilePath: string, dbName: string, collectionName: string) {
     this.indexFilePath = indexFilePath;
     this.dbName = dbName;
@@ -28,6 +36,9 @@ export class IndexManager {
 
   /**
    * Read index metadata from the index file.
+   * If the file doesn't exist, returns the default _id index.
+   * @returns Array of index metadata objects
+   * @throws Error if file read or JSON parsing fails (except ENOENT)
    */
   async loadIndexes(): Promise<IndexInfo[]> {
     try {
@@ -44,6 +55,9 @@ export class IndexManager {
 
   /**
    * Write index metadata to the index file.
+   * Creates the parent directory if it doesn't exist.
+   * @param indexes - Array of index metadata objects to save
+   * @throws Error if directory creation or file write fails
    */
   async saveIndexes(indexes: IndexInfo[]): Promise<void> {
     await mkdir(dirname(this.indexFilePath), { recursive: true });
@@ -52,6 +66,9 @@ export class IndexManager {
 
   /**
    * Generate an index name from the key specification.
+   * Concatenates field names and directions with underscores.
+   * @param keySpec - Fields to index (e.g., { email: 1, age: -1 })
+   * @returns Generated index name (e.g., "email_1_age_-1")
    */
   generateIndexName(keySpec: IndexKeySpec): string {
     return Object.entries(keySpec)
@@ -61,6 +78,10 @@ export class IndexManager {
 
   /**
    * Check if two key specifications are equivalent.
+   * Compares both field names and their sort directions in order.
+   * @param a - First index key specification
+   * @param b - Second index key specification
+   * @returns True if the specifications are identical, false otherwise
    */
   keySpecsEqual(a: IndexKeySpec, b: IndexKeySpec): boolean {
     const aKeys = Object.keys(a);
@@ -75,6 +96,10 @@ export class IndexManager {
 
   /**
    * Create an index on the collection.
+   * If an index with the same key specification already exists, returns its name.
+   * @param keySpec - Fields to index (e.g., { email: 1 })
+   * @param options - Index options (unique, name, sparse)
+   * @returns The name of the created or existing index
    */
   async createIndex(
     keySpec: IndexKeySpec,
@@ -110,6 +135,10 @@ export class IndexManager {
 
   /**
    * Drop an index from the collection.
+   * The _id index cannot be dropped.
+   * @param indexNameOrSpec - Index name or key specification to drop
+   * @throws CannotDropIdIndexError if attempting to drop the _id index
+   * @throws IndexNotFoundError if the index does not exist
    */
   async dropIndex(indexNameOrSpec: string | IndexKeySpec): Promise<void> {
     const indexes = await this.loadIndexes();
@@ -143,6 +172,7 @@ export class IndexManager {
 
   /**
    * List all indexes on the collection.
+   * @returns Array of all index metadata objects
    */
   async indexes(): Promise<IndexInfo[]> {
     return this.loadIndexes();
@@ -150,6 +180,10 @@ export class IndexManager {
 
   /**
    * Extract the key value from a document for a given index key specification.
+   * Supports nested field paths using dot notation.
+   * @param doc - Document to extract values from
+   * @param keySpec - Index key specification
+   * @returns Object mapping field names to their values in the document
    */
   extractKeyValue<T extends Document>(
     doc: T,
@@ -164,6 +198,11 @@ export class IndexManager {
 
   /**
    * Check unique constraints for documents being inserted or updated.
+   * Validates that no unique index constraints would be violated by the operation.
+   * @param docs - Documents to be inserted or updated
+   * @param existingDocs - All existing documents in the collection
+   * @param excludeIds - Document IDs to exclude from constraint checking (for updates)
+   * @throws MongoDuplicateKeyError if a unique constraint would be violated
    */
   async checkUniqueConstraints<T extends Document>(
     docs: T[],

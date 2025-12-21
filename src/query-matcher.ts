@@ -12,6 +12,19 @@ import {
 
 /**
  * Check if an object contains query operators (keys starting with $).
+ *
+ * @description Determines whether a value is an object where all keys are MongoDB query operators.
+ * Query operators are identified by keys that start with a dollar sign ($).
+ * Returns false for null, arrays, or non-object values.
+ *
+ * @param value - The value to check
+ * @returns True if the value is an object with all keys starting with $, false otherwise
+ *
+ * @example
+ * isOperatorObject({ $gt: 5, $lt: 10 }) // true
+ * isOperatorObject({ age: 25 }) // false
+ * isOperatorObject(null) // false
+ * isOperatorObject([1, 2, 3]) // false
  */
 export function isOperatorObject(value: unknown): value is QueryOperators {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -88,6 +101,26 @@ function matchesElemMatchCondition(
 
 /**
  * Check if a value matches query operators.
+ *
+ * @description Evaluates whether a document value satisfies all specified MongoDB query operators.
+ * Supports comparison operators ($eq, $ne, $gt, $gte, $lt, $lte), array operators
+ * ($in, $nin, $all, $elemMatch), existence checks ($exists), size checks ($size),
+ * and negation ($not). Logical operators ($and, $or, $nor) are not supported at this level
+ * and will throw an error.
+ *
+ * @param docValue - The value from the document to test
+ * @param operators - An object containing MongoDB query operators
+ * @returns True if the value matches all operators, false otherwise
+ *
+ * @throws {Error} If an invalid operator argument is provided (e.g., $size with non-integer)
+ * @throws {Error} If logical operators ($and, $or, $nor) are used at this level
+ *
+ * @example
+ * matchesOperators(25, { $gte: 18, $lt: 65 }) // true
+ * matchesOperators(15, { $gte: 18 }) // false
+ * matchesOperators([1, 2, 3], { $size: 3 }) // true
+ * matchesOperators('hello', { $in: ['hello', 'world'] }) // true
+ * matchesOperators(10, { $not: { $lt: 5 } }) // true
  */
 export function matchesOperators(
   docValue: unknown,
@@ -289,14 +322,49 @@ function evaluateLogicalOperator<T extends Document>(
 }
 
 /**
- * Check if a document matches a filter.
+ * Check if a document matches a MongoDB-style filter.
+ *
+ * @description The main query matching function that evaluates whether a document satisfies
+ * a MongoDB-style filter. This is the primary entry point for document matching and supports
+ * all standard MongoDB query features including equality, operators, logical operators, and
+ * dot notation for nested field access.
+ *
  * Supports:
- * - Empty filter (matches all)
- * - Simple equality
- * - Dot notation for nested fields (including array element traversal)
- * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $exists, $not)
+ * - Empty filter (matches all documents)
+ * - Simple equality ({ field: value })
+ * - Dot notation for nested fields ({ "address.city": "NYC" })
+ * - Array element traversal ({ "items.0.name": "apple" })
+ * - Query operators ($eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $exists, $not, $size, $all, $elemMatch)
  * - Logical operators ($and, $or, $nor)
- * - Array field matching
+ * - Array field matching (any element match)
+ *
+ * @param doc - The document to test against the filter
+ * @param filter - MongoDB-style filter object with field conditions and/or logical operators
+ * @returns True if the document matches the filter, false otherwise
+ *
+ * @example
+ * // Simple equality
+ * matchesFilter({ age: 25 }, { age: 25 }) // true
+ *
+ * @example
+ * // Query operators
+ * matchesFilter({ age: 25 }, { age: { $gte: 18, $lt: 65 } }) // true
+ *
+ * @example
+ * // Dot notation
+ * matchesFilter({ user: { name: 'John' } }, { 'user.name': 'John' }) // true
+ *
+ * @example
+ * // Logical operators
+ * matchesFilter(
+ *   { age: 25, status: 'active' },
+ *   { $and: [{ age: { $gte: 18 } }, { status: 'active' }] }
+ * ) // true
+ *
+ * @example
+ * // Array matching
+ * matchesFilter({ tags: ['js', 'ts'] }, { tags: 'js' }) // true
+ * matchesFilter({ scores: [85, 90, 95] }, { scores: { $gt: 80 } }) // true
  */
 export function matchesFilter<T extends Document>(
   doc: T,
@@ -322,7 +390,32 @@ export function matchesFilter<T extends Document>(
 
 /**
  * Check if an array element matches a $pull object condition.
- * Reuses matchesElemMatchCondition since the logic is equivalent.
+ *
+ * @description Determines whether an array element satisfies a condition used in MongoDB's
+ * $pull update operator. This is used to identify which array elements should be removed
+ * during a pull operation. The condition can specify field-level queries for object elements
+ * or direct operator queries for primitive elements.
+ *
+ * The logic is equivalent to $elemMatch - if an element matches the condition, it will be
+ * pulled (removed) from the array.
+ *
+ * @param element - The array element to test (can be primitive or object)
+ * @param condition - An object specifying the match condition with field names and/or operators
+ * @returns True if the element matches the pull condition (should be removed), false otherwise
+ *
+ * @example
+ * // Pull objects with score less than 10
+ * matchesPullCondition({ score: 5, name: 'test' }, { score: { $lt: 10 } }) // true
+ * matchesPullCondition({ score: 15, name: 'test' }, { score: { $lt: 10 } }) // false
+ *
+ * @example
+ * // Pull objects with exact match
+ * matchesPullCondition({ status: 'inactive' }, { status: 'inactive' }) // true
+ *
+ * @example
+ * // Pull primitives with operators
+ * matchesPullCondition(5, { $lt: 10 }) // true
+ * matchesPullCondition(15, { $lt: 10 }) // false
  */
 export function matchesPullCondition(
   element: unknown,
