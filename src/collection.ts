@@ -943,12 +943,19 @@ export class MongoneCollection<T extends Document = Document> {
         );
 
         if (currentValue === undefined) {
-          // Field doesn't exist - create new array
+          // Field doesn't exist - create new array with unique values
           if (this.isPushEachModifier(value)) {
+            // Deduplicate values from $each (since $addToSet is for unique values)
+            const uniqueValues: unknown[] = [];
+            for (const v of (value as { $each: unknown[] }).$each) {
+              if (!uniqueValues.some((existing) => this.valuesEqual(existing, v, true))) {
+                uniqueValues.push(v);
+              }
+            }
             this.setValueByPath(
               result as Record<string, unknown>,
               path,
-              [...(value as { $each: unknown[] }).$each]
+              uniqueValues
             );
           } else {
             this.setValueByPath(result as Record<string, unknown>, path, [value]);

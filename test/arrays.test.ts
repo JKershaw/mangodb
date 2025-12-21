@@ -407,6 +407,26 @@ describe(`Array Query Tests (${getTestModeName()})`, () => {
       // Matches non-empty arrays
       assert.strictEqual(docs.length, 1);
     });
+
+    it("should work with $not inside $elemMatch", async () => {
+      const collection = client.db(dbName).collection("elemmatch_not");
+      await collection.insertMany([
+        { items: [{ status: "active" }, { status: "deleted" }] },
+        { items: [{ status: "deleted" }, { status: "archived" }] },
+        { items: [{ status: "active" }, { status: "pending" }] },
+      ]);
+
+      // Find documents with at least one item NOT deleted
+      const docs = await collection
+        .find({
+          items: { $elemMatch: { status: { $not: { $eq: "deleted" } } } },
+        })
+        .toArray();
+
+      // First doc has "active", third has "active" and "pending"
+      // Second doc only has "deleted" and "archived" - "archived" matches $not deleted
+      assert.strictEqual(docs.length, 3);
+    });
   });
 });
 
@@ -556,6 +576,32 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
 
       const docs = await collection.find({ type: "a" }).toArray();
       assert.ok(docs.every((d) => (d.tags as string[]).includes("new")));
+    });
+
+    it("should work with deeply nested dot notation", async () => {
+      const collection = client.db(dbName).collection("push_deep_nested");
+      await collection.insertOne({ a: { b: { c: { tags: ["x"] } } } });
+
+      await collection.updateOne({}, { $push: { "a.b.c.tags": "y" } });
+
+      const doc = await collection.findOne({});
+      const tags = (
+        doc?.a as { b: { c: { tags: string[] } } }
+      ).b.c.tags;
+      assert.deepStrictEqual(tags, ["x", "y"]);
+    });
+
+    it("should create deeply nested structure if missing", async () => {
+      const collection = client.db(dbName).collection("push_deep_create");
+      await collection.insertOne({ name: "test" });
+
+      await collection.updateOne({}, { $push: { "a.b.c.tags": "first" } });
+
+      const doc = await collection.findOne({});
+      const tags = (
+        doc?.a as { b: { c: { tags: string[] } } }
+      ).b.c.tags;
+      assert.deepStrictEqual(tags, ["first"]);
     });
   });
 
@@ -731,6 +777,21 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       const doc = await collection.findOne({});
       // "b" already exists, only "c" and "d" added
       assert.deepStrictEqual(doc?.tags, ["a", "b", "c", "d"]);
+    });
+
+    it("should preserve duplicates in $each when field is new", async () => {
+      const collection = client.db(dbName).collection("addtoset_each_dup_new");
+      await collection.insertOne({ name: "test" });
+
+      // $each with duplicates on a new field - only unique values should be added
+      await collection.updateOne(
+        {},
+        { $addToSet: { tags: { $each: ["a", "a", "b", "a", "b"] } } }
+      );
+
+      const doc = await collection.findOne({});
+      // MongoDB adds unique values only, even for new field
+      assert.deepStrictEqual(doc?.tags, ["a", "b"]);
     });
 
     it("should use deep equality for objects", async () => {
