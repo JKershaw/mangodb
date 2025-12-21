@@ -4,12 +4,74 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 7 - Indexes
+**Phase**: 8 - Advanced
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-21 - Phase 8: Advanced Operations
+
+#### Added
+- FindOneAnd* methods for atomic find-and-modify operations:
+  - `collection.findOneAndDelete(filter, options)` - Find and delete a document
+  - `collection.findOneAndReplace(filter, replacement, options)` - Find and replace a document
+  - `collection.findOneAndUpdate(filter, update, options)` - Find and update a document
+  - `collection.bulkWrite(operations, options)` - Execute multiple write operations
+
+#### Behaviors Implemented
+- `findOneAndDelete` returns the deleted document
+- `findOneAndReplace` replaces the entire document (preserving `_id`)
+- `findOneAndUpdate` applies update operators to the document
+- All findOneAnd* methods support:
+  - `sort` option - Determines which document to modify when multiple match
+  - `projection` option - Controls which fields to return
+- `findOneAndReplace` and `findOneAndUpdate` support:
+  - `upsert` option - Insert if no match found
+  - `returnDocument: "before" | "after"` - Return pre or post modification (default: "before")
+- `bulkWrite` supports:
+  - `insertOne`, `updateOne`, `updateMany`, `deleteOne`, `deleteMany`, `replaceOne` operations
+  - `ordered` mode (default: true) - Stop on first error
+  - Unordered mode - Continue on errors and collect all failures
+  - Aggregated result with counts for all operation types
+
+#### Validation
+- `findOneAndReplace` and `replaceOne` reject documents containing update operators (`$` keys)
+
+#### Examples
+```typescript
+// findOneAndDelete
+const result = await collection.findOneAndDelete(
+  { status: "pending" },
+  { sort: { priority: -1 } }
+);
+// result.value contains the deleted document
+
+// findOneAndReplace
+const result = await collection.findOneAndReplace(
+  { name: "Alice" },
+  { name: "Alice", age: 31, city: "NYC" },
+  { returnDocument: "after" }
+);
+
+// findOneAndUpdate
+const result = await collection.findOneAndUpdate(
+  { name: "Alice" },
+  { $inc: { score: 10 } },
+  { returnDocument: "after", upsert: true }
+);
+
+// bulkWrite
+const result = await collection.bulkWrite([
+  { insertOne: { document: { name: "Alice" } } },
+  { updateOne: { filter: { name: "Alice" }, update: { $set: { age: 30 } } } },
+  { deleteOne: { filter: { name: "Bob" } } }
+]);
+// result.insertedCount, result.modifiedCount, result.deletedCount, etc.
+```
+
+---
 
 ### 2025-12-21 - Phase 7: Indexes
 

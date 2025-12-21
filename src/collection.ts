@@ -134,6 +134,90 @@ interface UpdateOperators {
   $pop?: Record<string, number>;
 }
 
+// Phase 8: FindOneAnd* options and result types
+
+/**
+ * Options for findOneAndDelete operation.
+ */
+interface FindOneAndDeleteOptions {
+  /** Which fields to return in the result */
+  projection?: ProjectionSpec;
+  /** Sort order to determine which document to delete */
+  sort?: Record<string, 1 | -1>;
+}
+
+/**
+ * Options for findOneAndReplace operation.
+ */
+interface FindOneAndReplaceOptions {
+  /** Which fields to return in the result */
+  projection?: ProjectionSpec;
+  /** Sort order to determine which document to replace */
+  sort?: Record<string, 1 | -1>;
+  /** Insert document if no match found */
+  upsert?: boolean;
+  /** Return document 'before' or 'after' replacement */
+  returnDocument?: "before" | "after";
+}
+
+/**
+ * Options for findOneAndUpdate operation.
+ */
+interface FindOneAndUpdateOptions {
+  /** Which fields to return in the result */
+  projection?: ProjectionSpec;
+  /** Sort order to determine which document to update */
+  sort?: Record<string, 1 | -1>;
+  /** Insert document if no match found */
+  upsert?: boolean;
+  /** Return document 'before' or 'after' update */
+  returnDocument?: "before" | "after";
+}
+
+/**
+ * Result of a findOneAnd* operation.
+ */
+interface ModifyResult<T> {
+  /** The document (before or after modification, or null if not found) */
+  value: T | null;
+  /** Whether the operation was acknowledged */
+  ok: 1 | 0;
+}
+
+/**
+ * A single operation for bulkWrite.
+ */
+interface BulkWriteOperation<T> {
+  insertOne?: { document: T };
+  updateOne?: { filter: Filter<T>; update: UpdateOperators; upsert?: boolean };
+  updateMany?: { filter: Filter<T>; update: UpdateOperators; upsert?: boolean };
+  deleteOne?: { filter: Filter<T> };
+  deleteMany?: { filter: Filter<T> };
+  replaceOne?: { filter: Filter<T>; replacement: T; upsert?: boolean };
+}
+
+/**
+ * Options for bulkWrite operation.
+ */
+interface BulkWriteOptions {
+  /** If true (default), stop on first error. If false, continue on errors. */
+  ordered?: boolean;
+}
+
+/**
+ * Result of a bulkWrite operation.
+ */
+interface BulkWriteResult {
+  acknowledged: boolean;
+  insertedCount: number;
+  matchedCount: number;
+  modifiedCount: number;
+  deletedCount: number;
+  upsertedCount: number;
+  insertedIds: Record<number, ObjectId>;
+  upsertedIds: Record<number, ObjectId>;
+}
+
 /**
  * Index key specification.
  * Keys are field names (can use dot notation).
@@ -1616,5 +1700,419 @@ export class MongoneCollection<T extends Document = Document> {
     options: UpdateOptions = {}
   ): Promise<UpdateResult> {
     return this.performUpdate(filter, update, options, false);
+  }
+
+  // Phase 8: FindOneAnd* methods and bulkWrite
+
+  /**
+   * Sort documents by the given specification and return them.
+   * Used by findOneAnd* methods to determine which document to modify.
+   */
+  private sortDocuments(docs: T[], sortSpec: Record<string, 1 | -1>): T[] {
+    const sortFields = Object.entries(sortSpec) as [string, 1 | -1][];
+    return [...docs].sort((a, b) => {
+      for (const [field, direction] of sortFields) {
+        const aValue = this.getValueByPath(a, field);
+        const bValue = this.getValueByPath(b, field);
+        const comparison = this.compareForSort(aValue, bValue);
+        if (comparison !== 0) {
+          return direction === 1 ? comparison : -comparison;
+        }
+      }
+      return 0;
+    });
+  }
+
+  /**
+   * Compare two values for sorting purposes.
+   */
+  private compareForSort(a: unknown, b: unknown): number {
+    // Handle null/undefined - they sort first
+    if (a === null || a === undefined) {
+      if (b === null || b === undefined) return 0;
+      return -1;
+    }
+    if (b === null || b === undefined) return 1;
+
+    // Same type comparisons
+    if (typeof a === "number" && typeof b === "number") {
+      return a - b;
+    }
+    if (typeof a === "string" && typeof b === "string") {
+      return a.localeCompare(b);
+    }
+    if (a instanceof Date && b instanceof Date) {
+      return a.getTime() - b.getTime();
+    }
+    if (a instanceof ObjectId && b instanceof ObjectId) {
+      return a.toHexString().localeCompare(b.toHexString());
+    }
+
+    // Fallback to string comparison
+    return String(a).localeCompare(String(b));
+  }
+
+  /**
+   * Find a document and delete it.
+   * Returns the deleted document.
+   */
+  async findOneAndDelete(
+    filter: Filter<T>,
+    options: FindOneAndDeleteOptions = {}
+  ): Promise<ModifyResult<T>> {
+    const documents = await this.readDocuments();
+
+    // Find matching documents
+    let matches = documents.filter((doc) => this.matchesFilter(doc, filter));
+
+    if (matches.length === 0) {
+      return { value: null, ok: 1 };
+    }
+
+    // Apply sort if specified
+    if (options.sort) {
+      matches = this.sortDocuments(matches, options.sort);
+    }
+
+    // Select the first document
+    const docToDelete = matches[0];
+    const docId = (docToDelete as { _id?: ObjectId })._id;
+
+    // Remove from documents array
+    const remaining = documents.filter((doc) => {
+      const id = (doc as { _id?: ObjectId })._id;
+      return !id || !docId || !id.equals(docId);
+    });
+
+    await this.writeDocuments(remaining);
+
+    // Apply projection if specified
+    let resultDoc = docToDelete;
+    if (options.projection) {
+      resultDoc = applyProjection(docToDelete, options.projection);
+    }
+
+    return { value: resultDoc, ok: 1 };
+  }
+
+  /**
+   * Validate that a replacement document doesn't contain update operators.
+   */
+  private validateReplacement(replacement: T): void {
+    for (const key of Object.keys(replacement)) {
+      if (key.startsWith("$")) {
+        throw new Error(
+          "Replacement document must not contain update operators (keys starting with '$')"
+        );
+      }
+    }
+  }
+
+  /**
+   * Find a document and replace it entirely.
+   * Returns the document before or after replacement based on options.
+   */
+  async findOneAndReplace(
+    filter: Filter<T>,
+    replacement: T,
+    options: FindOneAndReplaceOptions = {}
+  ): Promise<ModifyResult<T>> {
+    // Validate replacement doesn't contain update operators
+    this.validateReplacement(replacement);
+
+    const documents = await this.readDocuments();
+    const returnAfter = options.returnDocument === "after";
+
+    // Find matching documents
+    let matches = documents.filter((doc) => this.matchesFilter(doc, filter));
+
+    if (matches.length === 0) {
+      // Handle upsert
+      if (options.upsert) {
+        const newDoc = { ...replacement } as T;
+        if (!("_id" in newDoc)) {
+          (newDoc as Record<string, unknown>)._id = new ObjectId();
+        }
+
+        // Check unique constraints
+        await this.checkUniqueConstraints([newDoc], documents);
+
+        documents.push(newDoc);
+        await this.writeDocuments(documents);
+
+        let resultDoc = newDoc;
+        if (options.projection) {
+          resultDoc = applyProjection(newDoc, options.projection);
+        }
+
+        // For upsert with returnDocument: "before", return null
+        // For upsert with returnDocument: "after", return the new doc
+        return { value: returnAfter ? resultDoc : null, ok: 1 };
+      }
+      return { value: null, ok: 1 };
+    }
+
+    // Apply sort if specified
+    if (options.sort) {
+      matches = this.sortDocuments(matches, options.sort);
+    }
+
+    // Select the first document
+    const docToReplace = matches[0];
+    const originalId = (docToReplace as { _id?: ObjectId })._id;
+
+    // Create replacement preserving _id
+    const newDoc = { ...replacement } as T;
+    if (originalId) {
+      (newDoc as Record<string, unknown>)._id = originalId;
+    }
+
+    // Find and replace in documents array
+    const updatedDocuments: T[] = [];
+    const unchangedDocs: T[] = [];
+    let replaced = false;
+
+    for (const doc of documents) {
+      const id = (doc as { _id?: ObjectId })._id;
+      if (!replaced && id && originalId && id.equals(originalId)) {
+        updatedDocuments.push(newDoc);
+        replaced = true;
+      } else {
+        updatedDocuments.push(doc);
+        unchangedDocs.push(doc);
+      }
+    }
+
+    // Check unique constraints
+    await this.checkUniqueConstraints([newDoc], unchangedDocs);
+
+    await this.writeDocuments(updatedDocuments);
+
+    // Apply projection and return appropriate document
+    let resultDoc = returnAfter ? newDoc : docToReplace;
+    if (options.projection) {
+      resultDoc = applyProjection(resultDoc, options.projection);
+    }
+
+    return { value: resultDoc, ok: 1 };
+  }
+
+  /**
+   * Find a document and update it with update operators.
+   * Returns the document before or after update based on options.
+   */
+  async findOneAndUpdate(
+    filter: Filter<T>,
+    update: UpdateOperators,
+    options: FindOneAndUpdateOptions = {}
+  ): Promise<ModifyResult<T>> {
+    const documents = await this.readDocuments();
+    const returnAfter = options.returnDocument === "after";
+
+    // Find matching documents
+    let matches = documents.filter((doc) => this.matchesFilter(doc, filter));
+
+    if (matches.length === 0) {
+      // Handle upsert
+      if (options.upsert) {
+        const baseDoc = this.createDocumentFromFilter(filter);
+        const newDoc = this.applyUpdateOperators(baseDoc, update);
+
+        if (!("_id" in newDoc)) {
+          (newDoc as Record<string, unknown>)._id = new ObjectId();
+        }
+
+        // Check unique constraints
+        await this.checkUniqueConstraints([newDoc], documents);
+
+        documents.push(newDoc);
+        await this.writeDocuments(documents);
+
+        let resultDoc = newDoc;
+        if (options.projection) {
+          resultDoc = applyProjection(newDoc, options.projection);
+        }
+
+        // For upsert with returnDocument: "before", return null
+        // For upsert with returnDocument: "after", return the new doc
+        return { value: returnAfter ? resultDoc : null, ok: 1 };
+      }
+      return { value: null, ok: 1 };
+    }
+
+    // Apply sort if specified
+    if (options.sort) {
+      matches = this.sortDocuments(matches, options.sort);
+    }
+
+    // Select the first document
+    const docToUpdate = matches[0];
+    const originalId = (docToUpdate as { _id?: ObjectId })._id;
+
+    // Apply updates
+    const updatedDoc = this.applyUpdateOperators(docToUpdate, update);
+
+    // Find and replace in documents array
+    const updatedDocuments: T[] = [];
+    const unchangedDocs: T[] = [];
+    let updated = false;
+
+    for (const doc of documents) {
+      const id = (doc as { _id?: ObjectId })._id;
+      if (!updated && id && originalId && id.equals(originalId)) {
+        updatedDocuments.push(updatedDoc);
+        updated = true;
+      } else {
+        updatedDocuments.push(doc);
+        unchangedDocs.push(doc);
+      }
+    }
+
+    // Check unique constraints
+    await this.checkUniqueConstraints([updatedDoc], unchangedDocs);
+
+    await this.writeDocuments(updatedDocuments);
+
+    // Apply projection and return appropriate document
+    let resultDoc = returnAfter ? updatedDoc : docToUpdate;
+    if (options.projection) {
+      resultDoc = applyProjection(resultDoc, options.projection);
+    }
+
+    return { value: resultDoc, ok: 1 };
+  }
+
+  /**
+   * Execute multiple write operations in bulk.
+   */
+  async bulkWrite(
+    operations: BulkWriteOperation<T>[],
+    options: BulkWriteOptions = {}
+  ): Promise<BulkWriteResult> {
+    const ordered = options.ordered !== false; // Default to true
+
+    const result: BulkWriteResult = {
+      acknowledged: true,
+      insertedCount: 0,
+      matchedCount: 0,
+      modifiedCount: 0,
+      deletedCount: 0,
+      upsertedCount: 0,
+      insertedIds: {},
+      upsertedIds: {},
+    };
+
+    const errors: Array<{ index: number; error: Error }> = [];
+
+    for (let i = 0; i < operations.length; i++) {
+      const op = operations[i];
+
+      try {
+        if (op.insertOne) {
+          const insertResult = await this.insertOne(op.insertOne.document);
+          result.insertedCount++;
+          result.insertedIds[i] = insertResult.insertedId;
+        } else if (op.updateOne) {
+          const updateResult = await this.updateOne(
+            op.updateOne.filter,
+            op.updateOne.update,
+            { upsert: op.updateOne.upsert }
+          );
+          result.matchedCount += updateResult.matchedCount;
+          result.modifiedCount += updateResult.modifiedCount;
+          if (updateResult.upsertedId) {
+            result.upsertedCount++;
+            result.upsertedIds[i] = updateResult.upsertedId;
+          }
+        } else if (op.updateMany) {
+          const updateResult = await this.updateMany(
+            op.updateMany.filter,
+            op.updateMany.update,
+            { upsert: op.updateMany.upsert }
+          );
+          result.matchedCount += updateResult.matchedCount;
+          result.modifiedCount += updateResult.modifiedCount;
+          if (updateResult.upsertedId) {
+            result.upsertedCount++;
+            result.upsertedIds[i] = updateResult.upsertedId;
+          }
+        } else if (op.deleteOne) {
+          const deleteResult = await this.deleteOne(op.deleteOne.filter);
+          result.deletedCount += deleteResult.deletedCount;
+        } else if (op.deleteMany) {
+          const deleteResult = await this.deleteMany(op.deleteMany.filter);
+          result.deletedCount += deleteResult.deletedCount;
+        } else if (op.replaceOne) {
+          // Validate replacement
+          this.validateReplacement(op.replaceOne.replacement);
+
+          const documents = await this.readDocuments();
+          const matches = documents.filter((doc) =>
+            this.matchesFilter(doc, op.replaceOne!.filter)
+          );
+
+          if (matches.length === 0 && op.replaceOne.upsert) {
+            // Upsert case
+            const newDoc = { ...op.replaceOne.replacement } as T;
+            if (!("_id" in newDoc)) {
+              (newDoc as Record<string, unknown>)._id = new ObjectId();
+            }
+            await this.checkUniqueConstraints([newDoc], documents);
+            documents.push(newDoc);
+            await this.writeDocuments(documents);
+            result.upsertedCount++;
+            result.upsertedIds[i] = (newDoc as { _id: ObjectId })._id;
+          } else if (matches.length > 0) {
+            // Replace first match
+            const docToReplace = matches[0];
+            const originalId = (docToReplace as { _id?: ObjectId })._id;
+            const newDoc = { ...op.replaceOne.replacement } as T;
+            if (originalId) {
+              (newDoc as Record<string, unknown>)._id = originalId;
+            }
+
+            const updatedDocuments: T[] = [];
+            const unchangedDocs: T[] = [];
+            let replaced = false;
+
+            for (const doc of documents) {
+              const id = (doc as { _id?: ObjectId })._id;
+              if (!replaced && id && originalId && id.equals(originalId)) {
+                updatedDocuments.push(newDoc);
+                replaced = true;
+              } else {
+                updatedDocuments.push(doc);
+                unchangedDocs.push(doc);
+              }
+            }
+
+            await this.checkUniqueConstraints([newDoc], unchangedDocs);
+            await this.writeDocuments(updatedDocuments);
+            result.matchedCount++;
+            result.modifiedCount++;
+          }
+        }
+      } catch (error) {
+        if (ordered) {
+          // In ordered mode, re-throw immediately
+          throw error;
+        } else {
+          // In unordered mode, collect errors
+          errors.push({ index: i, error: error as Error });
+        }
+      }
+    }
+
+    // If unordered and there were errors, throw with partial results
+    if (!ordered && errors.length > 0) {
+      const bulkError = new Error(
+        `BulkWrite had ${errors.length} error(s)`
+      ) as Error & { writeErrors: typeof errors; result: BulkWriteResult };
+      bulkError.writeErrors = errors;
+      bulkError.result = result;
+      throw bulkError;
+    }
+
+    return result;
   }
 }

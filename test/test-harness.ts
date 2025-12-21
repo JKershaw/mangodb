@@ -58,6 +58,51 @@ export interface IndexCursor {
   toArray(): Promise<IndexInfo[]>;
 }
 
+// Phase 8: FindOneAnd* types
+export interface ModifyResult<T> {
+  value: T | null;
+  ok: number;
+}
+
+export interface FindOneAndDeleteOptions {
+  projection?: Document;
+  sort?: Document;
+}
+
+export interface FindOneAndReplaceOptions {
+  projection?: Document;
+  sort?: Document;
+  upsert?: boolean;
+  returnDocument?: "before" | "after";
+}
+
+export interface FindOneAndUpdateOptions {
+  projection?: Document;
+  sort?: Document;
+  upsert?: boolean;
+  returnDocument?: "before" | "after";
+}
+
+export interface BulkWriteOperation {
+  insertOne?: { document: Document };
+  updateOne?: { filter: Document; update: Document; upsert?: boolean };
+  updateMany?: { filter: Document; update: Document; upsert?: boolean };
+  deleteOne?: { filter: Document };
+  deleteMany?: { filter: Document };
+  replaceOne?: { filter: Document; replacement: Document; upsert?: boolean };
+}
+
+export interface BulkWriteResult {
+  acknowledged: boolean;
+  insertedCount: number;
+  matchedCount: number;
+  modifiedCount: number;
+  deletedCount: number;
+  upsertedCount: number;
+  insertedIds: Record<number, unknown>;
+  upsertedIds: Record<number, unknown>;
+}
+
 export interface TestCollection<T extends Document = Document> {
   insertOne(
     doc: T
@@ -91,6 +136,25 @@ export interface TestCollection<T extends Document = Document> {
   dropIndex(indexNameOrSpec: string | Record<string, 1 | -1>): Promise<void>;
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;
+  // Phase 8: FindOneAnd* and bulkWrite
+  findOneAndDelete(
+    filter: Partial<T>,
+    options?: FindOneAndDeleteOptions
+  ): Promise<ModifyResult<T>>;
+  findOneAndReplace(
+    filter: Partial<T>,
+    replacement: T,
+    options?: FindOneAndReplaceOptions
+  ): Promise<ModifyResult<T>>;
+  findOneAndUpdate(
+    filter: Partial<T>,
+    update: Document,
+    options?: FindOneAndUpdateOptions
+  ): Promise<ModifyResult<T>>;
+  bulkWrite(
+    operations: BulkWriteOperation[],
+    options?: { ordered?: boolean }
+  ): Promise<BulkWriteResult>;
 }
 
 export interface TestCursor<T> {
