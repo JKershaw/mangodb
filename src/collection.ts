@@ -178,15 +178,7 @@ interface FindOneAndUpdateOptions {
   returnDocument?: "before" | "after";
 }
 
-/**
- * Result of a findOneAnd* operation.
- */
-interface ModifyResult<T> {
-  /** The document (before or after modification, or null if not found) */
-  value: T | null;
-  /** Whether the operation was acknowledged */
-  ok: 1 | 0;
-}
+// Note: Driver 6.0+ returns document directly, not wrapped in ModifyResult
 
 /**
  * A single operation for bulkWrite.
@@ -1731,19 +1723,19 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Find a document and delete it.
-   * Returns the deleted document.
+   * Returns the deleted document directly (Driver 6.0+ behavior).
    */
   async findOneAndDelete(
     filter: Filter<T>,
     options: FindOneAndDeleteOptions = {}
-  ): Promise<ModifyResult<T>> {
+  ): Promise<T | null> {
     const documents = await this.readDocuments();
 
     // Find matching documents
     let matches = documents.filter((doc) => this.matchesFilter(doc, filter));
 
     if (matches.length === 0) {
-      return { value: null, ok: 1 };
+      return null;
     }
 
     // Apply sort if specified
@@ -1770,12 +1762,11 @@ export class MongoneCollection<T extends Document = Document> {
     await this.writeDocuments(remaining);
 
     // Apply projection if specified
-    let resultDoc = docToDelete;
     if (options.projection) {
-      resultDoc = applyProjection(docToDelete, options.projection);
+      return applyProjection(docToDelete, options.projection);
     }
 
-    return { value: resultDoc, ok: 1 };
+    return docToDelete;
   }
 
   /**
@@ -1793,13 +1784,13 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Find a document and replace it entirely.
-   * Returns the document before or after replacement based on options.
+   * Returns the document before or after replacement (Driver 6.0+ behavior).
    */
   async findOneAndReplace(
     filter: Filter<T>,
     replacement: T,
     options: FindOneAndReplaceOptions = {}
-  ): Promise<ModifyResult<T>> {
+  ): Promise<T | null> {
     // Validate replacement doesn't contain update operators
     this.validateReplacement(replacement);
 
@@ -1823,16 +1814,16 @@ export class MongoneCollection<T extends Document = Document> {
         documents.push(newDoc);
         await this.writeDocuments(documents);
 
-        let resultDoc = newDoc;
-        if (options.projection) {
-          resultDoc = applyProjection(newDoc, options.projection);
-        }
-
         // For upsert with returnDocument: "before", return null
         // For upsert with returnDocument: "after", return the new doc
-        return { value: returnAfter ? resultDoc : null, ok: 1 };
+        if (returnAfter) {
+          return options.projection
+            ? applyProjection(newDoc, options.projection)
+            : newDoc;
+        }
+        return null;
       }
-      return { value: null, ok: 1 };
+      return null;
     }
 
     // Apply sort if specified
@@ -1872,23 +1863,23 @@ export class MongoneCollection<T extends Document = Document> {
     await this.writeDocuments(updatedDocuments);
 
     // Apply projection and return appropriate document
-    let resultDoc = returnAfter ? newDoc : docToReplace;
+    const resultDoc = returnAfter ? newDoc : docToReplace;
     if (options.projection) {
-      resultDoc = applyProjection(resultDoc, options.projection);
+      return applyProjection(resultDoc, options.projection);
     }
 
-    return { value: resultDoc, ok: 1 };
+    return resultDoc;
   }
 
   /**
    * Find a document and update it with update operators.
-   * Returns the document before or after update based on options.
+   * Returns the document before or after update (Driver 6.0+ behavior).
    */
   async findOneAndUpdate(
     filter: Filter<T>,
     update: UpdateOperators,
     options: FindOneAndUpdateOptions = {}
-  ): Promise<ModifyResult<T>> {
+  ): Promise<T | null> {
     const documents = await this.readDocuments();
     const returnAfter = options.returnDocument === "after";
 
@@ -1911,16 +1902,16 @@ export class MongoneCollection<T extends Document = Document> {
         documents.push(newDoc);
         await this.writeDocuments(documents);
 
-        let resultDoc = newDoc;
-        if (options.projection) {
-          resultDoc = applyProjection(newDoc, options.projection);
-        }
-
         // For upsert with returnDocument: "before", return null
         // For upsert with returnDocument: "after", return the new doc
-        return { value: returnAfter ? resultDoc : null, ok: 1 };
+        if (returnAfter) {
+          return options.projection
+            ? applyProjection(newDoc, options.projection)
+            : newDoc;
+        }
+        return null;
       }
-      return { value: null, ok: 1 };
+      return null;
     }
 
     // Apply sort if specified
@@ -1957,12 +1948,12 @@ export class MongoneCollection<T extends Document = Document> {
     await this.writeDocuments(updatedDocuments);
 
     // Apply projection and return appropriate document
-    let resultDoc = returnAfter ? updatedDoc : docToUpdate;
+    const resultDoc = returnAfter ? updatedDoc : docToUpdate;
     if (options.projection) {
-      resultDoc = applyProjection(resultDoc, options.projection);
+      return applyProjection(resultDoc, options.projection);
     }
 
-    return { value: resultDoc, ok: 1 };
+    return resultDoc;
   }
 
   /**

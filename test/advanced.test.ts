@@ -38,9 +38,9 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
 
       const result = await collection.findOneAndDelete({ name: "Alice" });
 
-      assert.strictEqual(result.ok, 1);
-      assert.strictEqual(result.value?.name, "Alice");
-      assert.strictEqual(result.value?.age, 30);
+      // Driver 6.0+: returns document directly, not wrapped in { value, ok }
+      assert.strictEqual(result?.name, "Alice");
+      assert.strictEqual(result?.age, 30);
 
       // Verify document is deleted
       const doc = await collection.findOne({ name: "Alice" });
@@ -53,8 +53,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
 
       const result = await collection.findOneAndDelete({ name: "Nobody" });
 
-      assert.strictEqual(result.ok, 1);
-      assert.strictEqual(result.value, null);
+      assert.strictEqual(result, null);
     });
 
     it("should delete first in sort order when sort specified", async () => {
@@ -71,8 +70,8 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { sort: { priority: -1 } }
       );
 
-      assert.strictEqual(result.value?.name, "C");
-      assert.strictEqual(result.value?.priority, 3);
+      assert.strictEqual(result?.name, "C");
+      assert.strictEqual(result?.priority, 3);
 
       // Verify correct document deleted
       const remaining = await collection.find({}).toArray();
@@ -89,9 +88,9 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { projection: { name: 1, _id: 0 } }
       );
 
-      assert.strictEqual(result.value?.name, "Alice");
-      assert.strictEqual(result.value?.age, undefined);
-      assert.strictEqual(result.value?._id, undefined);
+      assert.strictEqual(result?.name, "Alice");
+      assert.strictEqual(result?.age, undefined);
+      assert.strictEqual(result?._id, undefined);
     });
 
     it("should only delete first matching document", async () => {
@@ -121,7 +120,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { sort: { scores: 1 } }
       );
 
-      assert.strictEqual(result.value?.name, "B"); // min score 1
+      assert.strictEqual(result?.name, "B"); // min score 1
     });
 
     it("should sort by array field using maximum element (descending)", async () => {
@@ -138,7 +137,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { sort: { scores: -1 } }
       );
 
-      assert.strictEqual(result.value?.name, "B"); // max score 30
+      assert.strictEqual(result?.name, "B"); // max score 30
     });
 
     it("should sort by boolean field correctly", async () => {
@@ -155,8 +154,8 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { sort: { active: 1 } }
       );
 
-      assert.strictEqual(result.value?.name, "B"); // false comes first
-      assert.strictEqual(result.value?.active, false);
+      assert.strictEqual(result?.name, "B"); // false comes first
+      assert.strictEqual(result?.active, false);
     });
   });
 
@@ -170,9 +169,8 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { name: "Alice", age: 31, city: "NYC" }
       );
 
-      assert.strictEqual(result.ok, 1);
-      assert.strictEqual(result.value?.age, 30); // Before replacement
-      assert.strictEqual(result.value?.city, undefined);
+      assert.strictEqual(result?.age, 30); // Before replacement
+      assert.strictEqual(result?.city, undefined);
 
       // Verify document is replaced
       const doc = await collection.findOne({ name: "Alice" });
@@ -190,7 +188,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { returnDocument: "after" }
       );
 
-      assert.strictEqual(result.value?.score, 200);
+      assert.strictEqual(result?.score, 200);
     });
 
     it("should preserve _id when replacing", async () => {
@@ -219,7 +217,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { name: "Bob" }
       );
 
-      assert.strictEqual(result.value, null);
+      assert.strictEqual(result, null);
     });
 
     it("should upsert when no match and upsert: true", async () => {
@@ -231,9 +229,8 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { upsert: true, returnDocument: "after" }
       );
 
-      assert.strictEqual(result.ok, 1);
-      assert.strictEqual(result.value?.name, "NewUser");
-      assert.strictEqual(result.value?.created, true);
+      assert.strictEqual(result?.name, "NewUser");
+      assert.strictEqual(result?.created, true);
 
       // Verify document was inserted
       const doc = await collection.findOne({ name: "NewUser" });
@@ -249,7 +246,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { upsert: true, returnDocument: "before" }
       );
 
-      assert.strictEqual(result.value, null);
+      assert.strictEqual(result, null);
 
       // But document should exist
       const doc = await collection.findOne({ name: "NewUser2" });
@@ -283,8 +280,8 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { sort: { priority: -1 } }
       );
 
-      assert.strictEqual(result.value?.name, "high");
-      assert.strictEqual(result.value?.priority, 3);
+      assert.strictEqual(result?.name, "high");
+      assert.strictEqual(result?.priority, 3);
     });
 
     it("should apply projection to returned document", async () => {
@@ -297,10 +294,10 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { projection: { name: 1, age: 1, _id: 0 }, returnDocument: "after" }
       );
 
-      assert.strictEqual(result.value?.name, "Alice");
-      assert.strictEqual(result.value?.age, 31);
-      assert.strictEqual(result.value?.secret, undefined);
-      assert.strictEqual(result.value?._id, undefined);
+      assert.strictEqual(result?.name, "Alice");
+      assert.strictEqual(result?.age, 31);
+      assert.strictEqual(result?.secret, undefined);
+      assert.strictEqual(result?._id, undefined);
     });
   });
 
@@ -314,8 +311,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { $set: { age: 31 } }
       );
 
-      assert.strictEqual(result.ok, 1);
-      assert.strictEqual(result.value?.age, 30); // Before update
+      assert.strictEqual(result?.age, 30); // Before update
 
       // Verify document is updated
       const doc = await collection.findOne({ name: "Alice" });
@@ -332,7 +328,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { returnDocument: "after" }
       );
 
-      assert.strictEqual(result.value?.score, 110);
+      assert.strictEqual(result?.score, 110);
     });
 
     it("should return null when no match", async () => {
@@ -344,7 +340,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { $set: { age: 25 } }
       );
 
-      assert.strictEqual(result.value, null);
+      assert.strictEqual(result, null);
     });
 
     it("should upsert when no match and upsert: true", async () => {
@@ -356,9 +352,8 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { upsert: true, returnDocument: "after" }
       );
 
-      assert.strictEqual(result.ok, 1);
-      assert.strictEqual(result.value?.name, "NewUser");
-      assert.strictEqual(result.value?.score, 0);
+      assert.strictEqual(result?.name, "NewUser");
+      assert.strictEqual(result?.score, 0);
     });
 
     it("should apply sort when multiple matches", async () => {
@@ -375,7 +370,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { sort: { priority: -1 } }
       );
 
-      assert.strictEqual(result.value?.priority, 3); // Highest priority
+      assert.strictEqual(result?.priority, 3); // Highest priority
     });
 
     it("should apply projection to result", async () => {
@@ -388,9 +383,9 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { projection: { name: 1 }, returnDocument: "after" }
       );
 
-      assert.strictEqual(result.value?.name, "Alice");
-      assert.strictEqual(result.value?.age, undefined);
-      assert.strictEqual(result.value?.secret, undefined);
+      assert.strictEqual(result?.name, "Alice");
+      assert.strictEqual(result?.age, undefined);
+      assert.strictEqual(result?.secret, undefined);
     });
 
     it("should work with $inc operator", async () => {
@@ -403,7 +398,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { returnDocument: "after" }
       );
 
-      assert.strictEqual(result.value?.counter, 15);
+      assert.strictEqual(result?.counter, 15);
     });
 
     it("should work with $unset operator", async () => {
@@ -416,7 +411,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
         { returnDocument: "after" }
       );
 
-      assert.strictEqual(result.value?.toRemove, undefined);
+      assert.strictEqual(result?.toRemove, undefined);
     });
   });
 

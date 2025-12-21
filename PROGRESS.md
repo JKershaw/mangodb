@@ -21,7 +21,8 @@ This document tracks implementation progress and notable discoveries.
   - `collection.bulkWrite(operations, options)` - Execute multiple write operations
 
 #### Behaviors Implemented
-- `findOneAndDelete` returns the deleted document
+- **Driver 6.0+ API**: All findOneAnd* methods return the document directly (not wrapped in `{ value, ok }`)
+- `findOneAndDelete` returns the deleted document or `null`
 - `findOneAndReplace` replaces the entire document (preserving `_id`)
 - `findOneAndUpdate` applies update operators to the document
 - All findOneAnd* methods support:
@@ -41,22 +42,22 @@ This document tracks implementation progress and notable discoveries.
 
 #### Examples
 ```typescript
-// findOneAndDelete
-const result = await collection.findOneAndDelete(
+// findOneAndDelete - returns document directly (Driver 6.0+ behavior)
+const deleted = await collection.findOneAndDelete(
   { status: "pending" },
   { sort: { priority: -1 } }
 );
-// result.value contains the deleted document
+// deleted is the document or null
 
 // findOneAndReplace
-const result = await collection.findOneAndReplace(
+const doc = await collection.findOneAndReplace(
   { name: "Alice" },
   { name: "Alice", age: 31, city: "NYC" },
   { returnDocument: "after" }
 );
 
 // findOneAndUpdate
-const result = await collection.findOneAndUpdate(
+const updated = await collection.findOneAndUpdate(
   { name: "Alice" },
   { $inc: { score: 10 } },
   { returnDocument: "after", upsert: true }

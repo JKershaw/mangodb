@@ -59,10 +59,7 @@ export interface IndexCursor {
 }
 
 // Phase 8: FindOneAnd* types
-export interface ModifyResult<T> {
-  value: T | null;
-  ok: number;
-}
+// Note: Driver 6.0+ returns document directly, not wrapped in ModifyResult
 
 export interface FindOneAndDeleteOptions {
   projection?: Document;
@@ -137,20 +134,21 @@ export interface TestCollection<T extends Document = Document> {
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;
   // Phase 8: FindOneAnd* and bulkWrite
+  // Driver 6.0+ returns document directly (not wrapped in { value, ok })
   findOneAndDelete(
     filter: Partial<T>,
     options?: FindOneAndDeleteOptions
-  ): Promise<ModifyResult<T>>;
+  ): Promise<T | null>;
   findOneAndReplace(
     filter: Partial<T>,
     replacement: T,
     options?: FindOneAndReplaceOptions
-  ): Promise<ModifyResult<T>>;
+  ): Promise<T | null>;
   findOneAndUpdate(
     filter: Partial<T>,
     update: Document,
     options?: FindOneAndUpdateOptions
-  ): Promise<ModifyResult<T>>;
+  ): Promise<T | null>;
   bulkWrite(
     operations: BulkWriteOperation[],
     options?: { ordered?: boolean }
