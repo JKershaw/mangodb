@@ -1,4 +1,9 @@
 import { ObjectId } from "mongodb";
+import {
+  getValueByPath,
+  setValueByPath,
+  cloneValue,
+} from "./document-utils.ts";
 
 type Document = Record<string, unknown>;
 
@@ -8,6 +13,9 @@ type Document = Record<string, unknown>;
  * Values are 1 for inclusion, 0 for exclusion.
  */
 export type ProjectionSpec = Record<string, 0 | 1>;
+
+// Re-export for backward compatibility
+export { getValueByPath, setValueByPath, cloneValue };
 
 /**
  * Symbol to represent an empty array in sorting.
@@ -126,80 +134,6 @@ export function compareValuesForSort(
   const bKey = Array.isArray(b) ? getArraySortKey(b, direction) : b;
 
   return compareScalarValues(aKey, bKey);
-}
-
-/**
- * Deep clone a value, handling ObjectId and Date properly.
- */
-export function cloneValue(value: unknown): unknown {
-  if (value instanceof ObjectId) {
-    return new ObjectId(value.toHexString());
-  }
-  if (value instanceof Date) {
-    return new Date(value.getTime());
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneValue(item));
-  }
-  if (value !== null && typeof value === "object") {
-    const result: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      result[k] = cloneValue(v);
-    }
-    return result;
-  }
-  return value;
-}
-
-/**
- * Get a value from a document using dot notation.
- */
-export function getValueByPath(doc: unknown, path: string): unknown {
-  const parts = path.split(".");
-  let current: unknown = doc;
-
-  for (const part of parts) {
-    if (current === null || current === undefined) {
-      return undefined;
-    }
-
-    if (Array.isArray(current)) {
-      const index = parseInt(part, 10);
-      if (!isNaN(index)) {
-        current = current[index];
-      } else {
-        return undefined;
-      }
-    } else if (typeof current === "object") {
-      current = (current as Record<string, unknown>)[part];
-    } else {
-      return undefined;
-    }
-  }
-
-  return current;
-}
-
-/**
- * Set a value in a document using dot notation.
- */
-export function setValueByPath(
-  doc: Record<string, unknown>,
-  path: string,
-  value: unknown
-): void {
-  const parts = path.split(".");
-  let current: Record<string, unknown> = doc;
-
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    if (current[part] === undefined) {
-      current[part] = {};
-    }
-    current = current[part] as Record<string, unknown>;
-  }
-
-  current[parts[parts.length - 1]] = value;
 }
 
 /**
