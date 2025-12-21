@@ -7,7 +7,8 @@
   "scripts": {
     "typecheck": "tsc",
     "test": "node --experimental-strip-types --test test/**/*.test.ts",
-    "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts"
+    "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts",
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/**/*.test.ts"
   },
   "keywords": [
     "mongodb",
