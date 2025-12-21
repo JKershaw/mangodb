@@ -183,7 +183,7 @@ describe(`Array Query Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 1);
     });
 
-    it("should handle empty $all array (matches arrays)", async () => {
+    it("should handle empty $all array (matches nothing)", async () => {
       const collection = client.db(dbName).collection("all_empty");
       await collection.insertMany([
         { tags: ["a", "b"] },
@@ -193,20 +193,21 @@ describe(`Array Query Tests (${getTestModeName()})`, () => {
 
       const docs = await collection.find({ tags: { $all: [] } }).toArray();
 
-      // Empty $all matches any array (including empty)
-      assert.strictEqual(docs.length, 2);
+      // Empty $all matches nothing (per MongoDB behavior)
+      assert.strictEqual(docs.length, 0);
     });
 
-    it("should not match non-array fields", async () => {
+    it("should match scalar fields containing the value", async () => {
       const collection = client.db(dbName).collection("all_nonarray");
       await collection.insertMany([
         { value: "a" },
         { value: 123 },
       ]);
 
+      // $all can work on non-array fields - scalar "a" contains "a"
       const docs = await collection.find({ value: { $all: ["a"] } }).toArray();
 
-      assert.strictEqual(docs.length, 0);
+      assert.strictEqual(docs.length, 1);
     });
 
     it("should not match missing fields", async () => {

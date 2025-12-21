@@ -587,15 +587,15 @@ await collection.find({ items: { $size: 0 } }).toArray();  // Empty arrays
 
 ```typescript
 await collection.find({ tags: { $all: ["red", "blue"] } }).toArray();
-await collection.find({ tags: { $all: [] } }).toArray();  // Matches any array
+await collection.find({ value: { $all: ["a"] } }).toArray();  // Works on scalar fields too
 ```
 
 **Behaviors**:
 - Matches arrays containing ALL specified elements
 - Order does not matter
 - Document array can have additional elements
-- Empty `$all: []` matches any document with an array field (including empty arrays)
-- Does not match non-array fields
+- Empty `$all: []` matches nothing (returns no documents)
+- Can match scalar (non-array) fields - treats scalar as single-element array
 - Duplicate values in `$all` are ignored
 - Can be combined with `$elemMatch` for complex conditions
 

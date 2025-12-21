@@ -493,10 +493,11 @@ export class MongoneCollection<T extends Document = Document> {
           if (!Array.isArray(opValue)) {
             throw new Error("$all needs an array");
           }
-          if (!Array.isArray(docValue)) return false;
           const allValues = opValue as unknown[];
-          // Empty $all matches any array
-          if (allValues.length === 0) break;
+          // Empty $all matches nothing (per MongoDB behavior)
+          if (allValues.length === 0) return false;
+          // $all can work on non-array fields - treat scalar as single-element array
+          const valueArray = Array.isArray(docValue) ? docValue : [docValue];
           // Check if every value in $all is in the document array
           for (const val of allValues) {
             // Handle $elemMatch inside $all
@@ -508,13 +509,13 @@ export class MongoneCollection<T extends Document = Document> {
             ) {
               const elemMatchCond = (val as { $elemMatch: Record<string, unknown> })
                 .$elemMatch;
-              const hasMatch = docValue.some((elem) =>
+              const hasMatch = valueArray.some((elem) =>
                 this.matchesElemMatchCondition(elem, elemMatchCond)
               );
               if (!hasMatch) return false;
             } else {
               // Regular value - check if any element equals it
-              const found = docValue.some((elem) => this.valuesEqual(elem, val));
+              const found = valueArray.some((elem) => this.valuesEqual(elem, val));
               if (!found) return false;
             }
           }
