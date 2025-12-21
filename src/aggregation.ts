@@ -90,7 +90,7 @@ export class AggregationCursor<T extends Document = Document> {
     }
 
     const stageKey = stageKeys[0];
-    const stageValue = (stage as Record<string, unknown>)[stageKey];
+    const stageValue = (stage as unknown as Record<string, unknown>)[stageKey];
 
     switch (stageKey) {
       case "$match":
