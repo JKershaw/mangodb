@@ -262,7 +262,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
           { name: "Alice" },
           { $set: { age: 30 } } as unknown as Record<string, unknown>
         ),
-        /update operators|keys starting with '\$'/i
+        /update operators|atomic operators|keys starting with '\$'/i
       );
     });
 
