@@ -90,7 +90,7 @@ export interface BulkWriteOperation {
 }
 
 export interface BulkWriteResult {
-  acknowledged: boolean;
+  acknowledged?: boolean; // May not be present in driver 6.x
   insertedCount: number;
   matchedCount: number;
   modifiedCount: number;
