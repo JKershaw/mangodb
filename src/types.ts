@@ -294,3 +294,100 @@ export interface IndexInfo {
  * Values are 1 for ascending sort order or -1 for descending sort order.
  */
 export type SortSpec = Record<string, 1 | -1>;
+
+// ==================== Aggregation Pipeline Types ====================
+
+/**
+ * $match stage - filters documents using query syntax.
+ * Reuses the same filter syntax as find().
+ */
+export interface MatchStage {
+  $match: Filter<Document>;
+}
+
+/**
+ * $project stage - reshapes documents by including, excluding, or renaming fields.
+ * Values can be:
+ * - 1: include field
+ * - 0: exclude field
+ * - "$fieldName": reference another field (rename/copy)
+ * - { $literal: value }: literal value
+ */
+export interface ProjectStage {
+  $project: Record<string, 0 | 1 | string | ProjectExpression>;
+}
+
+/**
+ * Expression for $project stage computed fields.
+ */
+export interface ProjectExpression {
+  $literal?: unknown;
+}
+
+/**
+ * $sort stage - orders documents by specified fields.
+ */
+export interface SortStage {
+  $sort: SortSpec;
+}
+
+/**
+ * $limit stage - limits the number of documents passed to the next stage.
+ */
+export interface LimitStage {
+  $limit: number;
+}
+
+/**
+ * $skip stage - skips the first n documents.
+ */
+export interface SkipStage {
+  $skip: number;
+}
+
+/**
+ * $count stage - counts documents and outputs a single document with the count.
+ * The string value specifies the output field name for the count.
+ */
+export interface CountStage {
+  $count: string;
+}
+
+/**
+ * Options for the $unwind stage when using the object syntax.
+ */
+export interface UnwindOptions {
+  /** The path to the array field to unwind (must start with $) */
+  path: string;
+  /** If true, documents with null, missing, or empty arrays are preserved */
+  preserveNullAndEmptyArrays?: boolean;
+  /** Field name to add containing the array index */
+  includeArrayIndex?: string;
+}
+
+/**
+ * $unwind stage - deconstructs an array field into multiple documents.
+ * Can be a string (short syntax) or an object with options.
+ */
+export interface UnwindStage {
+  $unwind: string | UnwindOptions;
+}
+
+/**
+ * Union type for all supported pipeline stages.
+ */
+export type PipelineStage =
+  | MatchStage
+  | ProjectStage
+  | SortStage
+  | LimitStage
+  | SkipStage
+  | CountStage
+  | UnwindStage;
+
+/**
+ * Options for the aggregate() method.
+ */
+export interface AggregateOptions {
+  // Reserved for future options like allowDiskUse, batchSize, etc.
+}

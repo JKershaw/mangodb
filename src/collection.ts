@@ -10,6 +10,7 @@
  */
 import { ObjectId } from "mongodb";
 import { MongoneCursor, IndexCursor } from "./cursor.ts";
+import { AggregationCursor } from "./aggregation.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
@@ -33,6 +34,8 @@ import type {
   IndexKeySpec,
   CreateIndexOptions,
   IndexInfo,
+  PipelineStage,
+  AggregateOptions,
 } from "./types.ts";
 
 import {
@@ -374,6 +377,58 @@ export class MongoneCollection<T extends Document = Document> {
       },
       options.projection || null
     );
+  }
+
+  /**
+   * Execute an aggregation pipeline on the collection.
+   *
+   * The aggregation pipeline processes documents through a sequence of stages,
+   * each transforming the document stream. Stages are executed in order.
+   *
+   * Supported stages:
+   * - $match: Filter documents using query syntax
+   * - $project: Include, exclude, or rename fields
+   * - $sort: Order documents by field values
+   * - $limit: Limit the number of documents
+   * - $skip: Skip the first n documents
+   * - $count: Count documents and output a single document
+   * - $unwind: Deconstruct array fields into multiple documents
+   *
+   * @param pipeline - Array of pipeline stages to execute
+   * @param options - Aggregation options (reserved for future use)
+   * @returns An AggregationCursor for iterating through results
+   *
+   * @example
+   * ```typescript
+   * // Filter and sort
+   * const results = await collection.aggregate([
+   *   { $match: { status: "active" } },
+   *   { $sort: { createdAt: -1 } },
+   *   { $limit: 10 }
+   * ]).toArray();
+   *
+   * // Project specific fields
+   * const names = await collection.aggregate([
+   *   { $project: { name: 1, email: 1, _id: 0 } }
+   * ]).toArray();
+   *
+   * // Count documents
+   * const countResult = await collection.aggregate([
+   *   { $match: { age: { $gte: 18 } } },
+   *   { $count: "adultCount" }
+   * ]).toArray();
+   *
+   * // Unwind arrays
+   * const unwound = await collection.aggregate([
+   *   { $unwind: "$tags" }
+   * ]).toArray();
+   * ```
+   */
+  aggregate(
+    pipeline: PipelineStage[],
+    _options?: AggregateOptions
+  ): AggregationCursor<T> {
+    return new AggregationCursor<T>(() => this.readDocuments(), pipeline);
   }
 
   /**

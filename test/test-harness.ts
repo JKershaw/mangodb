@@ -153,12 +153,17 @@ export interface TestCollection<T extends Document = Document> {
     operations: BulkWriteOperation[],
     options?: { ordered?: boolean }
   ): Promise<BulkWriteResult>;
+  aggregate(pipeline: Document[]): AggregationCursor<T>;
 }
 
 export interface TestCursor<T> {
   sort(spec: Document): TestCursor<T>;
   limit(n: number): TestCursor<T>;
   skip(n: number): TestCursor<T>;
+  toArray(): Promise<T[]>;
+}
+
+export interface AggregationCursor<T> {
   toArray(): Promise<T[]>;
 }
 
