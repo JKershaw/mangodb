@@ -567,6 +567,149 @@ await collection.find({ field: { $and: [{ a: 1 }] } }).toArray();
 
 ---
 
+## Array Query Operators
+
+### $size
+
+```typescript
+await collection.find({ tags: { $size: 3 } }).toArray();
+await collection.find({ items: { $size: 0 } }).toArray();  // Empty arrays
+```
+
+**Behaviors**:
+- Matches arrays with exactly the specified number of elements
+- Does NOT accept comparison operators (no `{ $size: { $gt: 2 } }`)
+- Only works on arrays - non-array fields never match
+- Missing fields do not match (not same as empty array)
+- Null fields do not match
+
+### $all
+
+```typescript
+await collection.find({ tags: { $all: ["red", "blue"] } }).toArray();
+await collection.find({ tags: { $all: [] } }).toArray();  // Matches any array
+```
+
+**Behaviors**:
+- Matches arrays containing ALL specified elements
+- Order does not matter
+- Document array can have additional elements
+- Empty `$all: []` matches any document with an array field (including empty arrays)
+- Does not match non-array fields
+- Duplicate values in `$all` are ignored
+- Can be combined with `$elemMatch` for complex conditions
+
+### $elemMatch
+
+```typescript
+// Match where at least one element satisfies ALL conditions
+await collection.find({
+  results: { $elemMatch: { score: { $gte: 80 }, passed: true } }
+}).toArray();
+
+// With primitives
+await collection.find({ scores: { $elemMatch: { $gte: 25, $lt: 35 } } }).toArray();
+```
+
+**Behaviors**:
+- Matches if ANY array element satisfies ALL conditions
+- Key difference from implicit AND: all conditions must be met by the SAME element
+- Works with both primitive arrays and arrays of objects
+- Empty `$elemMatch: {}` matches any non-empty array
+- Does not match non-array fields
+- Does not match empty arrays
+
+**Example showing difference from implicit AND**:
+```typescript
+// Document: { results: [{ score: 80, passed: false }, { score: 60, passed: true }] }
+
+// WITHOUT $elemMatch - matches! (score>=80 on elem 0, passed=true on elem 1)
+await collection.find({ "results.score": { $gte: 80 }, "results.passed": true }).toArray();
+
+// WITH $elemMatch - does NOT match (no single element has both)
+await collection.find({
+  results: { $elemMatch: { score: { $gte: 80 }, passed: true } }
+}).toArray();
+```
+
+---
+
+## Array Update Operators
+
+### $push
+
+```typescript
+await collection.updateOne({}, { $push: { tags: "new" } });
+await collection.updateOne({}, { $push: { tags: { $each: ["a", "b", "c"] } } });
+await collection.updateOne({}, { $push: { matrix: [1, 2, 3] } });  // Pushes array as single element
+```
+
+**Behaviors**:
+- Appends value to end of array
+- Creates array if field doesn't exist
+- Throws error if field exists but is not an array: `"The field 'name' must be an array but is of type string"`
+- Throws error for null fields: `"The field 'name' must be an array but is of type null"`
+- With `$each` modifier, pushes each element individually
+- Without `$each`, arrays are pushed as single elements
+
+### $pull
+
+```typescript
+await collection.updateOne({}, { $pull: { tags: "remove" } });
+await collection.updateOne({}, { $pull: { scores: { $lt: 50 } } });
+await collection.updateOne({}, { $pull: { items: { status: "deleted" } } });
+```
+
+**Behaviors**:
+- Removes ALL matching elements from array
+- Supports exact value matching
+- Supports query operators for complex conditions
+- Supports object matching (all specified fields must match)
+- No-op if field is missing (not an error)
+- No-op if no elements match
+- Throws error for non-array fields: `"Cannot apply $pull to a non-array value"`
+
+### $addToSet
+
+```typescript
+await collection.updateOne({}, { $addToSet: { tags: "unique" } });
+await collection.updateOne({}, { $addToSet: { tags: { $each: ["a", "b"] } } });
+```
+
+**Behaviors**:
+- Adds value only if not already present
+- Creates array if field doesn't exist
+- Throws error if field exists but is not an array
+- Uses BSON-style comparison: objects with different key ORDER are considered different
+- With `$each` modifier, checks each value individually
+
+**Key behavior - object key order matters**:
+```typescript
+// Document: { items: [{ id: 1, name: "a" }] }
+await collection.updateOne({}, { $addToSet: { items: { id: 1, name: "a" } } });
+// No change - object already exists
+
+await collection.updateOne({}, { $addToSet: { items: { name: "a", id: 1 } } });
+// ADDS the object! Different key order = different object in BSON
+```
+
+### $pop
+
+```typescript
+await collection.updateOne({}, { $pop: { items: 1 } });   // Remove last
+await collection.updateOne({}, { $pop: { items: -1 } });  // Remove first
+```
+
+**Behaviors**:
+- Value `1` removes last element
+- Value `-1` removes first element
+- No-op if array is empty
+- No-op if field is missing
+- Throws error for non-array fields: `"Cannot apply $pop to a non-array value"`
+- Throws error for invalid values: `"$pop expects 1 or -1"`
+
+---
+
 ## Notes
 
 This document will be updated as more behaviors are discovered through testing. Each entry should include:

@@ -20,6 +20,10 @@ interface QueryOperators {
   $nin?: unknown[];
   $exists?: boolean;
   $not?: QueryOperators;
+  // Phase 6: Array query operators
+  $size?: number;
+  $all?: unknown[];
+  $elemMatch?: Record<string, unknown>;
 }
 
 /**
@@ -79,6 +83,11 @@ interface UpdateOperators {
   $set?: Record<string, unknown>;
   $unset?: Record<string, unknown>;
   $inc?: Record<string, number>;
+  // Phase 6: Array update operators
+  $push?: Record<string, unknown>;
+  $pull?: Record<string, unknown>;
+  $addToSet?: Record<string, unknown>;
+  $pop?: Record<string, number>;
 }
 
 /**
@@ -313,8 +322,10 @@ export class MongoneCollection<T extends Document = Document> {
 
   /**
    * Check if two values are equal according to MongoDB rules.
+   * By default, uses order-insensitive object comparison (for queries).
+   * Set strictKeyOrder=true for BSON-style comparison where key order matters.
    */
-  private valuesEqual(a: unknown, b: unknown): boolean {
+  private valuesEqual(a: unknown, b: unknown, strictKeyOrder = false): boolean {
     // Handle ObjectId
     if (a instanceof ObjectId && b instanceof ObjectId) {
       return a.equals(b);
@@ -328,7 +339,7 @@ export class MongoneCollection<T extends Document = Document> {
     // Handle arrays - must be exact match
     if (Array.isArray(a) && Array.isArray(b)) {
       if (a.length !== b.length) return false;
-      return a.every((val, idx) => this.valuesEqual(val, b[idx]));
+      return a.every((val, idx) => this.valuesEqual(val, b[idx], strictKeyOrder));
     }
 
     // Handle null
@@ -348,12 +359,32 @@ export class MongoneCollection<T extends Document = Document> {
       const aKeys = Object.keys(a);
       const bKeys = Object.keys(b);
       if (aKeys.length !== bKeys.length) return false;
-      return aKeys.every((key) =>
-        this.valuesEqual(
-          (a as Record<string, unknown>)[key],
-          (b as Record<string, unknown>)[key]
-        )
-      );
+
+      if (strictKeyOrder) {
+        // BSON-style: key order matters
+        for (let i = 0; i < aKeys.length; i++) {
+          if (aKeys[i] !== bKeys[i]) return false;
+          if (
+            !this.valuesEqual(
+              (a as Record<string, unknown>)[aKeys[i]],
+              (b as Record<string, unknown>)[bKeys[i]],
+              strictKeyOrder
+            )
+          ) {
+            return false;
+          }
+        }
+        return true;
+      } else {
+        // Order-insensitive for queries
+        return aKeys.every((key) =>
+          this.valuesEqual(
+            (a as Record<string, unknown>)[key],
+            (b as Record<string, unknown>)[key],
+            strictKeyOrder
+          )
+        );
+      }
     }
 
     return a === b;
@@ -443,6 +474,71 @@ export class MongoneCollection<T extends Document = Document> {
           break;
         }
 
+        case "$size": {
+          // $size matches arrays with exactly the specified number of elements
+          const size = opValue as number;
+          if (!Number.isInteger(size)) {
+            throw new Error("$size must be a whole number");
+          }
+          if (size < 0) {
+            throw new Error("$size may not be negative");
+          }
+          if (!Array.isArray(docValue)) return false;
+          if (docValue.length !== size) return false;
+          break;
+        }
+
+        case "$all": {
+          // $all matches arrays containing all specified elements
+          if (!Array.isArray(opValue)) {
+            throw new Error("$all needs an array");
+          }
+          if (!Array.isArray(docValue)) return false;
+          const allValues = opValue as unknown[];
+          // Empty $all matches any array
+          if (allValues.length === 0) break;
+          // Check if every value in $all is in the document array
+          for (const val of allValues) {
+            // Handle $elemMatch inside $all
+            if (
+              val &&
+              typeof val === "object" &&
+              !Array.isArray(val) &&
+              "$elemMatch" in val
+            ) {
+              const elemMatchCond = (val as { $elemMatch: Record<string, unknown> })
+                .$elemMatch;
+              const hasMatch = docValue.some((elem) =>
+                this.matchesElemMatchCondition(elem, elemMatchCond)
+              );
+              if (!hasMatch) return false;
+            } else {
+              // Regular value - check if any element equals it
+              const found = docValue.some((elem) => this.valuesEqual(elem, val));
+              if (!found) return false;
+            }
+          }
+          break;
+        }
+
+        case "$elemMatch": {
+          // $elemMatch matches arrays where at least one element satisfies all conditions
+          if (opValue === null || typeof opValue !== "object" || Array.isArray(opValue)) {
+            throw new Error("$elemMatch needs an Object");
+          }
+          if (!Array.isArray(docValue)) return false;
+          if (docValue.length === 0) return false;
+          const elemMatchCond = opValue as Record<string, unknown>;
+          // Empty condition matches any non-empty array
+          if (Object.keys(elemMatchCond).length === 0) break;
+          // Check if any element matches all conditions
+          const hasMatchingElement = docValue.some((elem) =>
+            this.matchesElemMatchCondition(elem, elemMatchCond)
+          );
+          if (!hasMatchingElement) return false;
+          break;
+        }
+
         case "$and":
           throw new Error("unknown operator: $and");
 
@@ -472,6 +568,44 @@ export class MongoneCollection<T extends Document = Document> {
     }
     // Otherwise check if docValue matches any in value
     return inValues.some((iv) => this.valuesEqual(docValue, iv));
+  }
+
+  /**
+   * Check if an array element matches an $elemMatch condition.
+   * The condition can contain field queries (for objects) or operators (for primitives).
+   */
+  private matchesElemMatchCondition(
+    element: unknown,
+    condition: Record<string, unknown>
+  ): boolean {
+    for (const [key, value] of Object.entries(condition)) {
+      if (key.startsWith("$")) {
+        // Operator applied directly to the element (e.g., { $gte: 10, $lt: 20 })
+        const operators: QueryOperators = { [key]: value };
+        if (!this.matchesOperators(element, operators)) {
+          return false;
+        }
+      } else {
+        // Field condition (e.g., { score: 80, passed: true })
+        // Element must be an object with this field
+        if (element === null || typeof element !== "object" || Array.isArray(element)) {
+          return false;
+        }
+        const elemObj = element as Record<string, unknown>;
+        const fieldValue = this.getValueByPath(elemObj, key);
+
+        if (this.isOperatorObject(value)) {
+          if (!this.matchesOperators(fieldValue, value as QueryOperators)) {
+            return false;
+          }
+        } else {
+          if (!this.matchesSingleValue(fieldValue, value)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   }
 
   /**
@@ -764,7 +898,206 @@ export class MongoneCollection<T extends Document = Document> {
       }
     }
 
+    // Apply $push
+    if (update.$push) {
+      for (const [path, value] of Object.entries(update.$push)) {
+        const currentValue = this.getValueAtPath(
+          result as Record<string, unknown>,
+          path
+        );
+
+        if (currentValue === undefined) {
+          // Field doesn't exist - create new array
+          if (this.isPushEachModifier(value)) {
+            this.setValueByPath(
+              result as Record<string, unknown>,
+              path,
+              [...(value as { $each: unknown[] }).$each]
+            );
+          } else {
+            this.setValueByPath(result as Record<string, unknown>, path, [value]);
+          }
+        } else if (Array.isArray(currentValue)) {
+          // Field is an array - push to it
+          if (this.isPushEachModifier(value)) {
+            currentValue.push(...(value as { $each: unknown[] }).$each);
+          } else {
+            currentValue.push(value);
+          }
+        } else {
+          // Field exists but is not an array
+          const fieldType = currentValue === null ? "null" : typeof currentValue;
+          throw new Error(
+            `The field '${path}' must be an array but is of type ${fieldType}`
+          );
+        }
+      }
+    }
+
+    // Apply $addToSet
+    if (update.$addToSet) {
+      for (const [path, value] of Object.entries(update.$addToSet)) {
+        const currentValue = this.getValueAtPath(
+          result as Record<string, unknown>,
+          path
+        );
+
+        if (currentValue === undefined) {
+          // Field doesn't exist - create new array
+          if (this.isPushEachModifier(value)) {
+            this.setValueByPath(
+              result as Record<string, unknown>,
+              path,
+              [...(value as { $each: unknown[] }).$each]
+            );
+          } else {
+            this.setValueByPath(result as Record<string, unknown>, path, [value]);
+          }
+        } else if (Array.isArray(currentValue)) {
+          // Field is an array - add unique values
+          // Use strictKeyOrder=true for BSON-style object comparison (key order matters)
+          if (this.isPushEachModifier(value)) {
+            for (const v of (value as { $each: unknown[] }).$each) {
+              if (!currentValue.some((existing) => this.valuesEqual(existing, v, true))) {
+                currentValue.push(v);
+              }
+            }
+          } else {
+            if (!currentValue.some((existing) => this.valuesEqual(existing, value, true))) {
+              currentValue.push(value);
+            }
+          }
+        } else {
+          // Field exists but is not an array
+          const fieldType = currentValue === null ? "null" : typeof currentValue;
+          throw new Error(
+            `The field '${path}' must be an array but is of type ${fieldType}`
+          );
+        }
+      }
+    }
+
+    // Apply $pop
+    if (update.$pop) {
+      for (const [path, direction] of Object.entries(update.$pop)) {
+        if (direction !== 1 && direction !== -1) {
+          throw new Error("$pop expects 1 or -1");
+        }
+
+        const currentValue = this.getValueAtPath(
+          result as Record<string, unknown>,
+          path
+        );
+
+        if (currentValue === undefined) {
+          // Field doesn't exist - no-op
+          continue;
+        }
+
+        if (!Array.isArray(currentValue)) {
+          throw new Error(
+            `Cannot apply $pop to a non-array value`
+          );
+        }
+
+        if (currentValue.length > 0) {
+          if (direction === 1) {
+            currentValue.pop();
+          } else {
+            currentValue.shift();
+          }
+        }
+      }
+    }
+
+    // Apply $pull
+    if (update.$pull) {
+      for (const [path, condition] of Object.entries(update.$pull)) {
+        const currentValue = this.getValueAtPath(
+          result as Record<string, unknown>,
+          path
+        );
+
+        if (currentValue === undefined) {
+          // Field doesn't exist - no-op
+          continue;
+        }
+
+        if (!Array.isArray(currentValue)) {
+          throw new Error(
+            `Cannot apply $pull to a non-array value`
+          );
+        }
+
+        // Filter out matching elements
+        const filteredArray = currentValue.filter((elem) => {
+          if (this.isOperatorObject(condition)) {
+            // Condition is an operator expression
+            return !this.matchesOperators(elem, condition as QueryOperators);
+          } else if (
+            condition !== null &&
+            typeof condition === "object" &&
+            !Array.isArray(condition)
+          ) {
+            // Condition is an object - match fields
+            return !this.matchesPullCondition(elem, condition as Record<string, unknown>);
+          } else {
+            // Condition is a direct value - exact match
+            return !this.valuesEqual(elem, condition);
+          }
+        });
+
+        // Update the array in place
+        currentValue.length = 0;
+        currentValue.push(...filteredArray);
+      }
+    }
+
     return result;
+  }
+
+  /**
+   * Check if a value is a $push/$addToSet $each modifier.
+   */
+  private isPushEachModifier(value: unknown): value is { $each: unknown[] } {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      "$each" in value &&
+      Array.isArray((value as { $each: unknown }).$each)
+    );
+  }
+
+  /**
+   * Check if an array element matches a $pull object condition.
+   */
+  private matchesPullCondition(
+    element: unknown,
+    condition: Record<string, unknown>
+  ): boolean {
+    // Element must be an object
+    if (element === null || typeof element !== "object" || Array.isArray(element)) {
+      return false;
+    }
+
+    const elemObj = element as Record<string, unknown>;
+
+    for (const [key, value] of Object.entries(condition)) {
+      const fieldValue = this.getValueByPath(elemObj, key);
+
+      if (this.isOperatorObject(value)) {
+        if (!this.matchesOperators(fieldValue, value as QueryOperators)) {
+          return false;
+        }
+      } else {
+        if (!this.valuesEqual(fieldValue, value)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   /**

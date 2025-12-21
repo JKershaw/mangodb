@@ -4,12 +4,56 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 5 - Logical Operators
+**Phase**: 6 - Array Handling
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-21 - Phase 6: Array Handling
+
+#### Added
+- Array query operators:
+  - `$size` - Match arrays by exact length
+  - `$all` - Match arrays containing all specified elements
+  - `$elemMatch` - Match array elements satisfying multiple conditions
+
+- Array update operators:
+  - `$push` - Append element(s) to array (supports `$each` modifier)
+  - `$pull` - Remove elements matching condition
+  - `$addToSet` - Add element if not already present (supports `$each`)
+  - `$pop` - Remove first (-1) or last (1) element
+
+#### Behaviors Implemented
+- `$size` only matches arrays (not strings or objects)
+- `$all` with empty array matches any array (including empty)
+- `$elemMatch` requires ALL conditions to be satisfied by the SAME element
+- `$push`/`$addToSet` create array if field doesn't exist
+- `$push`/`$addToSet` throw error if field exists but is not an array
+- `$addToSet` uses BSON-style comparison (key order matters for objects)
+- `$pull` supports both exact values and query conditions
+- `$pop` is no-op on empty arrays or missing fields
+
+#### Examples
+```typescript
+// Array query operators
+await collection.find({ tags: { $size: 3 } }).toArray();
+await collection.find({ tags: { $all: ["red", "blue"] } }).toArray();
+await collection.find({
+  results: { $elemMatch: { score: { $gte: 80 }, passed: true } }
+}).toArray();
+
+// Array update operators
+await collection.updateOne({}, { $push: { tags: "new" } });
+await collection.updateOne({}, { $push: { tags: { $each: ["a", "b", "c"] } } });
+await collection.updateOne({}, { $addToSet: { tags: "unique" } });
+await collection.updateOne({}, { $pull: { scores: { $lt: 50 } } });
+await collection.updateOne({}, { $pop: { items: 1 } });  // Remove last
+await collection.updateOne({}, { $pop: { items: -1 } }); // Remove first
+```
+
+---
 
 ### 2025-12-20 - Phase 5: Logical Operators
 
@@ -183,7 +227,6 @@ See [COMPATIBILITY.md](./COMPATIBILITY.md) for detailed documentation of MongoDB
 Current implementation has these intentional limitations:
 
 1. **No indexing** - All queries scan full collection
-2. **No array operators** - No $elemMatch, $size, $all, $push, $pull (Phase 6)
-3. **Single-threaded** - No concurrent write protection
+2. **Single-threaded** - No concurrent write protection
 
 These will be addressed in future phases as documented in [ROADMAP.md](./ROADMAP.md).
