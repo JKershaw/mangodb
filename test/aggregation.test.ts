@@ -327,7 +327,7 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
         assert.strictEqual(results[0].name, "Alice");
       });
 
-      it("should return null for missing referenced field", async () => {
+      it("should exclude field when referencing missing field", async () => {
         const collection = client.db(dbName).collection("agg_proj_rename_miss");
         await collection.insertOne({ name: "Alice" });
 
@@ -335,7 +335,9 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
           .aggregate([{ $project: { value: "$nonexistent", _id: 0 } }])
           .toArray();
 
-        assert.strictEqual(results[0].value, null);
+        // MongoDB excludes the field entirely when the referenced field is missing
+        assert.strictEqual(results[0].value, undefined);
+        assert.ok(!("value" in results[0]));
       });
     });
 
@@ -376,7 +378,12 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
               .toArray();
           },
           (err: Error) => {
-            assert.ok(err.message.includes("Cannot mix inclusion and exclusion"));
+            // MongoDB error mentions "exclusion" or "inclusion" in various forms
+            const msg = err.message.toLowerCase();
+            assert.ok(
+              msg.includes("exclusion") || msg.includes("inclusion") || msg.includes("mix"),
+              `Expected error about mixing inclusion/exclusion, got: ${err.message}`
+            );
             return true;
           }
         );

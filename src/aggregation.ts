@@ -255,8 +255,11 @@ export class AggregationCursor<T extends Document = Document> {
         // Field reference - get value from referenced field
         const refPath = value.slice(1); // Remove $ prefix
         const refValue = getValueByPath(doc, refPath);
-        // MongoDB returns null for missing referenced fields (not undefined)
-        result[key] = refValue !== undefined ? refValue : null;
+        // MongoDB excludes the field if the referenced field is missing
+        if (refValue !== undefined) {
+          result[key] = refValue;
+        }
+        // If refValue is undefined, don't add the field to result
       } else if (this.isLiteralExpression(value)) {
         // Literal value
         result[key] = value.$literal;
