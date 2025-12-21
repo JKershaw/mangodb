@@ -37,18 +37,29 @@ export class MongoDuplicateKeyError extends Error {
 
 /**
  * Error thrown when trying to drop an index that doesn't exist.
+ * Matches MongoDB's IndexNotFound error (code 27).
  */
 export class IndexNotFoundError extends Error {
+  /** MongoDB error code for IndexNotFound */
+  readonly code = 27;
+  readonly codeName = "IndexNotFound";
+
   constructor(indexName: string) {
-    super(`index not found with name [${indexName}]`);
+    // MongoDB uses "can't find index with name [indexName]"
+    super(`can't find index with name [${indexName}]`);
     this.name = "IndexNotFoundError";
   }
 }
 
 /**
  * Error thrown when trying to drop the _id index.
+ * Matches MongoDB's InvalidOptions error (code 72).
  */
 export class CannotDropIdIndexError extends Error {
+  /** MongoDB error code for InvalidOptions */
+  readonly code = 72;
+  readonly codeName = "InvalidOptions";
+
   constructor() {
     super("cannot drop _id index");
     this.name = "CannotDropIdIndexError";
