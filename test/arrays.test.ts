@@ -546,8 +546,12 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
         async () =>
           await collection.updateOne({}, { $push: { name: "value" } }),
         (err: Error) => {
-          // MongoDB error: "The field 'name' must be an array but is of type string"
-          return err.message.includes("must be an array");
+          // MongoDB error formats vary by version
+          return (
+            err.message.includes("must be an array") ||
+            err.message.includes("non-array") ||
+            err.message.includes("Cannot apply $push")
+          );
         }
       );
     });
@@ -559,7 +563,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () => await collection.updateOne({}, { $push: { tags: "x" } }),
         (err: Error) => {
-          return err.message.includes("must be an array");
+          return (
+            err.message.includes("must be an array") ||
+            err.message.includes("non-array") ||
+            err.message.includes("Cannot apply $push")
+          );
         }
       );
     });
@@ -702,7 +710,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () => await collection.updateOne({}, { $pull: { name: "x" } }),
         (err: Error) => {
-          return err.message.includes("non-array");
+          return (
+            err.message.includes("non-array") ||
+            err.message.includes("must be an array") ||
+            err.message.includes("Cannot apply $pull")
+          );
         }
       );
     });
@@ -714,7 +726,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () => await collection.updateOne({}, { $pull: { tags: "x" } }),
         (err: Error) => {
-          return err.message.includes("non-array");
+          return (
+            err.message.includes("non-array") ||
+            err.message.includes("must be an array") ||
+            err.message.includes("Cannot apply $pull")
+          );
         }
       );
     });
@@ -850,7 +866,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
         async () =>
           await collection.updateOne({}, { $addToSet: { name: "x" } }),
         (err: Error) => {
-          return err.message.includes("must be an array");
+          return (
+            err.message.includes("must be an array") ||
+            err.message.includes("non-array") ||
+            err.message.includes("Cannot apply $addToSet")
+          );
         }
       );
     });
@@ -862,7 +882,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () => await collection.updateOne({}, { $addToSet: { tags: "x" } }),
         (err: Error) => {
-          return err.message.includes("must be an array");
+          return (
+            err.message.includes("must be an array") ||
+            err.message.includes("non-array") ||
+            err.message.includes("Cannot apply $addToSet")
+          );
         }
       );
     });
@@ -953,7 +977,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () => await collection.updateOne({}, { $pop: { name: 1 } }),
         (err: Error) => {
-          return err.message.includes("non-array");
+          return (
+            err.message.includes("non-array") ||
+            err.message.includes("must be an array") ||
+            err.message.includes("Cannot apply $pop")
+          );
         }
       );
     });
@@ -965,7 +993,11 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       await assert.rejects(
         async () => await collection.updateOne({}, { $pop: { items: 1 } }),
         (err: Error) => {
-          return err.message.includes("non-array");
+          return (
+            err.message.includes("non-array") ||
+            err.message.includes("must be an array") ||
+            err.message.includes("Cannot apply $pop")
+          );
         }
       );
     });
