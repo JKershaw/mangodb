@@ -1,10 +1,10 @@
 # Phase 7: Indexes - Implementation Plan
 
-This document outlines the detailed implementation plan for Phase 7 of Mongone, following TDD principles. All tests will run against both MongoDB and Mongone to ensure behavioral compatibility.
+This document outlines the detailed implementation plan for Phase 7 of MangoDB, following TDD principles. All tests will run against both MongoDB and MangoDB to ensure behavioral compatibility.
 
 ## Overview
 
-Phase 7 adds index management and unique constraint enforcement to Mongone. Per design decision, we implement the **API surface and unique constraints only** - indexes are not used for query optimization (full scans remain acceptable for dev/test datasets).
+Phase 7 adds index management and unique constraint enforcement to MangoDB. Per design decision, we implement the **API surface and unique constraints only** - indexes are not used for query optimization (full scans remain acceptable for dev/test datasets).
 
 ### Operations
 1. `collection.createIndex(keySpec, options)` - Create an index

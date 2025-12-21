@@ -1,5 +1,5 @@
 /**
- * MongoneCollection - File-based MongoDB-compatible collection.
+ * MangoDBCollection - File-based MongoDB-compatible collection.
  *
  * This module provides the main collection class that uses extracted modules:
  * - types.ts: Type definitions
@@ -9,7 +9,7 @@
  * - index-manager.ts: Index management
  */
 import { ObjectId } from "mongodb";
-import { MongoneCursor, IndexCursor } from "./cursor.ts";
+import { MangoDBCursor, IndexCursor } from "./cursor.ts";
 import { AggregationCursor } from "./aggregation.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -59,7 +59,7 @@ import { IndexManager } from "./index-manager.ts";
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
 
 /**
- * MongoneCollection - A file-based MongoDB-compatible collection.
+ * MangoDBCollection - A file-based MongoDB-compatible collection.
  *
  * This class provides MongoDB Collection API methods backed by JSON file storage.
  * It supports standard CRUD operations, indexing, bulk writes, and advanced queries
@@ -69,17 +69,17 @@ export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
  *
  * @example
  * ```typescript
- * const collection = new MongoneCollection<User>('./data', 'mydb', 'users');
+ * const collection = new MangoDBCollection<User>('./data', 'mydb', 'users');
  * await collection.insertOne({ name: 'John', age: 30 });
  * const user = await collection.findOne({ name: 'John' });
  * ```
  */
-export class MongoneCollection<T extends Document = Document> {
+export class MangoDBCollection<T extends Document = Document> {
   private readonly filePath: string;
   private readonly indexManager: IndexManager;
 
   /**
-   * Create a new MongoneCollection instance.
+   * Create a new MangoDBCollection instance.
    *
    * @param dataDir - Base directory for data storage
    * @param dbName - Database name
@@ -87,7 +87,7 @@ export class MongoneCollection<T extends Document = Document> {
    *
    * @example
    * ```typescript
-   * const collection = new MongoneCollection('./data', 'mydb', 'users');
+   * const collection = new MangoDBCollection('./data', 'mydb', 'users');
    * ```
    */
   constructor(dataDir: string, dbName: string, collectionName: string) {
@@ -348,7 +348,7 @@ export class MongoneCollection<T extends Document = Document> {
    *
    * @param filter - Query filter to match documents (default: empty object matches all)
    * @param options - Query options including projection
-   * @returns A MongoneCursor for iterating through matching documents
+   * @returns A MangoDBCursor for iterating through matching documents
    *
    * @example
    * ```typescript
@@ -369,8 +369,8 @@ export class MongoneCollection<T extends Document = Document> {
    * const names = await collection.find({}, { projection: { name: 1 } }).toArray();
    * ```
    */
-  find(filter: Filter<T> = {}, options: FindOptions = {}): MongoneCursor<T> {
-    return new MongoneCursor<T>(
+  find(filter: Filter<T> = {}, options: FindOptions = {}): MangoDBCursor<T> {
+    return new MangoDBCursor<T>(
       async () => {
         const documents = await this.readDocuments();
         return documents.filter((doc) => matchesFilter(doc, filter));

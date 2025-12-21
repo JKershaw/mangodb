@@ -1,7 +1,7 @@
 /**
  * Phase 4: Cursor Operation Tests
  *
- * These tests run against both real MongoDB and Mongone to ensure compatibility.
+ * These tests run against both real MongoDB and MangoDB to ensure compatibility.
  * Set MONGODB_URI environment variable to run against MongoDB.
  */
 
@@ -766,7 +766,7 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
           },
           (err: Error) => {
             // MongoDB error: "Projection cannot have a mix of inclusion and exclusion"
-            // Mongone error: "Cannot mix inclusion and exclusion in projection"
+            // MangoDB error: "Cannot mix inclusion and exclusion in projection"
             const msg = err.message.toLowerCase();
             const hasRelevantWords =
               msg.includes("mix") ||

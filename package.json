@@ -1,7 +1,7 @@
 {
-  "name": "mongone",
+  "name": "mangodb",
   "version": "0.1.0",
-  "description": "File-based MongoDB drop-in replacement for TypeScript/Node.js. SQLite is to SQL as Mongone is to MongoDB.",
+  "description": "File-based MongoDB drop-in replacement for TypeScript/Node.js. SQLite is to SQL as MangoDB is to MongoDB.",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {

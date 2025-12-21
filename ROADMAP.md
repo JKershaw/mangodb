@@ -1,6 +1,6 @@
-# Mongone Roadmap
+# MangoDB Roadmap
 
-This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
+This document outlines the implementation phases for MangoDB. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
 ## Current Phase: Phase 8 - Advanced (Complete)
 
@@ -11,7 +11,7 @@ This document outlines the implementation phases for Mongone. Each phase builds 
 **Goal**: Establish core abstractions and basic CRUD operations.
 
 ### Operations
-- [x] `MongoneClient` - Client abstraction matching MongoClient interface
+- [x] `MangoDBClient` - Client abstraction matching MongoClient interface
 - [x] `client.connect()` / `client.close()`
 - [x] `client.db(name)` - Database access
 - [x] `db.collection(name)` - Collection access
@@ -281,7 +281,7 @@ await collection.find({ active: true, $nor: [{ error: true }, { suspended: true 
 ### Design Decision
 - Indexes are NOT used for query optimization (full scans remain)
 - Only API surface and unique constraint enforcement implemented
-- This keeps Mongone lightweight for dev/test use cases
+- This keeps MangoDB lightweight for dev/test use cases
 
 ---
 
@@ -308,7 +308,7 @@ await collection.find({ active: true, $nor: [{ error: true }, { suspended: true 
 
 ## Design Principles
 
-1. **Test-Driven**: Write tests against real MongoDB first, then implement in Mongone
+1. **Test-Driven**: Write tests against real MongoDB first, then implement in MangoDB
 2. **Correctness Over Performance**: Get it right before making it fast
 3. **Minimal API Surface**: Only implement what's tested and needed
 4. **Document Discoveries**: Note unexpected MongoDB behaviors in COMPATIBILITY.md

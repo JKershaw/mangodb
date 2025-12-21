@@ -7,8 +7,8 @@ on:
     branches: [main, master]
 
 jobs:
-  test-mongone:
-    name: Test Mongone Mode
+  test-mangodb:
+    name: Test MangoDB Mode
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests (Mongone mode)
+      - name: Run tests (MangoDB mode)
         run: npm test
 
   test-mongodb:

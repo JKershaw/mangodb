@@ -1,7 +1,7 @@
 /**
  * Phase 5: Logical Operator Tests
  *
- * These tests run against both real MongoDB and Mongone to ensure compatibility.
+ * These tests run against both real MongoDB and MangoDB to ensure compatibility.
  * Set MONGODB_URI environment variable to run against MongoDB.
  */
 

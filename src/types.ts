@@ -1,16 +1,16 @@
 /**
- * Common types and interfaces for Mongone.
+ * Common types and interfaces for MangoDB.
  */
 import type { ObjectId } from "mongodb";
 
 /**
- * Base document type used throughout Mongone.
+ * Base document type used throughout MangoDB.
  * Represents a MongoDB document as a flexible key-value record.
  */
 export type Document = Record<string, unknown>;
 
 /**
- * Query operators supported by Mongone for filtering documents.
+ * Query operators supported by MangoDB for filtering documents.
  * These operators enable complex query conditions beyond simple equality checks.
  * @property $eq - Matches values that are equal to a specified value
  * @property $ne - Matches values that are not equal to a specified value
@@ -138,7 +138,7 @@ export interface FindOptions {
 export type ProjectionSpec = Record<string, 0 | 1>;
 
 /**
- * Update operators supported by Mongone for modifying documents.
+ * Update operators supported by MangoDB for modifying documents.
  * These operators enable targeted modifications to specific fields within documents.
  * @property $set - Sets the value of a field in a document
  * @property $unset - Removes the specified field from a document

@@ -1,15 +1,15 @@
 /**
- * Dual-target test harness for Mongone.
+ * Dual-target test harness for MangoDB.
  *
  * This module provides a unified interface for tests that can run against
- * either real MongoDB or Mongone, controlled by the MONGODB_URI environment variable.
+ * either real MongoDB or MangoDB, controlled by the MONGODB_URI environment variable.
  *
  * - If MONGODB_URI is set: Tests run against real MongoDB
- * - If MONGODB_URI is not set: Tests run against Mongone
+ * - If MONGODB_URI is not set: Tests run against MangoDB
  */
 
 import { MongoClient } from "mongodb";
-import { MongoneClient } from "../src/index.ts";
+import { MangoDBClient } from "../src/index.ts";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 
@@ -176,7 +176,7 @@ export function isMongoDBMode(): boolean {
 }
 
 export function getTestModeName(): string {
-  return isMongoDBMode() ? "MongoDB" : "Mongone";
+  return isMongoDBMode() ? "MongoDB" : "MangoDB";
 }
 
 /**
@@ -188,7 +188,7 @@ export async function createTestClient(): Promise<{
   dbName: string;
   cleanup: () => Promise<void>;
 }> {
-  const dbName = `mongone_test_${randomUUID().replace(/-/g, "")}`;
+  const dbName = `mangodb_test_${randomUUID().replace(/-/g, "")}`;
 
   if (isMongoDBMode()) {
     const client = new MongoClient(MONGODB_URI!);
@@ -208,8 +208,8 @@ export async function createTestClient(): Promise<{
       cleanup,
     };
   } else {
-    const dataDir = `/tmp/mongone_test_${randomUUID()}`;
-    const client = new MongoneClient(dataDir);
+    const dataDir = `/tmp/mangodb_test_${randomUUID()}`;
+    const client = new MangoDBClient(dataDir);
 
     const cleanup = async () => {
       await client.close();

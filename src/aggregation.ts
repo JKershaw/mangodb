@@ -1,5 +1,5 @@
 /**
- * Aggregation Pipeline for Mongone.
+ * Aggregation Pipeline for MangoDB.
  *
  * This module provides MongoDB-compatible aggregation pipeline functionality.
  * Supports basic stages: $match, $project, $sort, $limit, $skip, $count, $unwind.

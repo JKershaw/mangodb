@@ -1,8 +1,8 @@
-# Mongone: Project Initialization Prompt
+# MangoDB: Project Initialization Prompt
 
 ## Project Overview
 
-Mongone is a file-based MongoDB drop-in replacement for TypeScript/Node.js. Think "SQLite is to SQL as Mongone is to MongoDB." It allows applications to use MongoDB's API in environments with only local file access, then deploy to a real MongoDB server without code changes.
+MangoDB is a file-based MongoDB drop-in replacement for TypeScript/Node.js. Think "SQLite is to SQL as MangoDB is to MongoDB." It allows applications to use MongoDB's API in environments with only local file access, then deploy to a real MongoDB server without code changes.
 
 The core value proposition: develop and test locally without running MongoDB, then swap in the real database for production via a connection string environment variable.
 
@@ -10,7 +10,7 @@ The core value proposition: develop and test locally without running MongoDB, th
 
 ### Dual-Target Testing Strategy
 
-This is the most critical architectural decision. Create a single test suite that runs against both real MongoDB and Mongone, controlled by environment variable (presence or absence of a MongoDB connection string). The tests should not know which implementation they're testing.
+This is the most critical architectural decision. Create a single test suite that runs against both real MongoDB and MangoDB, controlled by environment variable (presence or absence of a MongoDB connection string). The tests should not know which implementation they're testing.
 
 This approach:
 - Catches subtle behavioral differences that spec-based testing would miss
@@ -27,14 +27,14 @@ This approach:
 
 ### API Compatibility Target
 
-Implement a commonly-used subset of the MongoDB Node.js driver API. Users should be able to import Mongone and use it with the same syntax as the official driver. The client should be instantiated differently (pointing to a directory instead of a connection string), but collection operations should be identical.
+Implement a commonly-used subset of the MongoDB Node.js driver API. Users should be able to import MangoDB and use it with the same syntax as the official driver. The client should be instantiated differently (pointing to a directory instead of a connection string), but collection operations should be identical.
 
 ## Development Philosophy
 
 ### Lean/Agile TDD
 
 - Write failing tests first using real MongoDB
-- Implement minimum code to pass tests in Mongone
+- Implement minimum code to pass tests in MangoDB
 - Only add functionality when tests demand it
 - Resist adding features "just in case"
 - Each commit should ideally be a small, working increment
@@ -62,7 +62,7 @@ Create and maintain these documents from day one:
 - Clear one-line description
 - What problem this solves (the "SQLite for MongoDB" pitch)
 - Current status/maturity warning
-- Basic usage example showing the swap between Mongone and MongoDB
+- Basic usage example showing the swap between MangoDB and MongoDB
 - What's implemented vs what's not
 - How to run tests (including requirement for a MongoDB instance)
 - Contributing guidelines
@@ -146,7 +146,7 @@ These are MongoDB behaviors that will likely surface through testing:
 Configure GitHub Actions to:
 - Run TypeScript compilation
 - Run tests against a MongoDB service container
-- Run tests in Mongone mode (no MongoDB connection string)
+- Run tests in MangoDB mode (no MongoDB connection string)
 - Both test runs must pass for CI to pass
 
 ## First Session Goals

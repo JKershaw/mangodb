@@ -1,5 +1,5 @@
 /**
- * Index management for Mongone collections.
+ * Index management for MangoDB collections.
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -13,7 +13,7 @@ import { MongoDuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError } fr
 const DEFAULT_ID_INDEX: IndexInfo = { v: 2, key: { _id: 1 }, name: "_id_" };
 
 /**
- * IndexManager handles index operations for a Mongone collection.
+ * IndexManager handles index operations for a MangoDB collection.
  * Stores index metadata in a separate JSON file and manages index creation,
  * deletion, and unique constraint validation.
  */
