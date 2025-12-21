@@ -121,14 +121,10 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("nonexistent_1");
         },
         (err: Error) => {
-          // MongoDB: "can't find index with name [...]" or similar
-          // Mongone: "index not found with name [...]"
-          const msg = err.message.toLowerCase();
+          // Both MongoDB and Mongone use "can't find index with name [...]"
           assert(
-            msg.includes("index not found") ||
-              msg.includes("can't find index") ||
-              msg.includes("index") && msg.includes("not") && msg.includes("found"),
-            `Expected index not found error, got: ${err.message}`
+            err.message.includes("can't find index with name"),
+            `Expected "can't find index with name" error, got: ${err.message}`
           );
           return true;
         }
@@ -143,11 +139,10 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("_id_");
         },
         (err: Error) => {
-          // Both MongoDB and Mongone should use "cannot drop _id index"
-          const msg = err.message.toLowerCase();
+          // Both MongoDB and Mongone use "cannot drop _id index"
           assert(
-            msg.includes("cannot drop _id") || msg.includes("can't drop _id"),
-            `Expected cannot drop _id error, got: ${err.message}`
+            err.message.includes("cannot drop _id index"),
+            `Expected "cannot drop _id index" error, got: ${err.message}`
           );
           return true;
         }
@@ -162,11 +157,10 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex({ _id: 1 });
         },
         (err: Error) => {
-          // Both MongoDB and Mongone should use "cannot drop _id index"
-          const msg = err.message.toLowerCase();
+          // Both MongoDB and Mongone use "cannot drop _id index"
           assert(
-            msg.includes("cannot drop _id") || msg.includes("can't drop _id"),
-            `Expected cannot drop _id error, got: ${err.message}`
+            err.message.includes("cannot drop _id index"),
+            `Expected "cannot drop _id index" error, got: ${err.message}`
           );
           return true;
         }
