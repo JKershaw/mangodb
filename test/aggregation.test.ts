@@ -532,13 +532,14 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 2);
     });
 
-    it("should return empty array for limit 0", async () => {
+    it("should throw for limit 0", async () => {
       const collection = client.db(dbName).collection("agg_limit_zero");
       await collection.insertMany([{ value: 1 }, { value: 2 }]);
 
-      const results = await collection.aggregate([{ $limit: 0 }]).toArray();
-
-      assert.strictEqual(results.length, 0);
+      await assert.rejects(
+        async () => collection.aggregate([{ $limit: 0 }]).toArray(),
+        (err: Error) => err.message.includes("positive")
+      );
     });
 
     it("should throw for non-integer limit", async () => {
@@ -546,13 +547,8 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       await collection.insertOne({ value: 1 });
 
       await assert.rejects(
-        async () => {
-          await collection.aggregate([{ $limit: 2.5 }]).toArray();
-        },
-        (err: Error) => {
-          assert.ok(err.message.includes("integer"));
-          return true;
-        }
+        async () => collection.aggregate([{ $limit: 2.5 }]).toArray(),
+        (err: Error) => err.message.includes("positive")
       );
     });
 
@@ -561,13 +557,8 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       await collection.insertOne({ value: 1 });
 
       await assert.rejects(
-        async () => {
-          await collection.aggregate([{ $limit: -1 }]).toArray();
-        },
-        (err: Error) => {
-          assert.ok(err.message.includes("non-negative"));
-          return true;
-        }
+        async () => collection.aggregate([{ $limit: -1 }]).toArray(),
+        (err: Error) => err.message.includes("positive")
       );
     });
   });

@@ -291,13 +291,14 @@ export class AggregationCursor<T extends Document = Document> {
 
   /**
    * $limit stage - Limit output to first n documents.
+   * MongoDB requires limit to be a positive integer (> 0).
    */
   private execLimit(limit: number, docs: Document[]): Document[] {
-    if (typeof limit !== "number" || !Number.isFinite(limit) || limit < 0) {
-      throw new Error("$limit must be a non-negative integer");
+    if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) {
+      throw new Error("the limit must be positive");
     }
     if (!Number.isInteger(limit)) {
-      throw new Error("$limit must be a non-negative integer");
+      throw new Error("the limit must be positive");
     }
     return docs.slice(0, limit);
   }
