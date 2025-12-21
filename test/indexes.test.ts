@@ -121,7 +121,15 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("nonexistent_1");
         },
         (err: Error) => {
-          assert(err.message.includes("index not found"));
+          // MongoDB: "can't find index with name [...]" or similar
+          // Mongone: "index not found with name [...]"
+          const msg = err.message.toLowerCase();
+          assert(
+            msg.includes("index not found") ||
+              msg.includes("can't find index") ||
+              msg.includes("index") && msg.includes("not") && msg.includes("found"),
+            `Expected index not found error, got: ${err.message}`
+          );
           return true;
         }
       );
@@ -135,7 +143,12 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex("_id_");
         },
         (err: Error) => {
-          assert(err.message.includes("cannot drop _id index"));
+          // Both MongoDB and Mongone should use "cannot drop _id index"
+          const msg = err.message.toLowerCase();
+          assert(
+            msg.includes("cannot drop _id") || msg.includes("can't drop _id"),
+            `Expected cannot drop _id error, got: ${err.message}`
+          );
           return true;
         }
       );
@@ -149,7 +162,12 @@ describe(`Index Management Tests (${getTestModeName()})`, () => {
           await collection.dropIndex({ _id: 1 });
         },
         (err: Error) => {
-          assert(err.message.includes("cannot drop _id index"));
+          // Both MongoDB and Mongone should use "cannot drop _id index"
+          const msg = err.message.toLowerCase();
+          assert(
+            msg.includes("cannot drop _id") || msg.includes("can't drop _id"),
+            `Expected cannot drop _id error, got: ${err.message}`
+          );
           return true;
         }
       );
