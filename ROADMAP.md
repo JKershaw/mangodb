@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for Mongone. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 6 - Array Handling
+## Current Phase: Phase 7 - Indexes
 
 ---
 
@@ -237,21 +237,27 @@ await collection.find({ active: true, $nor: [{ error: true }, { suspended: true 
 
 ---
 
-## Phase 6: Array Handling
+## Phase 6: Array Handling (Complete)
 
 **Goal**: Support querying and modifying array fields.
 
 ### Query Operations
-- [ ] Array element matching (`{tags: "red"}` matches `{tags: ["red", "blue"]}`)
-- [ ] `$elemMatch` - Match array element with multiple conditions
-- [ ] `$size` - Match array by length
-- [ ] `$all` - Match arrays containing all specified elements
+- [x] Array element matching (`{tags: "red"}` matches `{tags: ["red", "blue"]}`) - Already working from Phase 2
+- [x] `$elemMatch` - Match array element with multiple conditions
+- [x] `$size` - Match array by length
+- [x] `$all` - Match arrays containing all specified elements
 
 ### Update Operations
-- [ ] `$push` - Add element to array
-- [ ] `$pull` - Remove elements matching condition
-- [ ] `$addToSet` - Add element if not present
-- [ ] `$pop` - Remove first or last element
+- [x] `$push` - Add element to array (with `$each` modifier)
+- [x] `$pull` - Remove elements matching condition
+- [x] `$addToSet` - Add element if not present (with `$each` modifier)
+- [x] `$pop` - Remove first or last element
+
+### Considerations (Resolved)
+- `$elemMatch` ensures all conditions met by SAME array element
+- `$size` only works with exact numbers (no range queries)
+- `$addToSet` uses BSON-style object comparison (key order matters)
+- Array update operators throw errors for non-array fields
 
 ---
 
