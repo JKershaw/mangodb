@@ -1,4 +1,4 @@
-# MangoDB
+# MangoDB 🥭 
 
 File-based MongoDB drop-in replacement for TypeScript/Node.js. **SQLite is to SQL as MangoDB is to MongoDB.**
 
