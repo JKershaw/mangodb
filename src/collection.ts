@@ -10,7 +10,7 @@
  */
 import { ObjectId } from "mongodb";
 import { MangoDBCursor, IndexCursor } from "./cursor.ts";
-import { AggregationCursor } from "./aggregation.ts";
+import { AggregationCursor, type AggregationDbContext } from "./aggregation.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
@@ -77,6 +77,8 @@ export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
 export class MangoDBCollection<T extends Document = Document> {
   private readonly filePath: string;
   private readonly indexManager: IndexManager;
+  private readonly dataDir: string;
+  private readonly dbName: string;
 
   /**
    * Create a new MangoDBCollection instance.
@@ -91,6 +93,8 @@ export class MangoDBCollection<T extends Document = Document> {
    * ```
    */
   constructor(dataDir: string, dbName: string, collectionName: string) {
+    this.dataDir = dataDir;
+    this.dbName = dbName;
     this.filePath = join(dataDir, dbName, `${collectionName}.json`);
     const indexFilePath = join(dataDir, dbName, `${collectionName}.indexes.json`);
     this.indexManager = new IndexManager(indexFilePath, dbName, collectionName);
@@ -428,7 +432,18 @@ export class MangoDBCollection<T extends Document = Document> {
     pipeline: PipelineStage[],
     _options?: AggregateOptions
   ): AggregationCursor<T> {
-    return new AggregationCursor<T>(() => this.readDocuments(), pipeline);
+    // Create database context for $lookup and $out stages
+    const dbContext: AggregationDbContext = {
+      getCollection: (name: string) => {
+        return new MangoDBCollection(this.dataDir, this.dbName, name);
+      },
+    };
+
+    return new AggregationCursor<T>(
+      () => this.readDocuments(),
+      pipeline,
+      dbContext
+    );
   }
 
   /**
