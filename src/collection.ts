@@ -175,6 +175,46 @@ export class MangoDBCollection<T extends Document = Document> {
     return false;
   }
 
+  /**
+   * Filter documents with $text query support.
+   * Handles $text operator and delegates to matchesFilter for other conditions.
+   *
+   * @param documents - Documents to filter
+   * @param filter - Query filter that may contain $text
+   * @returns Filtered documents
+   * @throws TextIndexRequiredError if $text is used without a text index
+   */
+  private async filterWithTextSupport(documents: T[], filter: Filter<T>): Promise<T[]> {
+    const textQuery = (filter as Record<string, unknown>).$text as
+      | { $search?: string }
+      | undefined;
+
+    if (textQuery) {
+      // Get text index fields
+      const textFields = await this.indexManager.getTextIndexFields();
+      if (textFields.length === 0) {
+        throw new TextIndexRequiredError();
+      }
+
+      const searchString = textQuery.$search || "";
+
+      // Create a filter without $text for additional conditions
+      const remainingFilter = { ...filter } as Record<string, unknown>;
+      delete remainingFilter.$text;
+
+      // Apply both text search and regular filter
+      return documents.filter((doc) => {
+        const matchesText = this.matchesTextSearch(doc, searchString, textFields);
+        const matchesOther =
+          Object.keys(remainingFilter).length === 0 ||
+          matchesFilter(doc, remainingFilter as Filter<T>);
+        return matchesText && matchesOther;
+      });
+    }
+
+    return documents.filter((doc) => matchesFilter(doc, filter));
+  }
+
   // ==================== Index Operations ====================
 
   /**
@@ -370,17 +410,17 @@ export class MangoDBCollection<T extends Document = Document> {
    */
   async findOne(filter: Filter<T> = {}, options: FindOptions = {}): Promise<T | null> {
     const documents = await this.readDocuments();
+    const filtered = await this.filterWithTextSupport(documents, filter);
 
-    for (const doc of documents) {
-      if (matchesFilter(doc, filter)) {
-        if (options.projection) {
-          return applyProjection(doc, options.projection);
-        }
-        return doc;
-      }
+    if (filtered.length === 0) {
+      return null;
     }
 
-    return null;
+    const doc = filtered[0];
+    if (options.projection) {
+      return applyProjection(doc, options.projection);
+    }
+    return doc;
   }
 
   /**
@@ -416,36 +456,7 @@ export class MangoDBCollection<T extends Document = Document> {
     return new MangoDBCursor<T>(
       async () => {
         const documents = await this.readDocuments();
-
-        // Check for $text query
-        const textQuery = (filter as Record<string, unknown>).$text as
-          | { $search?: string }
-          | undefined;
-
-        if (textQuery) {
-          // Get text index fields
-          const textFields = await this.indexManager.getTextIndexFields();
-          if (textFields.length === 0) {
-            throw new TextIndexRequiredError();
-          }
-
-          const searchString = textQuery.$search || "";
-
-          // Create a filter without $text for additional conditions
-          const remainingFilter = { ...filter } as Record<string, unknown>;
-          delete remainingFilter.$text;
-
-          // Apply both text search and regular filter
-          return documents.filter((doc) => {
-            const matchesText = this.matchesTextSearch(doc, searchString, textFields);
-            const matchesOther =
-              Object.keys(remainingFilter).length === 0 ||
-              matchesFilter(doc, remainingFilter as Filter<T>);
-            return matchesText && matchesOther;
-          });
-        }
-
-        return documents.filter((doc) => matchesFilter(doc, filter));
+        return this.filterWithTextSupport(documents, filter);
       },
       options.projection || null
     );
@@ -531,7 +542,8 @@ export class MangoDBCollection<T extends Document = Document> {
    */
   async countDocuments(filter: Filter<T> = {}): Promise<number> {
     const documents = await this.readDocuments();
-    return documents.filter((doc) => matchesFilter(doc, filter)).length;
+    const filtered = await this.filterWithTextSupport(documents, filter);
+    return filtered.length;
   }
 
   // ==================== Delete Operations ====================

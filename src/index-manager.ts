@@ -200,15 +200,6 @@ export class IndexManager {
   }
 
   /**
-   * Check if a text index exists on this collection.
-   * @returns True if a text index exists, false otherwise
-   */
-  async hasTextIndex(): Promise<boolean> {
-    const fields = await this.getTextIndexFields();
-    return fields.length > 0;
-  }
-
-  /**
    * Extract the key value from a document for a given index key specification.
    * Supports nested field paths using dot notation.
    * @param doc - Document to extract values from

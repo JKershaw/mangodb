@@ -464,27 +464,8 @@ await collection.find({ $text: { $search: 123 } }).toArray();
 
 4. **$text operator** (Step 4)
    - Add text index support in `index-manager.ts`
-   - Add `$text` handling in `matchesFilter` function
+   - Add `$text` handling in `collection.ts`
    - Store text field names in index metadata
-
----
-
-## File Changes Required
-
-1. **$type operator** (Step 1)
-   - Add to `QueryOperators` interface in `types.ts`
-   - Implement type matching in `query-matcher.ts`
-   - Create BSON type mapping
-
-2. **$mod operator** (Step 2)
-   - Add to `QueryOperators` interface in `types.ts`
-   - Implement modulo matching in `query-matcher.ts`
-   - Handle error cases with proper messages
-
-3. **$expr operator** (Step 3)
-   - Add `$expr` support to `Filter` type in `types.ts`
-   - Handle `$expr` in `matchesFilter` function
-   - Reuse expression evaluation from aggregation module
 
 ---
 

@@ -117,6 +117,39 @@ describe(`Query Operators Tests (${getTestModeName()})`, () => {
 
         assert.strictEqual(docs.length, 2);
       });
+
+      it("should work with findOne", async () => {
+        const collection = client.db(dbName).collection("text_findone");
+        await collection.createIndex({ content: "text" } as any);
+        await collection.insertMany([
+          { content: "MongoDB is a document database" },
+          { content: "PostgreSQL is a relational database" },
+          { content: "Redis is an in-memory store" },
+        ]);
+
+        const doc = await collection.findOne({
+          $text: { $search: "MongoDB" }
+        } as any);
+
+        assert.ok(doc);
+        assert.ok((doc.content as string).includes("MongoDB"));
+      });
+
+      it("should work with countDocuments", async () => {
+        const collection = client.db(dbName).collection("text_count");
+        await collection.createIndex({ content: "text" } as any);
+        await collection.insertMany([
+          { content: "MongoDB tutorial" },
+          { content: "MongoDB advanced guide" },
+          { content: "Redis basics" },
+        ]);
+
+        const count = await collection.countDocuments({
+          $text: { $search: "MongoDB" }
+        } as any);
+
+        assert.strictEqual(count, 2);
+      });
     });
 
     describe("Edge Cases", () => {
