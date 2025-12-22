@@ -5,10 +5,12 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
+    "precommit": "npm run typecheck",
     "typecheck": "tsc",
     "test": "node --experimental-strip-types --test test/**/*.test.ts",
     "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts",
-    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/**/*.test.ts"
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/**/*.test.ts",
+    "prepare": "husky"
   },
   "keywords": [
     "mongodb",
@@ -22,6 +24,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "husky": "^9.1.7",
     "mongodb": "^6.12.0",
     "typescript": "^5.7.2"
   },
