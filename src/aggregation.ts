@@ -11,7 +11,7 @@ import {
   setValueByPath,
   compareValuesForSort,
 } from "./utils.ts";
-import { cloneDocument, documentsEqual } from "./document-utils.ts";
+import { cloneDocument } from "./document-utils.ts";
 import type {
   Document,
   Filter,
@@ -20,6 +20,56 @@ import type {
   UnwindOptions,
   ProjectExpression,
 } from "./types.ts";
+
+// ==================== Helper Functions ====================
+
+/**
+ * Get BSON type name for a value (used in error messages).
+ */
+function getBSONTypeName(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "missing";
+  if (Array.isArray(value)) return "array";
+  if (value instanceof Date) return "date";
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? "int" : "double";
+  }
+  if (typeof value === "boolean") return "bool";
+  if (typeof value === "string") return "string";
+  if (typeof value === "object") {
+    // Check for ObjectId
+    if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+      return "objectId";
+    }
+    return "object";
+  }
+  return typeof value;
+}
+
+/**
+ * Deep equality check that handles primitives and objects.
+ */
+function deepEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return a === b;
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((val, i) => deepEquals(val, b[i]));
+  }
+
+  if (typeof a === "object" && typeof b === "object") {
+    const aKeys = Object.keys(a as object);
+    const bKeys = Object.keys(b as object);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every(key =>
+      deepEquals((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+    );
+  }
+
+  return false;
+}
 
 // ==================== Expression Evaluation ====================
 
@@ -185,8 +235,9 @@ function evalDivide(args: unknown[], doc: Document): number | null {
     throw new Error("$divide only supports numeric types");
   }
 
+  // MongoDB returns null for divide by zero (doesn't throw)
   if (divisor === 0) {
-    throw new Error("can't $divide by zero");
+    return null;
   }
 
   return dividend / divisor;
@@ -205,7 +256,9 @@ function evalConcat(args: unknown[], doc: Document): string | null {
   // All values must be strings
   for (const v of values) {
     if (typeof v !== "string") {
-      throw new Error(`$concat only supports strings, not ${typeof v}`);
+      // MongoDB uses BSON type names
+      const typeName = getBSONTypeName(v);
+      throw new Error(`$concat only supports strings, not ${typeName}`);
     }
   }
 
@@ -295,7 +348,8 @@ function evalSize(args: unknown, doc: Document): number {
   const value = evaluateExpression(args, doc);
 
   if (!Array.isArray(value)) {
-    throw new Error("$size requires an array argument");
+    const typeName = getBSONTypeName(value);
+    throw new Error(`The argument to $size must be an array, but was of type: ${typeName}`);
   }
 
   return value.length;
@@ -461,8 +515,8 @@ class AddToSetAccumulator implements Accumulator {
 
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
-    // Check if already exists (using deep equality)
-    if (!this.values.some((v) => documentsEqual(v as Document, value as Document))) {
+    // Check if already exists (using deep equality that handles primitives)
+    if (!this.values.some((v) => deepEquals(v, value))) {
       this.values.push(value);
     }
   }
@@ -491,7 +545,7 @@ function createAccumulator(op: string, expr: unknown): Accumulator {
     case "$addToSet":
       return new AddToSetAccumulator(expr);
     default:
-      throw new Error(`Unrecognized accumulator: '${op}'`);
+      throw new Error(`unknown group operator '${op}'`);
   }
 }
 
@@ -903,6 +957,11 @@ export class AggregationCursor<T extends Document = Document> {
     groupSpec: { _id: unknown; [key: string]: unknown },
     docs: Document[]
   ): Document[] {
+    // Validate _id field is present (MongoDB requires it)
+    if (!("_id" in groupSpec)) {
+      throw new Error("a group specification must include an _id");
+    }
+
     const groups = new Map<
       string,
       { _id: unknown; accumulators: Map<string, Accumulator> }
@@ -953,6 +1012,20 @@ export class AggregationCursor<T extends Document = Document> {
     lookupSpec: { from: string; localField: string; foreignField: string; as: string },
     docs: Document[]
   ): Promise<Document[]> {
+    // Validate required fields
+    if (!lookupSpec.from) {
+      throw new Error("$lookup requires 'from' field");
+    }
+    if (!lookupSpec.localField) {
+      throw new Error("$lookup requires 'localField' field");
+    }
+    if (!lookupSpec.foreignField) {
+      throw new Error("$lookup requires 'foreignField' field");
+    }
+    if (!lookupSpec.as) {
+      throw new Error("$lookup requires 'as' field");
+    }
+
     if (!this.dbContext) {
       throw new Error("$lookup requires database context");
     }
@@ -966,10 +1039,7 @@ export class AggregationCursor<T extends Document = Document> {
       // Find matching foreign documents
       const matches = foreignDocs.filter((foreignDoc) => {
         const foreignValue = getValueByPath(foreignDoc, lookupSpec.foreignField);
-        return documentsEqual(
-          { v: localValue } as Document,
-          { v: foreignValue } as Document
-        );
+        return deepEquals(localValue, foreignValue);
       });
 
       return {
@@ -1007,16 +1077,16 @@ export class AggregationCursor<T extends Document = Document> {
       const newRoot = evaluateExpression(spec.newRoot, doc);
 
       if (newRoot === null || newRoot === undefined) {
+        const typeName = newRoot === null ? "null" : "missing";
         throw new Error(
-          "'newRoot' expression must evaluate to an object, but got: " +
-            (newRoot === null ? "null" : "undefined")
+          `'newRoot' expression must evaluate to an object, but resulting value was: ${typeName === "missing" ? "MISSING" : typeName}. Type of resulting value: '${typeName}'.`
         );
       }
 
       if (typeof newRoot !== "object" || Array.isArray(newRoot)) {
+        const typeName = getBSONTypeName(newRoot);
         throw new Error(
-          "'newRoot' expression must evaluate to an object, but got: " +
-            (Array.isArray(newRoot) ? "array" : typeof newRoot)
+          `'newRoot' expression must evaluate to an object, but resulting value was of type: ${typeName}`
         );
       }
 
