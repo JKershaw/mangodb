@@ -21,10 +21,12 @@ export type Document = Record<string, unknown>;
  * @property $in - Matches any of the values specified in an array
  * @property $nin - Matches none of the values specified in an array
  * @property $exists - Matches documents that have the specified field
- * @property $not - Inverts the effect of a query expression
+ * @property $not - Inverts the effect of a query expression (can also accept RegExp)
  * @property $size - Matches arrays with a specified number of elements
  * @property $all - Matches arrays that contain all elements specified in the query
  * @property $elemMatch - Matches documents that contain an array field with at least one element matching all specified query criteria
+ * @property $regex - Matches strings using a regular expression pattern
+ * @property $options - Options for $regex (i=case-insensitive, m=multiline, s=dotall)
  */
 export interface QueryOperators {
   $eq?: unknown;
@@ -36,10 +38,12 @@ export interface QueryOperators {
   $in?: unknown[];
   $nin?: unknown[];
   $exists?: boolean;
-  $not?: QueryOperators;
+  $not?: QueryOperators | RegExp;
   $size?: number;
   $all?: unknown[];
   $elemMatch?: Record<string, unknown>;
+  $regex?: string | RegExp;
+  $options?: string;
 }
 
 /**

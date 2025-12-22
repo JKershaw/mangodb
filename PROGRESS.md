@@ -4,12 +4,62 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 10 - Aggregation Pipeline Advanced
+**Phase**: 11 - Regular Expressions
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-22 - Phase 11: Regular Expressions
+
+#### Added
+- `$regex` query operator for pattern matching on string fields
+- `$options` modifier for regex flags (i, m, s)
+- JavaScript RegExp support as filter values
+- RegExp support in `$in` operator array
+- RegExp support in `$not` operator
+- RegExp support in `$nin` operator
+
+#### Behaviors Implemented
+- `$regex` accepts string patterns or RegExp objects
+- `$options` supports `i` (case-insensitive), `m` (multiline), `s` (dotall)
+- Non-string fields silently don't match regex (no error)
+- `null` and `undefined` values don't match any regex
+- Array fields match if ANY string element matches the pattern
+- RegExp in `$in` uses JavaScript RegExp objects (not `{ $regex: ... }` syntax)
+- `$not` with regex matches documents where field doesn't match pattern
+- Missing fields match `$not: { $regex: ... }` (can't match pattern if field doesn't exist)
+- `$options` without `$regex` throws error
+- Invalid regex patterns throw error
+
+#### Examples
+```typescript
+// Basic $regex
+await collection.find({ name: { $regex: "^A" } }).toArray();
+
+// Case insensitive
+await collection.find({ email: { $regex: "gmail\\.com$", $options: "i" } }).toArray();
+
+// JavaScript RegExp literal
+await collection.find({ name: /^Alice/i }).toArray();
+
+// Array field matching
+await collection.find({ tags: { $regex: "^prod" } }).toArray();
+
+// RegExp in $in
+await collection.find({ status: { $in: [/^active/, "pending"] } }).toArray();
+
+// $not with regex
+await collection.find({ name: { $not: { $regex: "^Admin" } } }).toArray();
+
+// In aggregation $match
+await collection.aggregate([
+  { $match: { email: /gmail\.com$/i } }
+]).toArray();
+```
+
+---
 
 ### 2025-12-22 - Phase 10: Aggregation Pipeline Advanced
 

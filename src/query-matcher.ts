@@ -36,21 +36,46 @@ export function isOperatorObject(value: unknown): value is QueryOperators {
 
 /**
  * Check if a document value matches any value in the $in array.
+ * Supports RegExp objects in the $in array for pattern matching.
  */
 function matchesIn(docValue: unknown, inValues: unknown[]): boolean {
+  const testValue = (dv: unknown, iv: unknown): boolean => {
+    // Handle RegExp in $in array
+    if (iv instanceof RegExp) {
+      return typeof dv === "string" && iv.test(dv);
+    }
+    return valuesEqual(dv, iv);
+  };
+
   if (Array.isArray(docValue)) {
-    return docValue.some((dv) => inValues.some((iv) => valuesEqual(dv, iv)));
+    return docValue.some((dv) => inValues.some((iv) => testValue(dv, iv)));
   }
-  return inValues.some((iv) => valuesEqual(docValue, iv));
+  return inValues.some((iv) => testValue(docValue, iv));
 }
 
 /**
  * Check if a document value matches a single filter value.
  * Handles array field matching (any element match).
+ * Handles RegExp filter values for pattern matching.
  */
 function matchesSingleValue(docValue: unknown, filterValue: unknown): boolean {
   if (filterValue === null) {
     return docValue === null || docValue === undefined;
+  }
+
+  // Handle RegExp filter value
+  if (filterValue instanceof RegExp) {
+    if (typeof docValue === "string") {
+      return filterValue.test(docValue);
+    }
+    // For arrays, match if any string element matches
+    if (Array.isArray(docValue)) {
+      return docValue.some(
+        (elem) => typeof elem === "string" && filterValue.test(elem)
+      );
+    }
+    // Non-string, non-array values don't match regex
+    return false;
   }
 
   if (valuesEqual(docValue, filterValue)) {
@@ -180,6 +205,22 @@ export function matchesOperators(
       }
 
       case "$not": {
+        // Handle RegExp directly in $not
+        if (opValue instanceof RegExp) {
+          if (docValue === undefined) break;
+          if (typeof docValue === "string" && opValue.test(docValue)) {
+            return false;
+          }
+          // For arrays, check if any string element matches
+          if (Array.isArray(docValue)) {
+            const anyMatch = docValue.some(
+              (elem) => typeof elem === "string" && opValue.test(elem)
+            );
+            if (anyMatch) return false;
+          }
+          break;
+        }
+
         if (
           opValue === null ||
           typeof opValue !== "object" ||
@@ -252,6 +293,76 @@ export function matchesOperators(
           matchesElemMatchCondition(elem, elemMatchCond)
         );
         if (!hasMatchingElement) return false;
+        break;
+      }
+
+      case "$regex": {
+        const pattern = opValue;
+        const options = (operators as QueryOperators).$options || "";
+
+        // Handle RegExp object directly
+        if (pattern instanceof RegExp) {
+          // For string values
+          if (typeof docValue === "string") {
+            if (!pattern.test(docValue)) return false;
+          } else if (Array.isArray(docValue)) {
+            // For arrays, match if any string element matches
+            const anyMatch = docValue.some(
+              (elem) => typeof elem === "string" && pattern.test(elem)
+            );
+            if (!anyMatch) return false;
+          } else {
+            // Non-string, non-array values don't match
+            return false;
+          }
+          break;
+        }
+
+        // Handle string pattern
+        if (typeof pattern !== "string") {
+          throw new Error("$regex has to be a string");
+        }
+
+        // Validate options - MongoDB only supports i, m, s, x (not g, u, y)
+        // Note: x (extended) is not supported in JavaScript but is in MongoDB
+        const validMongoOptions = new Set(["i", "m", "s"]);
+        for (const char of options) {
+          if (!validMongoOptions.has(char)) {
+            throw new Error(`invalid flag in regex options: ${char}`);
+          }
+        }
+
+        let regex: RegExp;
+        try {
+          regex = new RegExp(pattern, options);
+        } catch (e) {
+          // For invalid pattern or other errors
+          throw new Error(`Regular expression is invalid: ${(e as Error).message}`);
+        }
+
+        // For string values
+        if (typeof docValue === "string") {
+          if (!regex.test(docValue)) return false;
+        } else if (Array.isArray(docValue)) {
+          // For arrays, match if any string element matches
+          const anyMatch = docValue.some(
+            (elem) => typeof elem === "string" && regex.test(elem)
+          );
+          if (!anyMatch) return false;
+        } else {
+          // Non-string, non-array values don't match
+          return false;
+        }
+        break;
+      }
+
+      case "$options": {
+        // $options is handled in $regex case
+        // If we get here without $regex, it's an error
+        if (!("$regex" in operators)) {
+          throw new Error("$options needs a $regex");
+        }
+        // Otherwise, it was already handled in $regex case
         break;
       }
 
