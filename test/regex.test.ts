@@ -244,8 +244,11 @@ describe(`Regular Expression Tests (${getTestModeName()})`, () => {
             await collection.find({ name: { $regex: "[invalid" } }).toArray();
           },
           (err: Error) => {
-            // MongoDB throws SyntaxError for invalid regex
-            return err instanceof Error;
+            // MongoDB throws error for invalid regex pattern
+            return err instanceof Error && (
+              err.message.includes("Regular expression") ||
+              err.message.includes("Invalid regular expression")
+            );
           }
         );
       });
@@ -260,6 +263,21 @@ describe(`Regular Expression Tests (${getTestModeName()})`, () => {
           },
           (err: Error) => {
             return err.message.includes("$options") || err.message.includes("$regex");
+          }
+        );
+      });
+
+      it("should throw for invalid regex options", async () => {
+        const collection = client.db(dbName).collection("regex_err_flags");
+        await collection.insertOne({ name: "test" });
+
+        await assert.rejects(
+          async () => {
+            await collection.find({ name: { $regex: "test", $options: "g" } }).toArray();
+          },
+          (err: Error) => {
+            // MongoDB throws "invalid flag in regex options: g"
+            return err instanceof Error && err.message.includes("invalid flag");
           }
         );
       });

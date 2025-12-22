@@ -323,11 +323,21 @@ export function matchesOperators(
           throw new Error("$regex has to be a string");
         }
 
+        // Validate options - MongoDB only supports i, m, s, x (not g, u, y)
+        // Note: x (extended) is not supported in JavaScript but is in MongoDB
+        const validMongoOptions = new Set(["i", "m", "s"]);
+        for (const char of options) {
+          if (!validMongoOptions.has(char)) {
+            throw new Error(`invalid flag in regex options: ${char}`);
+          }
+        }
+
         let regex: RegExp;
         try {
           regex = new RegExp(pattern, options);
-        } catch {
-          throw new Error(`$regex has to be a string`);
+        } catch (e) {
+          // For invalid pattern or other errors
+          throw new Error(`Regular expression is invalid: ${(e as Error).message}`);
         }
 
         // For string values
