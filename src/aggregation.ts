@@ -152,13 +152,13 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
 
     // Comparison operators (for $cond conditions)
     case "$gt":
-      return evalComparison(args as unknown[], doc, (a, b) => a > b);
+      return evalComparison(args as unknown[], doc, (a, b) => (a as number) > (b as number));
     case "$gte":
-      return evalComparison(args as unknown[], doc, (a, b) => a >= b);
+      return evalComparison(args as unknown[], doc, (a, b) => (a as number) >= (b as number));
     case "$lt":
-      return evalComparison(args as unknown[], doc, (a, b) => a < b);
+      return evalComparison(args as unknown[], doc, (a, b) => (a as number) < (b as number));
     case "$lte":
-      return evalComparison(args as unknown[], doc, (a, b) => a <= b);
+      return evalComparison(args as unknown[], doc, (a, b) => (a as number) <= (b as number));
     case "$eq":
       return evalComparison(args as unknown[], doc, (a, b) => a === b);
     case "$ne":
@@ -616,7 +616,7 @@ export class AggregationCursor<T extends Document = Document> {
   async toArray(): Promise<Document[]> {
     // Validate $out is last stage if present
     for (let i = 0; i < this.pipeline.length; i++) {
-      const stage = this.pipeline[i] as Record<string, unknown>;
+      const stage = this.pipeline[i] as unknown as Record<string, unknown>;
       if ("$out" in stage && i !== this.pipeline.length - 1) {
         throw new Error("$out can only be the final stage in the pipeline");
       }
