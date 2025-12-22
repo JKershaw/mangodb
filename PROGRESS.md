@@ -4,12 +4,101 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 9 - Aggregation Pipeline Basic
+**Phase**: 10 - Aggregation Pipeline Advanced
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-22 - Phase 10: Aggregation Pipeline Advanced
+
+#### Added
+- Expression evaluation framework for computed fields
+- Expression operators:
+  - Arithmetic: `$add`, `$subtract`, `$multiply`, `$divide`
+  - String: `$concat`, `$toUpper`, `$toLower`
+  - Conditional: `$cond`, `$ifNull`
+  - Comparison: `$gt`, `$gte`, `$lt`, `$lte`, `$eq`, `$ne`
+  - Array: `$size` (expression version)
+- New pipeline stages:
+  - `$group` - Group documents by key with accumulators
+  - `$lookup` - Left outer join with another collection
+  - `$addFields` - Add new fields to documents
+  - `$set` - Alias for `$addFields`
+  - `$replaceRoot` - Replace document with embedded document
+  - `$out` - Write pipeline results to a collection
+- Accumulator operators for `$group`:
+  - `$sum` - Sum numeric values (or count with `$sum: 1`)
+  - `$avg` - Calculate average
+  - `$min` - Find minimum value
+  - `$max` - Find maximum value
+  - `$first` - Get first value in group
+  - `$last` - Get last value in group
+  - `$push` - Collect all values into array
+  - `$addToSet` - Collect unique values into array
+
+#### Behaviors Implemented
+- Arithmetic operators return `null` if any operand is `null` or missing
+- `$concat` returns `null` if any operand is `null` (throws for non-strings)
+- `$cond` supports both array syntax `[condition, then, else]` and object syntax `{ if, then, else }`
+- `$ifNull` returns first non-null value in array
+- `$group` with `_id: null` groups ALL documents into single group
+- `$lookup` returns empty array for no matches (left outer join behavior)
+- `$replaceRoot` throws error if `newRoot` evaluates to `null`, `undefined`, or non-object
+- `$out` must be the final stage in the pipeline (throws otherwise)
+- `$out` replaces the entire target collection
+- `$out` returns empty array (results are in target collection)
+- `$avg` returns `null` when there are no numeric values (not `0`)
+- Non-numeric values are ignored by `$sum` and `$avg` accumulators
+
+#### Examples
+```typescript
+// $group with multiple accumulators
+await collection.aggregate([
+  { $group: {
+    _id: "$category",
+    count: { $sum: 1 },
+    total: { $sum: "$amount" },
+    avgAmount: { $avg: "$amount" },
+    items: { $push: "$name" }
+  }},
+  { $sort: { total: -1 } }
+]).toArray();
+
+// $lookup for joining collections
+await orders.aggregate([
+  { $lookup: {
+    from: "products",
+    localField: "productId",
+    foreignField: "_id",
+    as: "product"
+  }},
+  { $unwind: "$product" }
+]).toArray();
+
+// $addFields with expressions
+await collection.aggregate([
+  { $addFields: {
+    total: { $add: ["$price", "$tax"] },
+    fullName: { $concat: ["$firstName", " ", "$lastName"] },
+    status: { $cond: [{ $gte: ["$score", 60] }, "pass", "fail"] }
+  }}
+]).toArray();
+
+// $replaceRoot
+await collection.aggregate([
+  { $replaceRoot: { newRoot: "$address" } }
+]).toArray();
+
+// $out to write results
+await collection.aggregate([
+  { $match: { status: "active" } },
+  { $out: "active_users" }
+]).toArray();
+```
+
+---
 
 ### 2025-12-22 - Phase 9: Aggregation Pipeline Basic
 

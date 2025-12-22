@@ -50,7 +50,7 @@ src/
 
 ---
 
-## Current State (Phases 1-9 Complete)
+## Current State (Phases 1-10 Complete)
 
 | Phase | Feature | Status | Test Cases |
 |-------|---------|--------|------------|
@@ -63,9 +63,10 @@ src/
 | 7 | Indexes | ✅ Complete | 39 |
 | 8 | Advanced Operations | ✅ Complete | 51 |
 | 9 | Aggregation Pipeline (Basic) | ✅ Complete | 70 |
-| **Total** | | | **513** |
+| 10 | Aggregation Pipeline (Advanced) | ✅ Complete | 57 |
+| **Total** | | | **570** |
 
-**Approximate MongoDB Coverage**: 75-80% of common operations
+**Approximate MongoDB Coverage**: 85-90% of common operations
 
 ---
 
@@ -73,7 +74,6 @@ src/
 
 | Phase | Feature | Priority | Effort | Est. Tests |
 |-------|---------|----------|--------|------------|
-| 10 | Aggregation Pipeline (Advanced) | **High** | Large | 60-80 |
 | 11 | Regular Expressions | Medium | Medium | 40-50 |
 | 12 | Additional Query Operators | Medium | Small | 30-40 |
 | 13 | Additional Update Operators | Medium | Small | 30-40 |
@@ -373,19 +373,19 @@ After implementation:
 
 ---
 
-## Phase 10: Aggregation Pipeline (Advanced)
+## Phase 10: Aggregation Pipeline (Advanced) ✅ COMPLETE
 
 **Goal**: Add grouping, lookup, and expression operators to the aggregation framework.
 
-**Priority**: HIGH — Required for analytics and relational-style queries.
+**Status**: COMPLETE — All advanced pipeline stages and expression operators implemented.
 
 ### Operations
 
 #### Step 1: `$group` Stage
-- [ ] Group documents by `_id` expression
-- [ ] Accumulator operators: `$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`
-- [ ] `$push` and `$addToSet` accumulators
-- [ ] `$count` accumulator
+- [x] Group documents by `_id` expression
+- [x] Accumulator operators: `$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`
+- [x] `$push` and `$addToSet` accumulators
+- [x] `$count` accumulator (via `$sum: 1`)
 
 **Test Cases**:
 ```typescript
@@ -411,9 +411,9 @@ await collection.aggregate([
 ```
 
 #### Step 2: `$lookup` Stage (Basic)
-- [ ] Left outer join with another collection
-- [ ] `from`, `localField`, `foreignField`, `as` fields
-- [ ] Returns array of matching documents
+- [x] Left outer join with another collection
+- [x] `from`, `localField`, `foreignField`, `as` fields
+- [x] Returns array of matching documents
 
 **Test Cases**:
 ```typescript
@@ -432,9 +432,9 @@ await orders.aggregate([
 ```
 
 #### Step 3: `$addFields` Stage
-- [ ] Add new fields to documents
-- [ ] Does not remove existing fields
-- [ ] Can reference existing fields with `$fieldName`
+- [x] Add new fields to documents
+- [x] Does not remove existing fields
+- [x] Can reference existing fields with `$fieldName`
 
 **Test Cases**:
 ```typescript
@@ -444,12 +444,12 @@ await collection.aggregate([
 ```
 
 #### Step 4: `$set` Stage (alias for $addFields)
-- [ ] Alias for `$addFields`
-- [ ] Same functionality
+- [x] Alias for `$addFields`
+- [x] Same functionality
 
 #### Step 5: `$replaceRoot` Stage
-- [ ] Replace document with specified embedded document
-- [ ] `newRoot` expression required
+- [x] Replace document with specified embedded document
+- [x] `newRoot` expression required
 
 **Test Cases**:
 ```typescript
@@ -459,9 +459,9 @@ await collection.aggregate([
 ```
 
 #### Step 6: `$out` Stage
-- [ ] Write results to a collection
-- [ ] Must be last stage in pipeline
-- [ ] Replaces collection if exists
+- [x] Write results to a collection
+- [x] Must be last stage in pipeline
+- [x] Replaces collection if exists
 
 **Test Cases**:
 ```typescript
@@ -472,12 +472,12 @@ await collection.aggregate([
 ```
 
 #### Step 7: Expression Operators (Basic Set)
-- [ ] `$concat` — Concatenate strings
-- [ ] `$add`, `$subtract`, `$multiply`, `$divide` — Arithmetic
-- [ ] `$cond` — Conditional expression
-- [ ] `$ifNull` — Null coalescing
-- [ ] `$toUpper`, `$toLower` — String case
-- [ ] `$size` — Array size (expression version)
+- [x] `$concat` — Concatenate strings
+- [x] `$add`, `$subtract`, `$multiply`, `$divide` — Arithmetic
+- [x] `$cond` — Conditional expression
+- [x] `$ifNull` — Null coalescing
+- [x] `$toUpper`, `$toLower` — String case
+- [x] `$size` — Array size (expression version)
 
 ### Test File Structure
 

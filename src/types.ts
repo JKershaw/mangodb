@@ -374,6 +374,58 @@ export interface UnwindStage {
 }
 
 /**
+ * $group stage - groups documents by _id and applies accumulators.
+ */
+export interface GroupStage {
+  $group: {
+    _id: unknown;
+    [field: string]: unknown;
+  };
+}
+
+/**
+ * $lookup stage - performs a left outer join with another collection.
+ */
+export interface LookupStage {
+  $lookup: {
+    from: string;
+    localField: string;
+    foreignField: string;
+    as: string;
+  };
+}
+
+/**
+ * $addFields stage - adds new fields to documents.
+ */
+export interface AddFieldsStage {
+  $addFields: Record<string, unknown>;
+}
+
+/**
+ * $set stage - alias for $addFields.
+ */
+export interface SetStage {
+  $set: Record<string, unknown>;
+}
+
+/**
+ * $replaceRoot stage - replaces document with embedded document.
+ */
+export interface ReplaceRootStage {
+  $replaceRoot: {
+    newRoot: unknown;
+  };
+}
+
+/**
+ * $out stage - writes pipeline results to a collection.
+ */
+export interface OutStage {
+  $out: string;
+}
+
+/**
  * Union type for all supported pipeline stages.
  */
 export type PipelineStage =
@@ -383,7 +435,13 @@ export type PipelineStage =
   | LimitStage
   | SkipStage
   | CountStage
-  | UnwindStage;
+  | UnwindStage
+  | GroupStage
+  | LookupStage
+  | AddFieldsStage
+  | SetStage
+  | ReplaceRootStage
+  | OutStage;
 
 /**
  * Options for the aggregate() method.
