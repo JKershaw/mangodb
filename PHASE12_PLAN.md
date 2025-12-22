@@ -2,12 +2,10 @@
 
 ## Overview
 
-Add remaining useful query operators to MangoDB: `$type`, `$mod`, and `$expr`. These operators enable type checking, modular arithmetic queries, and comparing fields within the same document.
-
-**Note**: The `$text` operator is deferred to a future phase as it requires text index infrastructure that is beyond the scope of this phase.
+Add remaining useful query operators to MangoDB: `$type`, `$mod`, `$expr`, and `$text`. These operators enable type checking, modular arithmetic queries, comparing fields within the same document, and simple text search.
 
 **Priority**: MEDIUM — Enhances query expressiveness
-**Estimated Tests**: 35-45
+**Estimated Tests**: 45-55
 
 ---
 
@@ -350,7 +348,128 @@ await collection.find({
 
 ---
 
+### Step 4: `$text` Query Operator (Simplified)
+
+**Syntax**:
+```typescript
+// Create text index first
+await collection.createIndex({ title: "text", description: "text" });
+
+// Then use $text query
+{ $text: { $search: "mongodb database" } }
+```
+
+**Behavior**:
+- Requires a text index to be created on the collection first
+- Text index records which fields to search (no actual indexing for performance)
+- `$search` tokenizes by whitespace and matches if ANY token is found
+- Case-insensitive matching by default
+- Searches all text-indexed fields
+
+**Simplified Implementation** (no performance optimization needed):
+1. `createIndex({ field: "text" })` stores field name as a text field
+2. `$text` query does full scan, checking text fields for token matches
+3. Match if any search token appears as substring in any text field
+
+**Test Cases**:
+```typescript
+// Create text index
+await collection.createIndex({ title: "text" });
+
+// Basic text search - finds documents containing "mongodb"
+await collection.find({ $text: { $search: "mongodb" } }).toArray();
+
+// Multiple words - matches if ANY word is found
+await collection.find({ $text: { $search: "mongodb database" } }).toArray();
+
+// Case insensitive
+await collection.find({ $text: { $search: "MONGODB" } }).toArray();
+
+// Compound text index (multiple fields)
+await collection.createIndex({ title: "text", body: "text" });
+await collection.find({ $text: { $search: "urgent" } }).toArray();
+// Searches both title and body fields
+```
+
+**Edge Cases**:
+```typescript
+// No text index - should throw error
+await collection.find({ $text: { $search: "test" } }).toArray();
+// Error: "text index required for $text query" (code 27)
+
+// Empty search string
+await collection.find({ $text: { $search: "" } }).toArray();
+// Returns no documents (no tokens to match)
+
+// Field value is null or missing - no match
+// Given: { title: null }
+await collection.find({ $text: { $search: "anything" } }).toArray();
+// No match
+
+// Non-string field values - silently skip
+// Given: { title: 123 }
+await collection.find({ $text: { $search: "123" } }).toArray();
+// No match (we only search strings)
+
+// Partial word match (substring)
+// Given: { title: "introduction to mongodb" }
+await collection.find({ $text: { $search: "mongo" } }).toArray();
+// Matches (substring match)
+```
+
+**Error Cases**:
+```typescript
+// No text index exists
+await collection.find({ $text: { $search: "test" } }).toArray();
+// Error: "text index required for $text query" (IndexNotFound, code 27)
+
+// $text without $search
+await collection.find({ $text: {} }).toArray();
+// Error: "$text requires $search"
+
+// $search is not a string
+await collection.find({ $text: { $search: 123 } }).toArray();
+// Error: "$search must be a string"
+```
+
+**What We Skip** (intentionally simplified):
+| MongoDB Feature | Our Approach |
+|-----------------|--------------|
+| Inverted index | Full scan |
+| Stemming | Exact substring match |
+| Stop words | Include all words |
+| Text score | No scoring |
+| Phrase matching (`"exact phrase"`) | Not implemented |
+| Negation (`-word`) | Not implemented |
+| Language options | Not implemented |
+
+---
+
 ## Implementation Order
+
+1. **$type operator** (Step 1)
+   - Add to `QueryOperators` interface in `types.ts`
+   - Implement type matching in `query-matcher.ts`
+   - Create BSON type mapping
+
+2. **$mod operator** (Step 2)
+   - Add to `QueryOperators` interface in `types.ts`
+   - Implement modulo matching in `query-matcher.ts`
+   - Handle error cases with proper messages
+
+3. **$expr operator** (Step 3)
+   - Add `$expr` support to `Filter` type in `types.ts`
+   - Handle `$expr` in `matchesFilter` function
+   - Reuse expression evaluation from aggregation module
+
+4. **$text operator** (Step 4)
+   - Add text index support in `index-manager.ts`
+   - Add `$text` handling in `matchesFilter` function
+   - Store text field names in index metadata
+
+---
+
+## File Changes Required
 
 1. **$type operator** (Step 1)
    - Add to `QueryOperators` interface in `types.ts`

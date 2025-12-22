@@ -258,9 +258,9 @@ export interface BulkWriteResult {
 /**
  * Index key specification for creating indexes.
  * Keys are field names (can use dot notation for nested fields).
- * Values are 1 for ascending index order or -1 for descending index order.
+ * Values are 1 for ascending, -1 for descending, or "text" for text indexes.
  */
-export type IndexKeySpec = Record<string, 1 | -1>;
+export type IndexKeySpec = Record<string, 1 | -1 | "text">;
 
 /**
  * Options for creating an index.

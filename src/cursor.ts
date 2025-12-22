@@ -14,7 +14,7 @@ type SortSpec = Record<string, 1 | -1>;
  */
 interface IndexInfo {
   v: number;
-  key: Record<string, 1 | -1>;
+  key: Record<string, 1 | -1 | "text">;
   name: string;
   unique?: boolean;
   sparse?: boolean;
