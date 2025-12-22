@@ -265,11 +265,12 @@ function evalConcat(args: unknown[], doc: Document): string | null {
   return values.join("");
 }
 
-function evalToUpper(args: unknown, doc: Document): string | null {
+function evalToUpper(args: unknown, doc: Document): string {
   const value = evaluateExpression(args, doc);
 
+  // MongoDB returns empty string for null/undefined
   if (value === null || value === undefined) {
-    return null;
+    return "";
   }
 
   if (typeof value !== "string") {
@@ -279,11 +280,12 @@ function evalToUpper(args: unknown, doc: Document): string | null {
   return value.toUpperCase();
 }
 
-function evalToLower(args: unknown, doc: Document): string | null {
+function evalToLower(args: unknown, doc: Document): string {
   const value = evaluateExpression(args, doc);
 
+  // MongoDB returns empty string for null/undefined
   if (value === null || value === undefined) {
-    return null;
+    return "";
   }
 
   if (typeof value !== "string") {

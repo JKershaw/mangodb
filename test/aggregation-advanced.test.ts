@@ -241,7 +241,7 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
         assert.strictEqual(results[0].lower, "hello world");
       });
 
-      it("should return null for null input", async () => {
+      it("should return empty string for null input", async () => {
         const collection = client.db(dbName).collection("expr_case_null");
         await collection.insertOne({ text: null });
 
@@ -251,7 +251,8 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
           ])
           .toArray();
 
-        assert.strictEqual(results[0].upper, null);
+        // MongoDB returns empty string for null input
+        assert.strictEqual(results[0].upper, "");
       });
     });
 
