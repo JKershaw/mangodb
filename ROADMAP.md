@@ -2,7 +2,7 @@
 
 This document outlines the implementation phases for MangoDB. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 8 - Advanced (Complete)
+## Current Phase: Phase 9 - Aggregation Pipeline Basic (Complete)
 
 ---
 
@@ -295,14 +295,32 @@ await collection.find({ active: true, $nor: [{ error: true }, { suspended: true 
 - [x] `collection.findOneAndReplace(filter, replacement, options)`
 - [x] `collection.bulkWrite(operations)`
 
-### Basic Aggregation Pipeline (Future)
-- [ ] `collection.aggregate(pipeline)`
-- [ ] `$match` stage
-- [ ] `$project` stage
-- [ ] `$sort` stage
-- [ ] `$limit` stage
-- [ ] `$skip` stage
-- [ ] `$count` stage
+### Basic Aggregation Pipeline
+See Phase 9 below for complete aggregation pipeline implementation.
+
+---
+
+## Phase 9: Aggregation Pipeline Basic (Complete)
+
+**Goal**: Implement the aggregation framework with commonly-used stages.
+
+### Operations
+- [x] `collection.aggregate(pipeline)` - Execute aggregation pipeline
+- [x] `AggregationCursor` with `toArray()` method
+- [x] `$match` stage - Filter documents (reuses query matcher)
+- [x] `$project` stage - Reshape documents (inclusion/exclusion/renaming)
+- [x] `$sort` stage - Order documents
+- [x] `$limit` stage - Limit output documents
+- [x] `$skip` stage - Skip first n documents
+- [x] `$count` stage - Count documents and return single result
+- [x] `$unwind` stage - Deconstruct arrays into multiple documents
+
+### Implementation Details
+- `$project` supports field inclusion, exclusion, renaming (`$field`), and `$literal`
+- `$count` returns empty array for empty input (not `{ count: 0 }`)
+- `$unwind` supports `preserveNullAndEmptyArrays` and `includeArrayIndex` options
+- Non-array values are treated as single-element arrays in `$unwind`
+- Pipeline stages execute sequentially, each transforming the document stream
 
 ---
 
