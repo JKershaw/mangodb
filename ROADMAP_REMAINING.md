@@ -50,7 +50,7 @@ src/
 
 ---
 
-## Current State (Phases 1-8 Complete)
+## Current State (Phases 1-9 Complete)
 
 | Phase | Feature | Status | Test Cases |
 |-------|---------|--------|------------|
@@ -62,9 +62,10 @@ src/
 | 6 | Array Handling | ✅ Complete | 86 |
 | 7 | Indexes | ✅ Complete | 39 |
 | 8 | Advanced Operations | ✅ Complete | 51 |
-| **Total** | | | **443** |
+| 9 | Aggregation Pipeline (Basic) | ✅ Complete | 70 |
+| **Total** | | | **513** |
 
-**Approximate MongoDB Coverage**: 65-70% of common operations
+**Approximate MongoDB Coverage**: 75-80% of common operations
 
 ---
 
@@ -72,23 +73,22 @@ src/
 
 | Phase | Feature | Priority | Effort | Est. Tests |
 |-------|---------|----------|--------|------------|
-| 9 | Aggregation Pipeline (Basic) | **High** | Large | 80-100 |
-| 10 | Aggregation Pipeline (Advanced) | High | Large | 60-80 |
+| 10 | Aggregation Pipeline (Advanced) | **High** | Large | 60-80 |
 | 11 | Regular Expressions | Medium | Medium | 40-50 |
 | 12 | Additional Query Operators | Medium | Small | 30-40 |
 | 13 | Additional Update Operators | Medium | Small | 30-40 |
 | 14 | Extended Index Features | Low | Medium | 25-30 |
 | 15 | Administrative Operations | Low | Small | 15-20 |
 
-**Total Remaining**: ~280-360 additional test cases
+**Total Remaining**: ~200-260 additional test cases
 
 ---
 
-## Phase 9: Aggregation Pipeline (Basic)
+## Phase 9: Aggregation Pipeline (Basic) ✅ COMPLETE
 
 **Goal**: Implement the aggregation framework with commonly-used stages.
 
-**Priority**: HIGH — This is the most significant missing feature for MongoDB compatibility.
+**Status**: COMPLETE — All basic pipeline stages implemented and tested.
 
 ### Overview
 
@@ -1260,13 +1260,12 @@ test/[feature].test.ts
 
 ## Summary
 
-### Immediate Priorities (Phases 9-10)
+### Immediate Priority (Phase 10)
 
-The aggregation pipeline is the most impactful remaining feature:
-- **Phase 9**: Basic stages ($match, $project, $sort, $limit, $skip, $count, $unwind)
+Phase 9 (Basic Aggregation) is now complete. The next priority is:
 - **Phase 10**: Advanced stages ($group, $lookup, $addFields, expressions)
 
-These two phases will bring MangoDB to approximately **85-90% coverage** of common MongoDB usage.
+Completing Phase 10 will bring MangoDB to approximately **85-90% coverage** of common MongoDB usage.
 
 ### Medium-Term (Phases 11-13)
 
@@ -1285,9 +1284,9 @@ Extended features for completeness:
 
 | Metric | Value |
 |--------|-------|
-| Remaining Phases | 7 |
-| Estimated New Tests | 280-360 |
-| Estimated Code Lines | 1,500-2,000 |
+| Remaining Phases | 6 |
+| Estimated New Tests | 200-260 |
+| Estimated Code Lines | 1,200-1,600 |
 | Estimated Time | Varies based on scope per phase |
 
 After completing all phases, MangoDB will be a comprehensive file-based MongoDB replacement suitable for:

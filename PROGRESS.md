@@ -4,12 +4,69 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 8 - Advanced
+**Phase**: 9 - Aggregation Pipeline Basic
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-22 - Phase 9: Aggregation Pipeline Basic
+
+#### Added
+- Aggregation pipeline framework:
+  - `collection.aggregate(pipeline)` - Execute aggregation pipeline
+  - `AggregationCursor` class with `toArray()` method
+  - Pipeline stage execution framework with sequential processing
+
+- Pipeline stages:
+  - `$match` - Filter documents using query syntax (reuses existing query matcher)
+  - `$project` - Reshape documents with inclusion, exclusion, field renaming, and `$literal`
+  - `$sort` - Order documents by specified fields
+  - `$limit` - Limit output to first n documents
+  - `$skip` - Skip first n documents
+  - `$count` - Count documents and return single document with count
+  - `$unwind` - Deconstruct array field into multiple documents
+
+#### Behaviors Implemented
+- `$project` cannot mix inclusion (1) and exclusion (0) except for `_id`
+- `$project` includes `_id` by default unless explicitly set to 0
+- `$project` supports field references with `$fieldName` syntax for renaming
+- `$project` supports `$literal` for literal values (prevents `$` interpretation)
+- `$count` returns empty array for empty input (not `{ count: 0 }`)
+- `$count` field name cannot be empty, start with `$`, or contain `.`
+- `$limit` requires positive integer (throws for 0, negative, or non-integer)
+- `$skip` requires non-negative integer
+- `$unwind` treats non-array values as single-element arrays
+- `$unwind` skips documents with null, missing, or empty array fields by default
+- `$unwind` supports `preserveNullAndEmptyArrays` option to preserve such documents
+- `$unwind` supports `includeArrayIndex` option to add index field
+- Unknown pipeline stages throw `Unrecognized pipeline stage name` error
+
+#### Examples
+```typescript
+// Basic aggregation pipeline
+const results = await collection.aggregate([
+  { $match: { status: "active" } },
+  { $sort: { createdAt: -1 } },
+  { $limit: 10 },
+  { $project: { name: 1, email: 1, _id: 0 } }
+]).toArray();
+
+// $unwind with options
+await collection.aggregate([
+  { $unwind: { path: "$items", includeArrayIndex: "idx", preserveNullAndEmptyArrays: true } }
+]).toArray();
+
+// $count after filtering
+await collection.aggregate([
+  { $match: { category: "books" } },
+  { $count: "totalBooks" }
+]).toArray();
+// Returns: [{ totalBooks: 42 }] or [] if no matches
+```
+
+---
 
 ### 2025-12-21 - Phase 8: Advanced Operations
 
