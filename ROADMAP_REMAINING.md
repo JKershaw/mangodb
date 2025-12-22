@@ -105,15 +105,15 @@ const results = await collection.aggregate([
 ### Operations
 
 #### Step 1: Pipeline Infrastructure
-- [ ] `collection.aggregate(pipeline)` method
-- [ ] `AggregationCursor` class with `toArray()`, `next()`, `forEach()`
-- [ ] Pipeline stage execution framework
-- [ ] Stage validation
+- [x] `collection.aggregate(pipeline)` method
+- [x] `AggregationCursor` class with `toArray()`, `next()`, `forEach()`
+- [x] Pipeline stage execution framework
+- [x] Stage validation
 
 #### Step 2: `$match` Stage
-- [ ] Filter documents using query syntax (reuse existing `matchesFilter` from `query-matcher.ts`)
-- [ ] Support all existing query operators
-- [ ] Works identically to `find()` filter
+- [x] Filter documents using query syntax (reuse existing `matchesFilter` from `query-matcher.ts`)
+- [x] Support all existing query operators
+- [x] Works identically to `find()` filter
 
 **Restrictions (from MongoDB docs)**:
 - Cannot use raw aggregation expressions - must wrap in `$expr`
@@ -133,11 +133,11 @@ await collection.aggregate([{ $match: { $or: [{ a: 1 }, { b: 2 }] } }]).toArray(
 ```
 
 #### Step 3: `$project` Stage
-- [ ] Include fields: `{ $project: { name: 1, email: 1 } }`
-- [ ] Exclude fields: `{ $project: { password: 0 } }`
-- [ ] Rename fields: `{ $project: { userName: "$name" } }`
-- [ ] Computed fields with expressions (basic)
-- [ ] Nested field projection
+- [x] Include fields: `{ $project: { name: 1, email: 1 } }`
+- [x] Exclude fields: `{ $project: { password: 0 } }`
+- [x] Rename fields: `{ $project: { userName: "$name" } }`
+- [x] Computed fields with expressions (basic)
+- [x] Nested field projection
 
 **Critical Restrictions (from MongoDB docs)**:
 - **Cannot mix inclusion (1) and exclusion (0)** except for `_id`
@@ -170,9 +170,9 @@ await collection.aggregate([{ $project: { "user.name": 1 } }]).toArray();
 ```
 
 #### Step 4: `$sort` Stage
-- [ ] Ascending/descending sort
-- [ ] Compound sort
-- [ ] Reuse existing sort logic from cursors
+- [x] Ascending/descending sort
+- [x] Compound sort
+- [x] Reuse existing sort logic from cursors
 
 **Test Cases**:
 ```typescript
@@ -181,9 +181,9 @@ await collection.aggregate([{ $sort: { category: 1, name: -1 } }]).toArray();
 ```
 
 #### Step 5: `$limit` and `$skip` Stages
-- [ ] `$limit: n` — Limit output documents
-- [ ] `$skip: n` — Skip first n documents
-- [ ] Position in pipeline matters (unlike cursor chaining)
+- [x] `$limit: n` — Limit output documents
+- [x] `$skip: n` — Skip first n documents
+- [x] Position in pipeline matters (unlike cursor chaining)
 
 **Test Cases**:
 ```typescript
@@ -192,8 +192,8 @@ await collection.aggregate([{ $skip: 10 }, { $limit: 5 }]).toArray();
 ```
 
 #### Step 6: `$count` Stage
-- [ ] Returns count as specified field name
-- [ ] `{ $count: "totalDocs" }` → `{ totalDocs: 123 }`
+- [x] Returns count as specified field name
+- [x] `{ $count: "totalDocs" }` → `{ totalDocs: 123 }`
 
 **Critical Behavior (from MongoDB docs)**:
 - Field name must be **non-empty string**
@@ -215,9 +215,9 @@ await emptyCollection.aggregate([{ $count: "total" }]).toArray();
 ```
 
 #### Step 7: `$unwind` Stage
-- [ ] Deconstruct array field into multiple documents
-- [ ] `preserveNullAndEmptyArrays` option
-- [ ] `includeArrayIndex` option
+- [x] Deconstruct array field into multiple documents
+- [x] `preserveNullAndEmptyArrays` option
+- [x] `includeArrayIndex` option
 
 **Behavior by Input Type (from MongoDB docs)**:
 
