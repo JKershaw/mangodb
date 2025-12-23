@@ -50,7 +50,7 @@ src/
 
 ---
 
-## Current State (Phases 1-11 Complete)
+## Current State (Phases 1-12 Complete)
 
 | Phase | Feature | Status | Test Cases |
 |-------|---------|--------|------------|
@@ -65,7 +65,8 @@ src/
 | 9 | Aggregation Pipeline (Basic) | ✅ Complete | 70 |
 | 10 | Aggregation Pipeline (Advanced) | ✅ Complete | 57 |
 | 11 | Regular Expressions | ✅ Complete | 38 |
-| **Total** | | | **608** |
+| 12 | Additional Query Operators | ✅ Complete | 67 |
+| **Total** | | | **675** |
 
 **Approximate MongoDB Coverage**: 90%+ of common operations
 
@@ -75,12 +76,13 @@ src/
 
 | Phase | Feature | Priority | Effort | Est. Tests |
 |-------|---------|----------|--------|------------|
-| 12 | Additional Query Operators | Medium | Small | 30-40 |
+| 12.5 | Find Options Parity | **High** | Small | 8-12 |
 | 13 | Additional Update Operators | Medium | Small | 30-40 |
 | 14 | Extended Index Features | Low | Medium | 25-30 |
 | 15 | Administrative Operations | Low | Small | 15-20 |
+| 16 | Extended Expression Operators | Low | Medium | 50-70 |
 
-**Total Remaining**: ~100-130 additional test cases
+**Total Remaining**: ~130-170 additional test cases
 
 ---
 
@@ -749,6 +751,99 @@ test/query-operators.test.ts
 
 ---
 
+## Phase 12.5: Find Options Parity
+
+**Goal**: Ensure `findOne` supports the same options available on cursor methods.
+
+**Priority**: HIGH — Enables common "get latest" query pattern.
+
+**Background**: The `findOneAnd*` methods support `sort`, but plain `findOne` only accepts `projection`. This is a gap discovered during real-world usage testing.
+
+### Operations
+
+#### Step 1: Add `sort` option to `findOne`
+- [ ] Extend `FindOptions` interface to include `sort`
+- [ ] Apply sort before selecting first document
+- [ ] Reuse existing `sortDocuments` from utils
+
+**Use Case**:
+```typescript
+// Get the most recent active order
+const latest = await collection.findOne(
+  { status: "active" },
+  { sort: { createdAt: -1 } }
+);
+```
+
+#### Step 2: Add `skip` option to `findOne` (optional)
+- [ ] Extend `FindOptions` interface to include `skip`
+- [ ] Apply skip after sort, before selecting first document
+- [ ] Useful for "get Nth matching document" pattern
+
+**Use Case**:
+```typescript
+// Get the second-highest scorer
+const runnerUp = await collection.findOne(
+  { tournament: "finals" },
+  { sort: { score: -1 }, skip: 1 }
+);
+```
+
+### Implementation Notes
+
+**Files to modify:**
+1. `src/types.ts` — Extend `FindOptions` interface
+2. `src/collection.ts` — Update `findOne` method to apply sort/skip
+
+**Implementation approach:**
+```typescript
+// In types.ts
+export interface FindOptions {
+  projection?: ProjectionSpec;
+  sort?: SortSpec;      // NEW
+  skip?: number;        // NEW
+}
+
+// In collection.ts findOne method
+async findOne(filter: Filter<T>, options?: FindOptions): Promise<T | null> {
+  let docs = await this.loadDocuments();
+  docs = docs.filter(doc => matchesFilter(doc, filter));
+
+  if (options?.sort) {
+    docs = sortDocuments(docs, options.sort);
+  }
+  if (options?.skip) {
+    docs = docs.slice(options.skip);
+  }
+
+  const doc = docs[0] ?? null;
+  // Apply projection...
+}
+```
+
+### Test File Structure
+
+```
+test/find-options.test.ts
+├── findOne with sort
+│   ├── should return document matching sort order
+│   ├── should return latest with descending sort
+│   ├── should return earliest with ascending sort
+│   ├── should work with compound sort
+│   ├── should work with sort and projection
+│   └── should return null if no match (with sort)
+│
+└── findOne with skip
+    ├── should skip first N matching documents
+    ├── should work with sort and skip together
+    ├── should return null if skip exceeds matches
+    └── should work with skip, sort, and projection
+```
+
+### Estimated Tests: 8-12
+
+---
+
 ## Phase 13: Additional Update Operators
 
 **Goal**: Implement remaining update operators.
@@ -1055,6 +1150,207 @@ test/admin.test.ts
 
 ---
 
+## Phase 16: Extended Expression Operators
+
+**Goal**: Expand the expression operator library for more powerful aggregation pipelines.
+
+**Priority**: LOW — Enhances aggregation expressiveness for advanced use cases.
+
+**Background**: The current expression evaluator (`evaluateExpression` in `aggregation.ts`) supports a core set of operators. Real-world usage revealed gaps when building complex aggregations with null handling, type conversion, and array manipulation.
+
+### Current Expression Operators (Implemented)
+
+| Category | Operators |
+|----------|-----------|
+| Arithmetic | `$add`, `$subtract`, `$multiply`, `$divide` |
+| String | `$concat`, `$toUpper`, `$toLower` |
+| Conditional | `$cond`, `$ifNull` |
+| Comparison | `$gt`, `$gte`, `$lt`, `$lte`, `$eq`, `$ne` |
+| Array | `$size` |
+| Special | `$literal` |
+
+### Operations
+
+#### Step 1: Additional Arithmetic Operators
+- [ ] `$abs` — Absolute value
+- [ ] `$ceil` — Ceiling (round up)
+- [ ] `$floor` — Floor (round down)
+- [ ] `$round` — Round to specified decimal places
+- [ ] `$mod` — Modulo (expression version)
+
+**Test Cases**:
+```typescript
+await collection.aggregate([
+  { $project: {
+    absValue: { $abs: "$balance" },
+    rounded: { $round: ["$price", 2] },
+    remainder: { $mod: ["$quantity", 12] }
+  }}
+]).toArray();
+```
+
+#### Step 2: Additional String Operators
+- [ ] `$substr` / `$substrCP` — Substring extraction
+- [ ] `$strLenCP` — String length
+- [ ] `$split` — Split string into array
+- [ ] `$trim` / `$ltrim` / `$rtrim` — Whitespace trimming
+- [ ] `$toString` — Convert to string
+- [ ] `$indexOfCP` — Find substring position
+
+**Test Cases**:
+```typescript
+await collection.aggregate([
+  { $project: {
+    firstThree: { $substr: ["$code", 0, 3] },
+    words: { $split: ["$sentence", " "] },
+    length: { $strLenCP: "$name" }
+  }}
+]).toArray();
+```
+
+#### Step 3: Array Manipulation Operators
+- [ ] `$arrayElemAt` — Get element at index
+- [ ] `$slice` — Extract portion of array (expression version)
+- [ ] `$concatArrays` — Concatenate arrays
+- [ ] `$filter` — Filter array elements
+- [ ] `$map` — Transform array elements
+- [ ] `$reduce` — Reduce array to single value
+- [ ] `$in` — Check if value in array (expression version)
+
+**Test Cases**:
+```typescript
+await collection.aggregate([
+  { $project: {
+    firstItem: { $arrayElemAt: ["$items", 0] },
+    topThree: { $slice: ["$scores", 3] },
+    allTags: { $concatArrays: ["$tags", "$categories"] },
+    activeTasks: { $filter: {
+      input: "$tasks",
+      as: "task",
+      cond: { $eq: ["$$task.status", "active"] }
+    }}
+  }}
+]).toArray();
+```
+
+#### Step 4: Type Conversion Operators
+- [ ] `$toInt` — Convert to integer
+- [ ] `$toDouble` — Convert to double
+- [ ] `$toBool` — Convert to boolean
+- [ ] `$toDate` — Convert to date
+- [ ] `$toObjectId` — Convert to ObjectId
+- [ ] `$type` — Get BSON type name (expression version)
+
+**Test Cases**:
+```typescript
+await collection.aggregate([
+  { $project: {
+    numericId: { $toInt: "$stringId" },
+    timestamp: { $toDate: "$dateString" },
+    fieldType: { $type: "$unknownField" }
+  }}
+]).toArray();
+```
+
+#### Step 5: Date Operators
+- [ ] `$year` — Extract year
+- [ ] `$month` — Extract month (1-12)
+- [ ] `$dayOfMonth` — Extract day of month
+- [ ] `$hour` — Extract hour
+- [ ] `$minute` — Extract minute
+- [ ] `$second` — Extract second
+- [ ] `$dayOfWeek` — Extract day of week (1=Sunday)
+- [ ] `$dateToString` — Format date as string
+
+**Test Cases**:
+```typescript
+await collection.aggregate([
+  { $project: {
+    year: { $year: "$createdAt" },
+    month: { $month: "$createdAt" },
+    formatted: { $dateToString: {
+      format: "%Y-%m-%d",
+      date: "$createdAt"
+    }}
+  }}
+]).toArray();
+```
+
+### Implementation Notes
+
+**Files to modify:**
+1. `src/aggregation.ts` — Add cases to `evaluateOperator` function
+
+**Implementation approach:**
+```typescript
+// In aggregation.ts evaluateOperator function
+case "$abs":
+  return Math.abs(evaluateExpression(args, doc) as number);
+
+case "$substr": {
+  const [str, start, length] = args as [unknown, unknown, unknown];
+  const strVal = evaluateExpression(str, doc) as string;
+  const startVal = evaluateExpression(start, doc) as number;
+  const lengthVal = evaluateExpression(length, doc) as number;
+  return strVal?.substring(startVal, startVal + lengthVal) ?? null;
+}
+
+case "$arrayElemAt": {
+  const [arr, idx] = args as [unknown, unknown];
+  const arrVal = evaluateExpression(arr, doc) as unknown[];
+  const idxVal = evaluateExpression(idx, doc) as number;
+  return arrVal?.[idxVal < 0 ? arrVal.length + idxVal : idxVal] ?? null;
+}
+```
+
+### Test File Structure
+
+```
+test/expression-operators.test.ts
+├── Arithmetic Operators
+│   ├── $abs
+│   │   ├── should return absolute value of positive
+│   │   ├── should return absolute value of negative
+│   │   └── should return null for null input
+│   ├── $ceil / $floor / $round
+│   └── $mod (expression)
+│
+├── String Operators
+│   ├── $substr
+│   │   ├── should extract substring
+│   │   ├── should handle start beyond length
+│   │   └── should return null for null input
+│   ├── $split
+│   ├── $strLenCP
+│   ├── $trim / $ltrim / $rtrim
+│   └── $toString
+│
+├── Array Operators
+│   ├── $arrayElemAt
+│   │   ├── should get element at positive index
+│   │   ├── should get element at negative index
+│   │   └── should return null for out of bounds
+│   ├── $slice
+│   ├── $concatArrays
+│   ├── $filter
+│   └── $map
+│
+├── Type Conversion
+│   ├── $toInt / $toDouble
+│   ├── $toBool
+│   ├── $toDate
+│   └── $type (expression)
+│
+└── Date Operators
+    ├── $year / $month / $dayOfMonth
+    ├── $hour / $minute / $second
+    └── $dateToString
+```
+
+### Estimated Tests: 50-70
+
+---
+
 ## Appendix A: Error Messages Reference
 
 All error messages should match MongoDB's format exactly. These have been verified against official MongoDB documentation.
@@ -1262,27 +1558,32 @@ test/[feature].test.ts
 
 ### Current Status
 
-Phases 1-11 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage.
+Phases 1-12 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **675 tests**.
 
-### Medium-Term (Phases 12-13)
+### High Priority (Phase 12.5)
 
-Additional operators to complete the query/update APIs:
-- **Phase 12**: $type, $mod, $expr operators
-- **Phase 13**: $min, $max, $mul, positional operators
+Consistency fix discovered during real-world usage testing:
+- **Phase 12.5**: Find options parity (`findOne` + sort/skip)
 
-### Low Priority (Phases 14-15)
+### Medium Priority (Phase 13)
+
+Additional operators to complete the update API:
+- **Phase 13**: $min, $max, $mul, $rename, positional operators
+
+### Low Priority (Phases 14-16)
 
 Extended features for completeness:
 - **Phase 14**: Sparse, TTL, partial indexes
 - **Phase 15**: Admin operations, distinct()
+- **Phase 16**: Extended expression operators (arithmetic, string, array, date)
 
 ### Estimated Total Work
 
 | Metric | Value |
 |--------|-------|
-| Remaining Phases | 4 |
-| Estimated New Tests | 100-130 |
-| Estimated Code Lines | 600-900 |
+| Remaining Phases | 5 |
+| Estimated New Tests | 130-170 |
+| Estimated Code Lines | 800-1200 |
 | Estimated Time | Varies based on scope per phase |
 
 After completing all phases, MangoDB will be a comprehensive file-based MongoDB replacement suitable for:
