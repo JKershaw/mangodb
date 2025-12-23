@@ -2,7 +2,9 @@
 
 This document outlines the implementation phases for MangoDB. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 9 - Aggregation Pipeline Basic (Complete)
+## Current Phase: Phase 12.5 - Find Options Parity (Next)
+
+See [ROADMAP_REMAINING.md](./ROADMAP_REMAINING.md) for detailed plans on remaining phases (12.5, 13-16).
 
 ---
 
