@@ -288,11 +288,15 @@ export type IndexKeySpec = Record<string, 1 | -1 | "text">;
  * @property unique - When true, creates a unique index that rejects duplicate values for the indexed field(s)
  * @property name - Optional custom name for the index (MongoDB will generate one if not provided)
  * @property sparse - When true, the index only includes documents that contain the indexed field(s)
+ * @property expireAfterSeconds - TTL index: documents expire after this many seconds from the date field value
+ * @property partialFilterExpression - Only index documents matching this filter expression
  */
 export interface CreateIndexOptions {
   unique?: boolean;
   name?: string;
   sparse?: boolean;
+  expireAfterSeconds?: number;
+  partialFilterExpression?: Record<string, unknown>;
 }
 
 /**
@@ -303,6 +307,8 @@ export interface CreateIndexOptions {
  * @property name - The name of the index
  * @property unique - Whether this is a unique index that enforces unique values
  * @property sparse - Whether this is a sparse index that only indexes documents containing the field(s)
+ * @property expireAfterSeconds - TTL index expiration time in seconds
+ * @property partialFilterExpression - Filter expression for partial indexes
  */
 export interface IndexInfo {
   v: number;
@@ -310,6 +316,8 @@ export interface IndexInfo {
   name: string;
   unique?: boolean;
   sparse?: boolean;
+  expireAfterSeconds?: number;
+  partialFilterExpression?: Record<string, unknown>;
 }
 
 /**

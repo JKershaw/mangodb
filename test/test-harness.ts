@@ -48,12 +48,16 @@ export interface IndexInfo {
   name: string;
   unique?: boolean;
   sparse?: boolean;
+  expireAfterSeconds?: number;
+  partialFilterExpression?: Record<string, unknown>;
 }
 
 export interface CreateIndexOptions {
   unique?: boolean;
   name?: string;
   sparse?: boolean;
+  expireAfterSeconds?: number;
+  partialFilterExpression?: Record<string, unknown>;
 }
 
 export interface IndexCursor {
@@ -162,6 +166,7 @@ export interface TestCursor<T> {
   sort(spec: Document): TestCursor<T>;
   limit(n: number): TestCursor<T>;
   skip(n: number): TestCursor<T>;
+  hint(indexHint: string | Document): TestCursor<T>;
   toArray(): Promise<T[]>;
 }
 

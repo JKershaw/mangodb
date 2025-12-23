@@ -8,6 +8,9 @@ export {
   MongoDuplicateKeyError,
   IndexNotFoundError,
   CannotDropIdIndexError,
+  TextIndexRequiredError,
+  InvalidIndexOptionsError,
+  BadHintError,
 } from "./errors.ts";
 
 // Aggregation pipeline types

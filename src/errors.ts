@@ -149,3 +149,70 @@ export class TextIndexRequiredError extends Error {
     this.name = "TextIndexRequiredError";
   }
 }
+
+/**
+ * Error thrown when invalid index options are specified.
+ * For example, combining sparse and partialFilterExpression.
+ * Matches MongoDB's InvalidOptions error (code 67).
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await collection.createIndex({ email: 1 }, {
+ *     sparse: true,
+ *     partialFilterExpression: { status: "active" }
+ *   });
+ * } catch (err) {
+ *   if (err instanceof InvalidIndexOptionsError) {
+ *     console.log('Cannot combine these options');
+ *   }
+ * }
+ * ```
+ */
+export class InvalidIndexOptionsError extends Error {
+  /** MongoDB error code for InvalidOptions */
+  readonly code = 67;
+  readonly codeName = "InvalidOptions";
+
+  /**
+   * Create a new InvalidIndexOptionsError.
+   *
+   * @param message - Description of the invalid options
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidIndexOptionsError";
+  }
+}
+
+/**
+ * Error thrown when using hint() with a non-existent index.
+ * Matches MongoDB's planner error format.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await collection.find({}).hint("nonexistent_index").toArray();
+ * } catch (err) {
+ *   if (err instanceof BadHintError) {
+ *     console.log('Index not found');
+ *   }
+ * }
+ * ```
+ */
+export class BadHintError extends Error {
+  /** MongoDB error code for bad hint */
+  readonly code = 17007;
+  readonly codeName = "BadValue";
+
+  /**
+   * Create a new BadHintError.
+   *
+   * @param hint - The hint that was specified (index name or key pattern)
+   */
+  constructor(hint: string | Record<string, unknown>) {
+    const hintStr = typeof hint === "string" ? hint : JSON.stringify(hint);
+    super(`planner returned error: bad hint - ${hintStr}`);
+    this.name = "BadHintError";
+  }
+}

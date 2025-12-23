@@ -456,7 +456,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * Find all documents matching the filter.
    *
    * Returns a cursor that can be used to iterate through matching documents.
-   * The cursor supports methods like toArray(), sort(), limit(), and skip().
+   * The cursor supports methods like toArray(), sort(), limit(), skip(), and hint().
    *
    * @param filter - Query filter to match documents (default: empty object matches all)
    * @param options - Query options including projection
@@ -479,15 +479,37 @@ export class MangoDBCollection<T extends Document = Document> {
    *
    * // Find with projection
    * const names = await collection.find({}, { projection: { name: 1 } }).toArray();
+   *
+   * // Find with index hint
+   * const results = await collection.find({ email: 'test@test.com' })
+   *   .hint('email_1')
+   *   .toArray();
    * ```
    */
   find(filter: Filter<T> = {}, options: FindOptions = {}): MangoDBCursor<T> {
+    // Create hint validator that checks if the specified index exists
+    const hintValidator = async (hint: string | Record<string, unknown>): Promise<boolean> => {
+      const indexes = await this.indexManager.indexes();
+
+      if (typeof hint === "string") {
+        // Hint by index name
+        return indexes.some((idx) => idx.name === hint);
+      } else {
+        // Hint by key pattern - generate name and check
+        const hintName = this.indexManager.generateIndexName(
+          hint as Record<string, 1 | -1 | "text">
+        );
+        return indexes.some((idx) => idx.name === hintName);
+      }
+    };
+
     return new MangoDBCursor<T>(
       async () => {
         const documents = await this.readDocuments();
         return this.filterWithTextSupport(documents, filter);
       },
-      options.projection || null
+      options.projection || null,
+      hintValidator
     );
   }
 
