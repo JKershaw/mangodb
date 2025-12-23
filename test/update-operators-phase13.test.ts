@@ -832,4 +832,129 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
       assert.ok((doc?.updatedAt as Date) <= after);
     });
   });
+
+  // ==================== Edge Cases and Error Conditions ====================
+  describe("edge cases and error conditions", () => {
+    it("$rename should throw error when source equals destination", async () => {
+      const collection = client.db(dbName).collection("rename_same_path");
+      await collection.insertOne({ field: "value" });
+
+      await assert.rejects(
+        async () =>
+          await collection.updateOne({}, { $rename: { field: "field" } }),
+        (err: Error) => {
+          return (
+            err.message.includes("source and dest") ||
+            err.message.includes("must differ")
+          );
+        }
+      );
+    });
+
+    it("$currentDate should throw error for invalid $type value", async () => {
+      const collection = client.db(dbName).collection("currentdate_invalid_type");
+      await collection.insertOne({ name: "Alice" });
+
+      await assert.rejects(
+        async () =>
+          await collection.updateOne(
+            { name: "Alice" },
+            { $currentDate: { lastModified: { $type: "invalid" as "date" } } }
+          ),
+        (err: Error) => {
+          return (
+            err.message.includes("unrecognized type") ||
+            err.message.includes("expected")
+          );
+        }
+      );
+    });
+
+    it("$currentDate should throw error for false value", async () => {
+      const collection = client.db(dbName).collection("currentdate_false");
+      await collection.insertOne({ name: "Alice" });
+
+      await assert.rejects(
+        async () =>
+          await collection.updateOne(
+            { name: "Alice" },
+            { $currentDate: { lastModified: false as unknown as true } }
+          ),
+        (err: Error) => {
+          return (
+            err.message.includes("expected") ||
+            err.message.includes("$currentDate")
+          );
+        }
+      );
+    });
+
+    it("$mul should throw error for null field value", async () => {
+      const collection = client.db(dbName).collection("mul_null");
+      await collection.insertOne({ name: "Alice", value: null });
+
+      await assert.rejects(
+        async () =>
+          await collection.updateOne({ name: "Alice" }, { $mul: { value: 2 } }),
+        (err: Error) => {
+          return (
+            err.message.includes("non-numeric") ||
+            err.message.includes("Cannot apply $mul")
+          );
+        }
+      );
+    });
+
+    it("$min should handle null current value using BSON ordering", async () => {
+      const collection = client.db(dbName).collection("min_null_current");
+      await collection.insertOne({ name: "Alice", value: null });
+
+      // In BSON ordering, null (type 1) < number (type 2)
+      // So $min with a number should NOT update because the number is greater
+      const result = await collection.updateOne(
+        { name: "Alice" },
+        { $min: { value: 100 } }
+      );
+
+      const doc = await collection.findOne({ name: "Alice" });
+      // null < 100 in BSON ordering, so value stays null
+      assert.strictEqual(doc?.value, null);
+      assert.strictEqual(result.modifiedCount, 0);
+    });
+
+    it("$max should handle null current value using BSON ordering", async () => {
+      const collection = client.db(dbName).collection("max_null_current");
+      await collection.insertOne({ name: "Alice", value: null });
+
+      // In BSON ordering, null (type 1) < number (type 2)
+      // So $max with a number should update because the number is greater
+      await collection.updateOne({ name: "Alice" }, { $max: { value: 100 } });
+
+      const doc = await collection.findOne({ name: "Alice" });
+      assert.strictEqual(doc?.value, 100);
+    });
+
+    it("$min/$max should compare strings correctly", async () => {
+      const collection = client.db(dbName).collection("min_max_strings");
+      await collection.insertOne({ name: "Alice", code: "beta" });
+
+      // "alpha" < "beta" alphabetically
+      await collection.updateOne(
+        { name: "Alice" },
+        { $min: { code: "alpha" } }
+      );
+
+      let doc = await collection.findOne({ name: "Alice" });
+      assert.strictEqual(doc?.code, "alpha");
+
+      // "gamma" > "alpha" alphabetically
+      await collection.updateOne(
+        { name: "Alice" },
+        { $max: { code: "gamma" } }
+      );
+
+      doc = await collection.findOne({ name: "Alice" });
+      assert.strictEqual(doc?.code, "gamma");
+    });
+  });
 });

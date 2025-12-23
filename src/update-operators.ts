@@ -49,6 +49,7 @@ function compareValues(a: unknown, b: unknown): number {
 /**
  * Get the BSON type order for a value (simplified).
  * MongoDB uses a specific ordering for type comparison.
+ * Order: MinKey < Null < Numbers < String < Object < Array < BinData < ObjectId < Boolean < Date < Timestamp < RegExp < MaxKey
  */
 function getBsonTypeOrder(value: unknown): number {
   if (value === undefined) return 0;
@@ -56,11 +57,11 @@ function getBsonTypeOrder(value: unknown): number {
   if (typeof value === "number") return 2;
   if (typeof value === "string") return 3;
   if (typeof value === "object") {
-    if (value instanceof Date) return 5;
-    if (Array.isArray(value)) return 6;
-    return 4; // Regular object
+    if (Array.isArray(value)) return 5;
+    if (value instanceof Date) return 8; // Date comes AFTER Boolean in MongoDB
+    return 4; // Regular object (including ObjectId)
   }
-  if (typeof value === "boolean") return 7;
+  if (typeof value === "boolean") return 7; // Boolean comes BEFORE Date
   return 10;
 }
 
@@ -144,14 +145,17 @@ function applyArrayPush(
  * Apply MongoDB update operators to a document.
  *
  * Creates a new document with the specified update operators applied. Supports
- * $set, $unset, $inc, $push, $addToSet, $pop, and $pull operators. The original
- * document is not modified.
+ * $set, $unset, $inc, $push, $addToSet, $pop, $pull, $min, $max, $mul, $rename,
+ * and $currentDate operators. The original document is not modified.
  *
  * @param doc - The original document to update
- * @param update - Update operators object containing one or more of: $set, $unset, $inc, $push, $addToSet, $pop, $pull
+ * @param update - Update operators object containing one or more of: $set, $unset, $inc, $push, $addToSet, $pop, $pull, $min, $max, $mul, $rename, $currentDate
  * @returns A new document with all updates applied
  * @throws Error if $pop receives a value other than 1 or -1
  * @throws Error if $push, $addToSet, $pop, or $pull target a field that is not an array
+ * @throws Error if $mul targets a non-numeric field
+ * @throws Error if $rename source and destination are the same
+ * @throws Error if $currentDate has an invalid type specification
  * @example
  * // Increment a counter
  * applyUpdateOperators({ count: 1 }, { $inc: { count: 1 } })
@@ -324,6 +328,12 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $rename - rename fields
   if (update.$rename) {
     for (const [oldPath, newPath] of Object.entries(update.$rename)) {
+      // MongoDB errors if source and destination are the same
+      if (oldPath === newPath) {
+        throw new Error(
+          `The source and destination field for $rename must differ: ${oldPath}`
+        );
+      }
       const value = getValueAtPath(result as Record<string, unknown>, oldPath);
       if (value !== undefined) {
         // Only rename if the old field exists
@@ -341,14 +351,24 @@ export function applyUpdateOperators<T extends Document>(
         // Simple boolean true means Date type
         setValueByPath(result as Record<string, unknown>, path, now);
       } else if (typeof spec === "object" && spec !== null && "$type" in spec) {
-        const typeSpec = spec as { $type: "date" | "timestamp" };
+        const typeSpec = spec as { $type: string };
         if (typeSpec.$type === "date") {
           setValueByPath(result as Record<string, unknown>, path, now);
         } else if (typeSpec.$type === "timestamp") {
           // For timestamp, use numeric milliseconds
           // (MongoDB uses a Timestamp object, but we use numeric for simplicity)
           setValueByPath(result as Record<string, unknown>, path, now.getTime());
+        } else {
+          // Invalid $type value - MongoDB errors on this
+          throw new Error(
+            `$currentDate: unrecognized type specification '${typeSpec.$type}', expected 'date' or 'timestamp'`
+          );
         }
+      } else {
+        // Invalid spec format (not true, not an object with $type)
+        throw new Error(
+          `$currentDate: expected boolean true or { $type: 'date' | 'timestamp' }`
+        );
       }
     }
   }
