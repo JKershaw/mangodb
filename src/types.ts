@@ -158,6 +158,12 @@ export type ProjectionSpec = Record<string, 0 | 1>;
  * @property $pull - Removes all array elements that match a specified query
  * @property $addToSet - Adds elements to an array only if they do not already exist in the set
  * @property $pop - Removes the first or last element of an array (1 for last, -1 for first)
+ * @property $min - Updates field only if specified value is less than current value
+ * @property $max - Updates field only if specified value is greater than current value
+ * @property $mul - Multiplies the value of a field by a number
+ * @property $rename - Renames a field
+ * @property $currentDate - Sets the field to the current date
+ * @property $setOnInsert - Sets fields only during upsert insert operations
  */
 export interface UpdateOperators {
   $set?: Record<string, unknown>;
@@ -167,6 +173,13 @@ export interface UpdateOperators {
   $pull?: Record<string, unknown>;
   $addToSet?: Record<string, unknown>;
   $pop?: Record<string, number>;
+  // Phase 13 operators
+  $min?: Record<string, unknown>;
+  $max?: Record<string, unknown>;
+  $mul?: Record<string, number>;
+  $rename?: Record<string, string>;
+  $currentDate?: Record<string, boolean | { $type: "date" | "timestamp" }>;
+  $setOnInsert?: Record<string, unknown>;
 }
 
 /**
