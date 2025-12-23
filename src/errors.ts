@@ -203,6 +203,7 @@ export class InvalidIndexOptionsError extends Error {
 export class BadHintError extends Error {
   /** MongoDB error code for bad hint */
   readonly code = 17007;
+  readonly codeName = "BadValue";
 
   /**
    * Create a new BadHintError.

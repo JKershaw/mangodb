@@ -5,6 +5,7 @@ import {
   type ProjectionSpec,
 } from "./utils.ts";
 import { BadHintError } from "./errors.ts";
+import type { IndexInfo } from "./types.ts";
 
 type Document = Record<string, unknown>;
 type SortSpec = Record<string, 1 | -1>;
@@ -15,18 +16,6 @@ type HintSpec = string | Record<string, unknown>;
  * Returns true if the hint is valid, false otherwise.
  */
 export type HintValidator = (hint: HintSpec) => Promise<boolean>;
-
-/**
- * Information about an index.
- * Duplicated here to avoid circular imports.
- */
-interface IndexInfo {
-  v: number;
-  key: Record<string, 1 | -1 | "text">;
-  name: string;
-  unique?: boolean;
-  sparse?: boolean;
-}
 
 /**
  * IndexCursor represents a cursor over index information.

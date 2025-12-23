@@ -102,6 +102,8 @@ export class IndexManager {
    * @param options - Index options (unique, name, sparse, expireAfterSeconds, partialFilterExpression)
    * @returns The name of the created or existing index
    * @throws InvalidIndexOptionsError if sparse and partialFilterExpression are both specified
+   * @throws InvalidIndexOptionsError if expireAfterSeconds is used on _id field
+   * @throws InvalidIndexOptionsError if expireAfterSeconds is out of valid range
    */
   async createIndex(
     keySpec: IndexKeySpec,
@@ -112,6 +114,31 @@ export class IndexManager {
       throw new InvalidIndexOptionsError(
         "cannot mix 'partialFilterExpression' with 'sparse'"
       );
+    }
+
+    // Validate TTL options
+    if (options.expireAfterSeconds !== undefined) {
+      // Check if it's a valid number
+      if (typeof options.expireAfterSeconds !== "number" || isNaN(options.expireAfterSeconds)) {
+        throw new InvalidIndexOptionsError(
+          "expireAfterSeconds must be a number"
+        );
+      }
+
+      // Check range: must be between 0 and 2147483647 (max 32-bit signed integer)
+      if (options.expireAfterSeconds < 0 || options.expireAfterSeconds > 2147483647) {
+        throw new InvalidIndexOptionsError(
+          "expireAfterSeconds must be between 0 and 2147483647"
+        );
+      }
+
+      // TTL cannot be used on _id field
+      const indexFields = Object.keys(keySpec);
+      if (indexFields.length === 1 && indexFields[0] === "_id") {
+        throw new InvalidIndexOptionsError(
+          "The field 'expireAfterSeconds' is not valid for an _id index"
+        );
+      }
     }
 
     const indexes = await this.loadIndexes();

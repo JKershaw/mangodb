@@ -151,6 +151,44 @@ describe(`Sparse Index Tests (${getTestModeName()})`, () => {
     });
   });
 
+  describe("Sparse Index with Nested Fields", () => {
+    it("should allow missing nested field on sparse unique index", async () => {
+      const collection = client.db(dbName).collection("sparse_nested");
+      await collection.createIndex(
+        { "address.email": 1 },
+        { unique: true, sparse: true }
+      );
+
+      // Documents without address.email are not indexed
+      await collection.insertOne({ name: "Alice" });
+      await collection.insertOne({ name: "Bob" });
+      await collection.insertOne({ address: { city: "NYC" } }); // has address but no email
+
+      const count = await collection.countDocuments({});
+      assert.strictEqual(count, 3);
+    });
+
+    it("should enforce uniqueness for present nested values", async () => {
+      const collection = client.db(dbName).collection("sparse_nested_unique");
+      await collection.createIndex(
+        { "profile.email": 1 },
+        { unique: true, sparse: true }
+      );
+
+      await collection.insertOne({ profile: { email: "alice@test.com" } });
+
+      await assert.rejects(
+        async () => {
+          await collection.insertOne({ profile: { email: "alice@test.com" } });
+        },
+        (err: Error & { code?: number }) => {
+          assert.strictEqual(err.code, 11000);
+          return true;
+        }
+      );
+    });
+  });
+
   describe("Sparse Index Metadata", () => {
     it("should list sparse: true in indexes()", async () => {
       const collection = client.db(dbName).collection("sparse_metadata");
@@ -249,6 +287,86 @@ describe(`TTL Index Tests (${getTestModeName()})`, () => {
       assert.strictEqual(
         (compoundIndex as { expireAfterSeconds?: number }).expireAfterSeconds,
         undefined
+      );
+    });
+  });
+
+  describe("TTL Index Validation", () => {
+    it("should reject TTL index on _id field", async () => {
+      const collection = client.db(dbName).collection("ttl_reject_id");
+
+      await assert.rejects(
+        async () => {
+          await collection.createIndex({ _id: 1 }, { expireAfterSeconds: 3600 });
+        },
+        (err: Error) => {
+          // MongoDB rejects TTL on _id field
+          assert(
+            err.message.includes("_id") ||
+              err.message.includes("expireAfterSeconds") ||
+              (err as { code?: number }).code === 67
+          );
+          return true;
+        }
+      );
+    });
+
+    it("should reject negative expireAfterSeconds", async () => {
+      const collection = client.db(dbName).collection("ttl_reject_negative");
+
+      await assert.rejects(
+        async () => {
+          await collection.createIndex(
+            { createdAt: 1 },
+            { expireAfterSeconds: -1 }
+          );
+        },
+        (err: Error) => {
+          assert(
+            err.message.includes("expireAfterSeconds") ||
+              (err as { code?: number }).code === 67
+          );
+          return true;
+        }
+      );
+    });
+
+    it("should reject expireAfterSeconds > 2147483647", async () => {
+      const collection = client.db(dbName).collection("ttl_reject_overflow");
+
+      await assert.rejects(
+        async () => {
+          await collection.createIndex(
+            { createdAt: 1 },
+            { expireAfterSeconds: 2147483648 }
+          );
+        },
+        (err: Error) => {
+          assert(
+            err.message.includes("expireAfterSeconds") ||
+              (err as { code?: number }).code === 67
+          );
+          return true;
+        }
+      );
+    });
+
+    it("should accept max valid expireAfterSeconds (2147483647)", async () => {
+      const collection = client.db(dbName).collection("ttl_max_valid");
+
+      const name = await collection.createIndex(
+        { createdAt: 1 },
+        { expireAfterSeconds: 2147483647 }
+      );
+
+      assert.strictEqual(name, "createdAt_1");
+
+      const indexes = await collection.indexes();
+      const ttlIndex = indexes.find((i) => i.name === "createdAt_1");
+      assert(ttlIndex);
+      assert.strictEqual(
+        (ttlIndex as { expireAfterSeconds?: number }).expireAfterSeconds,
+        2147483647
       );
     });
   });
@@ -452,6 +570,77 @@ describe(`Partial Index Tests (${getTestModeName()})`, () => {
               err.message.includes("partial") ||
               (err as { code?: number }).code === 67
           );
+          return true;
+        }
+      );
+    });
+  });
+
+  describe("Partial Index with Updates", () => {
+    it("should allow duplicate after update moves document out of filter scope", async () => {
+      const collection = client.db(dbName).collection("partial_update_out");
+      await collection.createIndex(
+        { email: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { status: "active" },
+        }
+      );
+
+      // Insert active document
+      await collection.insertOne({
+        email: "test@test.com",
+        status: "active",
+      });
+
+      // Update to inactive - document leaves index scope
+      await collection.updateOne(
+        { email: "test@test.com" },
+        { $set: { status: "inactive" } }
+      );
+
+      // Now we can insert another active document with same email
+      await collection.insertOne({
+        email: "test@test.com",
+        status: "active",
+      });
+
+      const count = await collection.countDocuments({ email: "test@test.com" });
+      assert.strictEqual(count, 2);
+    });
+
+    it("should reject duplicate when update moves document into filter scope", async () => {
+      const collection = client.db(dbName).collection("partial_update_in");
+      await collection.createIndex(
+        { email: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { status: "active" },
+        }
+      );
+
+      // Insert inactive document
+      await collection.insertOne({
+        email: "test@test.com",
+        status: "inactive",
+      });
+
+      // Insert active document with same email (allowed because first is inactive)
+      await collection.insertOne({
+        email: "test@test.com",
+        status: "active",
+      });
+
+      // Try to update the inactive one to active - should fail due to duplicate
+      await assert.rejects(
+        async () => {
+          await collection.updateOne(
+            { email: "test@test.com", status: "inactive" },
+            { $set: { status: "active" } }
+          );
+        },
+        (err: Error & { code?: number }) => {
+          assert.strictEqual(err.code, 11000);
           return true;
         }
       );
