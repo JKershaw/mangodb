@@ -12,6 +12,59 @@ import {
 import { isOperatorObject, matchesOperators, matchesPullCondition } from "./query-matcher.ts";
 
 /**
+ * Compare two values using MongoDB's BSON comparison order.
+ * Returns: negative if a < b, 0 if equal, positive if a > b
+ *
+ * @param a - First value to compare
+ * @param b - Second value to compare
+ * @returns Negative number if a < b, 0 if equal, positive if a > b
+ */
+function compareValues(a: unknown, b: unknown): number {
+  // Handle same type comparisons first
+  if (typeof a === "number" && typeof b === "number") {
+    return a - b;
+  }
+  if (typeof a === "string" && typeof b === "string") {
+    return a.localeCompare(b);
+  }
+  if (a instanceof Date && b instanceof Date) {
+    return a.getTime() - b.getTime();
+  }
+
+  // For different types, use simplified BSON type ordering
+  const typeOrderA = getBsonTypeOrder(a);
+  const typeOrderB = getBsonTypeOrder(b);
+
+  if (typeOrderA !== typeOrderB) {
+    return typeOrderA - typeOrderB;
+  }
+
+  // Same type but not handled above - try generic comparison
+  if (a === b) return 0;
+  if (a === null) return -1;
+  if (b === null) return 1;
+  return String(a).localeCompare(String(b));
+}
+
+/**
+ * Get the BSON type order for a value (simplified).
+ * MongoDB uses a specific ordering for type comparison.
+ */
+function getBsonTypeOrder(value: unknown): number {
+  if (value === undefined) return 0;
+  if (value === null) return 1;
+  if (typeof value === "number") return 2;
+  if (typeof value === "string") return 3;
+  if (typeof value === "object") {
+    if (value instanceof Date) return 5;
+    if (Array.isArray(value)) return 6;
+    return 4; // Regular object
+  }
+  if (typeof value === "boolean") return 7;
+  return 10;
+}
+
+/**
  * Check if a value is a $push/$addToSet $each modifier.
  *
  * The $each modifier is used with $push and $addToSet to append multiple values
@@ -219,6 +272,84 @@ export function applyUpdateOperators<T extends Document>(
 
       currentValue.length = 0;
       currentValue.push(...filteredArray);
+    }
+  }
+
+  // Apply $min - only update if new value is less than current
+  if (update.$min) {
+    for (const [path, minValue] of Object.entries(update.$min)) {
+      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
+      if (currentValue === undefined) {
+        // Field doesn't exist, create it with the specified value
+        setValueByPath(result as Record<string, unknown>, path, minValue);
+      } else if (compareValues(minValue, currentValue) < 0) {
+        // New value is less than current, update it
+        setValueByPath(result as Record<string, unknown>, path, minValue);
+      }
+    }
+  }
+
+  // Apply $max - only update if new value is greater than current
+  if (update.$max) {
+    for (const [path, maxValue] of Object.entries(update.$max)) {
+      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
+      if (currentValue === undefined) {
+        // Field doesn't exist, create it with the specified value
+        setValueByPath(result as Record<string, unknown>, path, maxValue);
+      } else if (compareValues(maxValue, currentValue) > 0) {
+        // New value is greater than current, update it
+        setValueByPath(result as Record<string, unknown>, path, maxValue);
+      }
+    }
+  }
+
+  // Apply $mul - multiply field by a number
+  if (update.$mul) {
+    for (const [path, multiplier] of Object.entries(update.$mul)) {
+      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
+      if (currentValue === undefined) {
+        // Field doesn't exist, create it with value 0 (not the multiplied value!)
+        setValueByPath(result as Record<string, unknown>, path, 0);
+      } else if (typeof currentValue !== "number") {
+        // Non-numeric field value - throw error
+        throw new Error(
+          `Cannot apply $mul to a value of non-numeric type. Field '${path}' has non-numeric type ${typeof currentValue}`
+        );
+      } else {
+        setValueByPath(result as Record<string, unknown>, path, currentValue * multiplier);
+      }
+    }
+  }
+
+  // Apply $rename - rename fields
+  if (update.$rename) {
+    for (const [oldPath, newPath] of Object.entries(update.$rename)) {
+      const value = getValueAtPath(result as Record<string, unknown>, oldPath);
+      if (value !== undefined) {
+        // Only rename if the old field exists
+        deleteValueByPath(result as Record<string, unknown>, oldPath);
+        setValueByPath(result as Record<string, unknown>, newPath, value);
+      }
+    }
+  }
+
+  // Apply $currentDate - set field to current date
+  if (update.$currentDate) {
+    for (const [path, spec] of Object.entries(update.$currentDate)) {
+      const now = new Date();
+      if (spec === true) {
+        // Simple boolean true means Date type
+        setValueByPath(result as Record<string, unknown>, path, now);
+      } else if (typeof spec === "object" && spec !== null && "$type" in spec) {
+        const typeSpec = spec as { $type: "date" | "timestamp" };
+        if (typeSpec.$type === "date") {
+          setValueByPath(result as Record<string, unknown>, path, now);
+        } else if (typeSpec.$type === "timestamp") {
+          // For timestamp, use numeric milliseconds
+          // (MongoDB uses a Timestamp object, but we use numeric for simplicity)
+          setValueByPath(result as Record<string, unknown>, path, now.getTime());
+        }
+      }
     }
   }
 

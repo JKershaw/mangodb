@@ -2,9 +2,9 @@
 
 This document outlines the implementation phases for MangoDB. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 13 - Additional Update Operators (Next)
+## Current Phase: Phase 14 - Query Operators Extended (Next)
 
-See [ROADMAP_REMAINING.md](./ROADMAP_REMAINING.md) for detailed plans on remaining phases (13-16).
+See [ROADMAP_REMAINING.md](./ROADMAP_REMAINING.md) for detailed plans on remaining phases (14-16).
 
 ---
 

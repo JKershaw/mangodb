@@ -50,7 +50,7 @@ src/
 
 ---
 
-## Current State (Phases 1-12.5 Complete)
+## Current State (Phases 1-13 Complete)
 
 | Phase | Feature | Status | Test Cases |
 |-------|---------|--------|------------|
@@ -67,9 +67,10 @@ src/
 | 11 | Regular Expressions | ✅ Complete | 38 |
 | 12 | Additional Query Operators | ✅ Complete | 67 |
 | 12.5 | Find Options Parity | ✅ Complete | 15 |
-| **Total** | | | **690** |
+| 13 | Additional Update Operators | ✅ Complete | 49 |
+| **Total** | | | **739** |
 
-**Approximate MongoDB Coverage**: 90%+ of common operations
+**Approximate MongoDB Coverage**: 92%+ of common operations
 
 ---
 
@@ -78,12 +79,12 @@ src/
 | Phase | Feature | Priority | Effort | Est. Tests |
 |-------|---------|----------|--------|------------|
 | 12.5 | Find Options Parity | ✅ Complete | Small | 15 |
-| 13 | Additional Update Operators | Medium | Small | 30-40 |
+| 13 | Additional Update Operators | ✅ Complete | Small | 49 |
 | 14 | Extended Index Features | Low | Medium | 25-30 |
 | 15 | Administrative Operations | Low | Small | 15-20 |
 | 16 | Extended Expression Operators | Low | Medium | 50-70 |
 
-**Total Remaining**: ~120-160 additional test cases
+**Total Remaining**: ~90-120 additional test cases
 
 ---
 
@@ -845,18 +846,18 @@ test/find-options.test.ts
 
 ---
 
-## Phase 13: Additional Update Operators
+## Phase 13: Additional Update Operators ✅ COMPLETE
 
 **Goal**: Implement remaining update operators.
 
-**Priority**: MEDIUM — Completes update functionality.
+**Status**: COMPLETE — All operators implemented and tested (49 tests).
 
 ### Operations
 
 #### Step 1: `$min` and `$max` Update Operators
-- [ ] `$min` — Only update if new value is less than current
-- [ ] `$max` — Only update if new value is greater than current
-- [ ] Works with numbers, dates, strings
+- [x] `$min` — Only update if new value is less than current
+- [x] `$max` — Only update if new value is greater than current
+- [x] Works with numbers, dates, strings
 
 **Test Cases**:
 ```typescript
@@ -871,8 +872,8 @@ await collection.updateOne({}, { $min: { firstVisit: new Date() } });
 ```
 
 #### Step 2: `$mul` Update Operator
-- [ ] Multiply field by value
-- [ ] Creates field with 0 if doesn't exist
+- [x] Multiply field by value
+- [x] Creates field with 0 if doesn't exist
 
 **Test Cases**:
 ```typescript
@@ -881,9 +882,9 @@ await collection.updateOne({ name: "Alice" }, { $mul: { quantity: 2 } }); // Dou
 ```
 
 #### Step 3: `$rename` Update Operator
-- [ ] Rename a field
-- [ ] Works with dot notation for nested fields
-- [ ] Removes old field, creates new field
+- [x] Rename a field
+- [x] Works with dot notation for nested fields
+- [x] Removes old field, creates new field
 
 **Test Cases**:
 ```typescript
@@ -892,8 +893,8 @@ await collection.updateOne({}, { $rename: { "user.old": "user.new" } });
 ```
 
 #### Step 4: `$currentDate` Update Operator
-- [ ] Set field to current date
-- [ ] Supports `$type: "date"` or `$type: "timestamp"`
+- [x] Set field to current date
+- [x] Supports `$type: "date"` or `$type: "timestamp"`
 
 **Test Cases**:
 ```typescript
@@ -902,8 +903,8 @@ await collection.updateOne({}, { $currentDate: { lastModified: { $type: "date" }
 ```
 
 #### Step 5: `$setOnInsert` Update Operator
-- [ ] Only set during upsert insert (not update)
-- [ ] Ignored when document already exists
+- [x] Only set during upsert insert (not update)
+- [x] Ignored when document already exists
 
 **Test Cases**:
 ```typescript
@@ -1559,12 +1560,16 @@ test/[feature].test.ts
 
 ### Current Status
 
-Phases 1-12.5 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **690 tests**.
+Phases 1-13 are now complete. MangoDB has approximately **92%+ coverage** of common MongoDB usage with **739 tests** (625 passing in test run).
 
-### Next Up: Medium Priority (Phase 13)
+### Completed in Phase 13
+- `$min` and `$max` update operators (conditional updates)
+- `$mul` update operator (multiplication)
+- `$rename` update operator (field renaming)
+- `$currentDate` update operator (date/timestamp setting)
+- `$setOnInsert` update operator (upsert-only fields)
 
-Additional operators to complete the update API:
-- **Phase 13**: $min, $max, $mul, $rename, positional operators
+Note: Positional operators (`$`, `$[]`, `$[<identifier>]`) are deferred to a future phase due to complexity.
 
 ### Low Priority (Phases 14-16)
 
