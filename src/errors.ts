@@ -216,3 +216,132 @@ export class BadHintError extends Error {
     this.name = "BadHintError";
   }
 }
+
+/**
+ * Error thrown when a namespace (collection) is not found.
+ * For example, when trying to rename a non-existent collection.
+ * Matches MongoDB's NamespaceNotFound error (code 26).
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const nonExistent = db.collection('doesNotExist');
+ *   await nonExistent.rename('newName');
+ * } catch (err) {
+ *   if (err instanceof NamespaceNotFoundError) {
+ *     console.log('Collection does not exist');
+ *   }
+ * }
+ * ```
+ */
+export class NamespaceNotFoundError extends Error {
+  /** MongoDB error code for NamespaceNotFound */
+  readonly code = 26;
+  readonly codeName = "NamespaceNotFound";
+
+  /**
+   * Create a new NamespaceNotFoundError.
+   *
+   * @param message - Description of the namespace issue (default: "source namespace does not exist")
+   */
+  constructor(message = "source namespace does not exist") {
+    super(message);
+    this.name = "NamespaceNotFoundError";
+  }
+}
+
+/**
+ * Error thrown when a target namespace already exists.
+ * For example, when trying to rename a collection to a name that already exists
+ * without specifying dropTarget: true.
+ * Matches MongoDB's NamespaceExists error (code 48).
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await collection.rename('existingCollection');
+ * } catch (err) {
+ *   if (err instanceof TargetNamespaceExistsError) {
+ *     console.log('Target collection already exists');
+ *   }
+ * }
+ * ```
+ */
+export class TargetNamespaceExistsError extends Error {
+  /** MongoDB error code for NamespaceExists */
+  readonly code = 48;
+  readonly codeName = "NamespaceExists";
+
+  /**
+   * Create a new TargetNamespaceExistsError.
+   *
+   * @param message - Description of the namespace issue (default: "target namespace exists")
+   */
+  constructor(message = "target namespace exists") {
+    super(message);
+    this.name = "TargetNamespaceExistsError";
+  }
+}
+
+/**
+ * Error thrown when an illegal operation is attempted.
+ * For example, when trying to rename a collection to itself.
+ * Matches MongoDB's IllegalOperation error (code 20).
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await collection.rename('sameCollection'); // same name as current
+ * } catch (err) {
+ *   if (err instanceof IllegalOperationError) {
+ *     console.log('Cannot rename collection to itself');
+ *   }
+ * }
+ * ```
+ */
+export class IllegalOperationError extends Error {
+  /** MongoDB error code for IllegalOperation */
+  readonly code = 20;
+  readonly codeName = "IllegalOperation";
+
+  /**
+   * Create a new IllegalOperationError.
+   *
+   * @param message - Description of the illegal operation
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = "IllegalOperationError";
+  }
+}
+
+/**
+ * Error thrown when an invalid collection name is used.
+ * Matches MongoDB's InvalidNamespace error (code 73).
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await collection.rename('.invalid');
+ * } catch (err) {
+ *   if (err instanceof InvalidNamespaceError) {
+ *     console.log('Invalid collection name');
+ *   }
+ * }
+ * ```
+ */
+export class InvalidNamespaceError extends Error {
+  /** MongoDB error code for InvalidNamespace */
+  readonly code = 73;
+  readonly codeName = "InvalidNamespace";
+
+  /**
+   * Create a new InvalidNamespaceError.
+   *
+   * @param message - Description of the naming issue
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidNamespaceError";
+  }
+}

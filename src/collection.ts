@@ -12,7 +12,7 @@ import { ObjectId } from "mongodb";
 import { MangoDBCursor, IndexCursor } from "./cursor.ts";
 import { AggregationCursor, type AggregationDbContext } from "./aggregation.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, unlink, rename as renameFile, access, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 
 import type {
@@ -36,6 +36,8 @@ import type {
   IndexInfo,
   PipelineStage,
   AggregateOptions,
+  RenameOptions,
+  CollectionStats,
 } from "./types.ts";
 
 import {
@@ -56,7 +58,13 @@ import {
 
 import { IndexManager } from "./index-manager.ts";
 
-import { TextIndexRequiredError } from "./errors.ts";
+import {
+  TextIndexRequiredError,
+  NamespaceNotFoundError,
+  TargetNamespaceExistsError,
+  IllegalOperationError,
+  InvalidNamespaceError,
+} from "./errors.ts";
 
 // Re-export types for backward compatibility
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
@@ -1310,5 +1318,288 @@ export class MangoDBCollection<T extends Document = Document> {
     }
 
     return result;
+  }
+
+  // ==================== Administrative Operations ====================
+
+  /**
+   * Get an estimated count of documents in the collection.
+   *
+   * This method returns the count of documents without taking a query filter.
+   * It's faster than countDocuments() because it can use collection metadata.
+   * For MangoDB, it reads the document count from the file.
+   *
+   * @returns The estimated number of documents in the collection
+   *
+   * @example
+   * ```typescript
+   * const count = await collection.estimatedDocumentCount();
+   * console.log(`Approximately ${count} documents`);
+   * ```
+   */
+  async estimatedDocumentCount(): Promise<number> {
+    const documents = await this.readDocuments();
+    return documents.length;
+  }
+
+  /**
+   * Get distinct values for a specified field.
+   *
+   * Returns an array of distinct values for the given field across all documents
+   * that match the optional filter. If a field value is an array, each element
+   * is treated as a separate value.
+   *
+   * @param field - The field name to get distinct values for (supports dot notation)
+   * @param filter - Optional query filter to limit the documents considered
+   * @returns An array of distinct values
+   *
+   * @example
+   * ```typescript
+   * // Get all distinct categories
+   * const categories = await collection.distinct('category');
+   *
+   * // Get distinct categories for active items only
+   * const activeCategories = await collection.distinct('category', { active: true });
+   *
+   * // Array field - each element is distinct
+   * // Given: [{ tags: ['a', 'b'] }, { tags: ['b', 'c'] }]
+   * const tags = await collection.distinct('tags');
+   * // Returns: ['a', 'b', 'c']
+   * ```
+   */
+  async distinct(field: string, filter: Filter<T> = {}): Promise<unknown[]> {
+    const documents = await this.readDocuments();
+    const filtered = await this.filterWithTextSupport(documents, filter);
+
+    const seen = new Set<string>();
+    const values: unknown[] = [];
+
+    for (const doc of filtered) {
+      const value = getValueByPath(doc, field);
+
+      // Skip undefined (missing field)
+      if (value === undefined) {
+        continue;
+      }
+
+      // If value is an array, add each element separately
+      if (Array.isArray(value)) {
+        for (const elem of value) {
+          const key = JSON.stringify(elem);
+          if (!seen.has(key)) {
+            seen.add(key);
+            values.push(elem);
+          }
+        }
+      } else {
+        const key = JSON.stringify(value);
+        if (!seen.has(key)) {
+          seen.add(key);
+          values.push(value);
+        }
+      }
+    }
+
+    return values;
+  }
+
+  /**
+   * Drop (delete) the collection.
+   *
+   * Permanently removes the collection and all its indexes from the database.
+   * Returns true regardless of whether the collection existed.
+   *
+   * @returns true (always)
+   *
+   * @example
+   * ```typescript
+   * // Drop the collection
+   * const dropped = await collection.drop();
+   * console.log(dropped); // true
+   *
+   * // Collection is now empty
+   * const docs = await collection.find({}).toArray();
+   * console.log(docs); // []
+   * ```
+   */
+  async drop(): Promise<boolean> {
+    // Delete data file
+    try {
+      await unlink(this.filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    // Delete index file
+    const indexFilePath = this.filePath.replace(".json", ".indexes.json");
+    try {
+      await unlink(indexFilePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    // Reset index manager
+    await this.indexManager.reset();
+
+    return true;
+  }
+
+  /**
+   * Get statistics about the collection.
+   *
+   * Returns information about document count, size, and indexes.
+   *
+   * @returns Collection statistics object
+   *
+   * @example
+   * ```typescript
+   * const stats = await collection.stats();
+   * console.log(`Documents: ${stats.count}`);
+   * console.log(`Size: ${stats.size} bytes`);
+   * console.log(`Indexes: ${stats.nindexes}`);
+   * ```
+   */
+  async stats(): Promise<CollectionStats> {
+    const docs = await this.readDocuments();
+    const indexes = await this.indexManager.indexes();
+
+    let dataSize = 0;
+    let indexSize = 0;
+
+    try {
+      const fileStat = await stat(this.filePath);
+      dataSize = fileStat.size;
+    } catch {
+      // File doesn't exist, size is 0
+    }
+
+    const indexFilePath = this.filePath.replace(".json", ".indexes.json");
+    try {
+      const indexStat = await stat(indexFilePath);
+      indexSize = indexStat.size;
+    } catch {
+      // Index file doesn't exist, size is 0
+    }
+
+    // Distribute index size roughly among indexes
+    const indexSizes: Record<string, number> = {};
+    const perIndexSize = indexes.length > 0 ? Math.floor(indexSize / indexes.length) : 0;
+    for (const idx of indexes) {
+      indexSizes[idx.name] = perIndexSize;
+    }
+
+    // Extract collection name from file path
+    const collectionName = this.filePath.split("/").pop()?.replace(".json", "") || "";
+
+    return {
+      ns: `${this.dbName}.${collectionName}`,
+      count: docs.length,
+      size: dataSize,
+      storageSize: dataSize,
+      totalIndexSize: indexSize,
+      indexSizes,
+      totalSize: dataSize + indexSize,
+      nindexes: indexes.length,
+      ok: 1,
+    };
+  }
+
+  /**
+   * Rename the collection.
+   *
+   * Renames this collection to a new name. By default, fails if the target
+   * collection already exists. Use dropTarget: true to overwrite an existing
+   * collection.
+   *
+   * @param newName - The new name for the collection
+   * @param options - Options including dropTarget
+   * @returns A new Collection instance pointing to the renamed collection
+   * @throws NamespaceNotFoundError if this collection doesn't exist (code 26)
+   * @throws TargetNamespaceExistsError if target exists and dropTarget is false (code 48)
+   * @throws IllegalOperationError if newName is the same as current name
+   * @throws InvalidNamespaceError if newName is invalid
+   *
+   * @example
+   * ```typescript
+   * // Basic rename
+   * const newCollection = await collection.rename('newName');
+   *
+   * // Rename with overwrite
+   * const newCollection = await collection.rename('existingName', { dropTarget: true });
+   * ```
+   */
+  async rename(newName: string, options: RenameOptions = {}): Promise<MangoDBCollection<T>> {
+    // Validate new name
+    if (!newName || newName.length === 0) {
+      throw new InvalidNamespaceError("collection names cannot be empty");
+    }
+    if (newName.startsWith(".") || newName.endsWith(".")) {
+      throw new InvalidNamespaceError("collection names must not start or end with '.'");
+    }
+    if (newName.includes("$")) {
+      throw new InvalidNamespaceError("collection names cannot contain '$'");
+    }
+
+    // Get current collection name
+    const currentName = this.filePath.split("/").pop()?.replace(".json", "") || "";
+    if (currentName === newName) {
+      throw new IllegalOperationError("cannot rename collection to itself");
+    }
+
+    // Check source exists
+    try {
+      await access(this.filePath);
+    } catch {
+      throw new NamespaceNotFoundError();
+    }
+
+    const dbDir = dirname(this.filePath);
+    const newFilePath = join(dbDir, `${newName}.json`);
+    const newIndexPath = join(dbDir, `${newName}.indexes.json`);
+    const currentIndexPath = this.filePath.replace(".json", ".indexes.json");
+
+    // Check if target exists
+    let targetExists = false;
+    try {
+      await access(newFilePath);
+      targetExists = true;
+    } catch {
+      // Target doesn't exist, which is fine
+    }
+
+    if (targetExists) {
+      if (!options.dropTarget) {
+        throw new TargetNamespaceExistsError();
+      }
+      // Drop target
+      try {
+        await unlink(newFilePath);
+      } catch {
+        // Ignore errors
+      }
+      try {
+        await unlink(newIndexPath);
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    // Rename data file
+    await renameFile(this.filePath, newFilePath);
+
+    // Rename index file if it exists
+    try {
+      await access(currentIndexPath);
+      await renameFile(currentIndexPath, newIndexPath);
+    } catch {
+      // Index file doesn't exist, that's okay
+    }
+
+    // Return new collection instance
+    return new MangoDBCollection(this.dataDir, this.dbName, newName);
   }
 }

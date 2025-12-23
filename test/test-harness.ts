@@ -19,9 +19,59 @@ export interface TestClient {
   db(name: string): TestDb;
 }
 
+// Phase 15: Administrative Operations types
+export interface ListCollectionsCursor {
+  toArray(): Promise<CollectionInfo[]>;
+}
+
+export interface CollectionInfo {
+  name: string;
+  type: "collection" | "view";
+  options?: Record<string, unknown>;
+  info?: { readOnly: boolean };
+}
+
+export interface ListCollectionsOptions {
+  nameOnly?: boolean;
+}
+
+export interface DbStats {
+  db: string;
+  collections: number;
+  views: number;
+  objects: number;
+  dataSize: number;
+  storageSize: number;
+  indexes: number;
+  indexSize: number;
+  totalSize: number;
+  ok: 1;
+}
+
+export interface CollectionStats {
+  ns: string;
+  count: number;
+  size: number;
+  storageSize: number;
+  totalIndexSize: number;
+  indexSizes: Record<string, number>;
+  totalSize: number;
+  nindexes: number;
+  ok: 1;
+}
+
+export interface RenameOptions {
+  dropTarget?: boolean;
+}
+
 export interface TestDb {
   collection<T extends Document = Document>(name: string): TestCollection<T>;
   dropDatabase(): Promise<void>;
+  listCollections(
+    filter?: Document,
+    options?: ListCollectionsOptions
+  ): ListCollectionsCursor;
+  stats(): Promise<DbStats>;
 }
 
 export interface UpdateResult {
@@ -160,6 +210,12 @@ export interface TestCollection<T extends Document = Document> {
     options?: { ordered?: boolean }
   ): Promise<BulkWriteResult>;
   aggregate(pipeline: Document[]): AggregationCursor<T>;
+  // Phase 15: Administrative Operations
+  estimatedDocumentCount(): Promise<number>;
+  distinct(field: string, filter?: Partial<T>): Promise<unknown[]>;
+  drop(): Promise<boolean>;
+  stats(): Promise<CollectionStats>;
+  rename(newName: string, options?: RenameOptions): Promise<TestCollection<T>>;
 }
 
 export interface TestCursor<T> {

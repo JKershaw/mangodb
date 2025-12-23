@@ -481,3 +481,89 @@ export type PipelineStage =
 export interface AggregateOptions {
   // Reserved for future options like allowDiskUse, batchSize, etc.
 }
+
+// ==================== Administrative Operation Types ====================
+
+/**
+ * Options for listCollections operation.
+ * @property nameOnly - If true, returns only collection names (simplified output)
+ * @property batchSize - Cursor batch size (ignored in MangoDB)
+ */
+export interface ListCollectionsOptions {
+  nameOnly?: boolean;
+  batchSize?: number;
+}
+
+/**
+ * Information about a collection returned by listCollections.
+ * @property name - The name of the collection
+ * @property type - The type ('collection' or 'view')
+ * @property options - Collection options
+ * @property info - Additional info including readOnly status
+ */
+export interface CollectionInfo {
+  name: string;
+  type: "collection" | "view";
+  options?: Record<string, unknown>;
+  info?: {
+    readOnly: boolean;
+  };
+}
+
+/**
+ * Options for collection.rename operation.
+ * @property dropTarget - If true, drop target collection if it exists
+ */
+export interface RenameOptions {
+  dropTarget?: boolean;
+}
+
+/**
+ * Statistics about a database returned by db.stats().
+ * @property db - Database name
+ * @property collections - Number of collections
+ * @property views - Number of views (always 0 for MangoDB)
+ * @property objects - Total number of documents
+ * @property dataSize - Total size of data files in bytes
+ * @property storageSize - Same as dataSize for MangoDB
+ * @property indexes - Total number of indexes
+ * @property indexSize - Total size of index files in bytes
+ * @property totalSize - dataSize + indexSize
+ * @property ok - Status indicator (1 for success)
+ */
+export interface DbStats {
+  db: string;
+  collections: number;
+  views: number;
+  objects: number;
+  dataSize: number;
+  storageSize: number;
+  indexes: number;
+  indexSize: number;
+  totalSize: number;
+  ok: 1;
+}
+
+/**
+ * Statistics about a collection returned by collection.stats().
+ * @property ns - Namespace (db.collection)
+ * @property count - Number of documents
+ * @property size - Total size of documents in bytes
+ * @property storageSize - Same as size for MangoDB
+ * @property totalIndexSize - Size of indexes in bytes
+ * @property indexSizes - Size of each index by name
+ * @property totalSize - size + totalIndexSize
+ * @property nindexes - Number of indexes
+ * @property ok - Status indicator (1 for success)
+ */
+export interface CollectionStats {
+  ns: string;
+  count: number;
+  size: number;
+  storageSize: number;
+  totalIndexSize: number;
+  indexSizes: Record<string, number>;
+  totalSize: number;
+  nindexes: number;
+  ok: 1;
+}

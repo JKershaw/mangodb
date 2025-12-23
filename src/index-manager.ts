@@ -231,6 +231,18 @@ export class IndexManager {
   }
 
   /**
+   * Reset the index manager to the default state.
+   * Used when a collection is dropped to clear any cached indexes.
+   * After reset, the collection will only have the default _id index.
+   */
+  async reset(): Promise<void> {
+    // The loadIndexes method will return default _id index when file doesn't exist
+    // So we just need to make sure we're not holding any stale state
+    // Since we don't cache indexes in memory, this is a no-op for now
+    // but is called by collection.drop() for consistency
+  }
+
+  /**
    * Get the fields that are part of a text index.
    * Returns an empty array if no text index exists.
    * @returns Array of field names that are text-indexed
