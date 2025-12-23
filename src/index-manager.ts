@@ -179,6 +179,27 @@ export class IndexManager {
   }
 
   /**
+   * Get the fields that are part of a text index.
+   * Returns an empty array if no text index exists.
+   * @returns Array of field names that are text-indexed
+   */
+  async getTextIndexFields(): Promise<string[]> {
+    const indexes = await this.loadIndexes();
+    for (const idx of indexes) {
+      const fields: string[] = [];
+      for (const [field, direction] of Object.entries(idx.key)) {
+        if (direction === "text") {
+          fields.push(field);
+        }
+      }
+      if (fields.length > 0) {
+        return fields;
+      }
+    }
+    return [];
+  }
+
+  /**
    * Extract the key value from a document for a given index key specification.
    * Supports nested field paths using dot notation.
    * @param doc - Document to extract values from

@@ -2,6 +2,8 @@
  * MongoDB-compatible error classes for MangoDB.
  */
 
+import type { IndexKeySpec } from "./types.ts";
+
 /**
  * Error thrown when a duplicate key violation occurs on a unique index.
  * Matches MongoDB's E11000 error format.
@@ -24,7 +26,7 @@ export class MongoDuplicateKeyError extends Error {
   readonly code = 11000;
 
   /** The index key pattern that was violated */
-  readonly keyPattern: Record<string, 1 | -1>;
+  readonly keyPattern: IndexKeySpec;
 
   /** The duplicate key value that caused the error */
   readonly keyValue: Record<string, unknown>;
@@ -42,7 +44,7 @@ export class MongoDuplicateKeyError extends Error {
     db: string,
     collection: string,
     indexName: string,
-    keyPattern: Record<string, 1 | -1>,
+    keyPattern: IndexKeySpec,
     keyValue: Record<string, unknown>
   ) {
     const keyStr = Object.entries(keyValue)
@@ -116,5 +118,34 @@ export class CannotDropIdIndexError extends Error {
   constructor() {
     super("cannot drop _id index");
     this.name = "CannotDropIdIndexError";
+  }
+}
+
+/**
+ * Error thrown when a $text query is executed without a text index.
+ * Matches MongoDB's IndexNotFound error (code 27).
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await collection.find({ $text: { $search: "hello" } }).toArray();
+ * } catch (err) {
+ *   if (err instanceof TextIndexRequiredError) {
+ *     console.log('Need to create a text index first');
+ *   }
+ * }
+ * ```
+ */
+export class TextIndexRequiredError extends Error {
+  /** MongoDB error code for IndexNotFound */
+  readonly code = 27;
+  readonly codeName = "IndexNotFound";
+
+  /**
+   * Create a new TextIndexRequiredError.
+   */
+  constructor() {
+    super("text index required for $text query");
+    this.name = "TextIndexRequiredError";
   }
 }
