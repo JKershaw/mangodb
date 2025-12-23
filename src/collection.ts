@@ -42,6 +42,7 @@ import {
   serializeDocument,
   deserializeDocument,
   getValueByPath,
+  setValueByPath,
   documentsEqual,
 } from "./document-utils.ts";
 
@@ -692,6 +693,14 @@ export class MangoDBCollection<T extends Document = Document> {
 
     if (matchedCount === 0 && options.upsert) {
       const baseDoc = createDocumentFromFilter(filter);
+
+      // Apply $setOnInsert fields - only during upsert insert
+      if (update.$setOnInsert) {
+        for (const [path, value] of Object.entries(update.$setOnInsert)) {
+          setValueByPath(baseDoc as Record<string, unknown>, path, value);
+        }
+      }
+
       const newDoc = applyUpdateOperators(baseDoc, update);
 
       if (!("_id" in newDoc)) {
@@ -1034,6 +1043,14 @@ export class MangoDBCollection<T extends Document = Document> {
     if (matches.length === 0) {
       if (options.upsert) {
         const baseDoc = createDocumentFromFilter(filter);
+
+        // Apply $setOnInsert fields - only during upsert insert
+        if (update.$setOnInsert) {
+          for (const [path, value] of Object.entries(update.$setOnInsert)) {
+            setValueByPath(baseDoc as Record<string, unknown>, path, value);
+          }
+        }
+
         const newDoc = applyUpdateOperators(baseDoc, update);
 
         if (!("_id" in newDoc)) {
