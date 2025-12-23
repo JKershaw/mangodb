@@ -1128,10 +1128,8 @@ describe(`Query Operators Tests (${getTestModeName()})`, () => {
           $expr: { $gt: ["$a", "$b"] }
         } as any).toArray();
 
-        // Only the first doc matches (10 > 5)
-        // The second doc: 10 > null is false
-        assert.strictEqual(docs.length, 1);
-        assert.strictEqual(docs[0].b, 5);
+        // Both match: 10 > 5 = true, 10 > null = true (numbers > null in BSON ordering)
+        assert.strictEqual(docs.length, 2);
       });
 
       it("should handle boolean result directly", async () => {

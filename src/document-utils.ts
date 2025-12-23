@@ -371,7 +371,32 @@ export function getValueAtPath(doc: Record<string, unknown>, path: string): unkn
  * compareValues(new Date("2023-01-01"), new Date("2023-01-02")) // negative
  * compareValues(5, "10") // NaN (different types)
  */
+/**
+ * Get the BSON type order for cross-type comparisons.
+ * MongoDB compares different types using this ordering.
+ */
+function getBSONTypeOrder(value: unknown): number {
+  if (value === null || value === undefined) return 1; // Null/undefined
+  if (typeof value === "number") return 2; // Numbers
+  if (typeof value === "string") return 3; // String
+  if (typeof value === "object" && !Array.isArray(value) && !(value instanceof Date) && !(value instanceof RegExp) && !(value instanceof ObjectId)) return 4; // Object
+  if (Array.isArray(value)) return 5; // Array
+  if (value instanceof ObjectId) return 7; // ObjectId
+  if (typeof value === "boolean") return 8; // Boolean
+  if (value instanceof Date) return 9; // Date
+  if (value instanceof RegExp) return 11; // RegExp
+  return 100; // Unknown types go last
+}
+
 export function compareValues(a: unknown, b: unknown): number {
+  // Handle null/undefined specially
+  const aIsNullish = a === null || a === undefined;
+  const bIsNullish = b === null || b === undefined;
+
+  if (aIsNullish && bIsNullish) return 0;
+  if (aIsNullish) return -1; // null/undefined is less than everything
+  if (bIsNullish) return 1;  // everything is greater than null/undefined
+
   if (a instanceof ObjectId && b instanceof ObjectId) {
     return a.toHexString().localeCompare(b.toHexString());
   }
@@ -393,7 +418,10 @@ export function compareValues(a: unknown, b: unknown): number {
     }
   }
 
-  return NaN;
+  // For different types, use BSON type ordering
+  const aOrder = getBSONTypeOrder(a);
+  const bOrder = getBSONTypeOrder(b);
+  return aOrder - bOrder;
 }
 
 /**
