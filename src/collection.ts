@@ -387,10 +387,12 @@ export class MangoDBCollection<T extends Document = Document> {
    * Find a single document matching the filter.
    *
    * Returns the first document that matches the filter criteria.
-   * If no document matches, returns null.
+   * If no document matches, returns null. Supports sorting to control
+   * which document is returned when multiple match, and skip to return
+   * the Nth matching document.
    *
    * @param filter - Query filter to match documents (default: empty object matches all)
-   * @param options - Query options including projection
+   * @param options - Query options including projection, sort, and skip
    * @returns The matching document or null if not found
    *
    * @example
@@ -406,11 +408,37 @@ export class MangoDBCollection<T extends Document = Document> {
    *
    * // Find by _id
    * const user = await collection.findOne({ _id: new ObjectId('...') });
+   *
+   * // Get the most recent active order (sort)
+   * const latest = await collection.findOne(
+   *   { status: 'active' },
+   *   { sort: { createdAt: -1 } }
+   * );
+   *
+   * // Get the second-highest scorer (sort + skip)
+   * const runnerUp = await collection.findOne(
+   *   { tournament: 'finals' },
+   *   { sort: { score: -1 }, skip: 1 }
+   * );
    * ```
    */
   async findOne(filter: Filter<T> = {}, options: FindOptions = {}): Promise<T | null> {
     const documents = await this.readDocuments();
-    const filtered = await this.filterWithTextSupport(documents, filter);
+    let filtered = await this.filterWithTextSupport(documents, filter);
+
+    if (filtered.length === 0) {
+      return null;
+    }
+
+    // Apply sort if specified
+    if (options.sort) {
+      filtered = this.sortDocuments(filtered, options.sort);
+    }
+
+    // Apply skip if specified
+    if (options.skip && options.skip > 0) {
+      filtered = filtered.slice(options.skip);
+    }
 
     if (filtered.length === 0) {
       return null;

@@ -131,9 +131,13 @@ export interface UpdateOptions {
 /**
  * Options for find operations (find and findOne).
  * @property projection - Specifies which fields to include or exclude in the returned documents
+ * @property sort - Specifies the sort order for matching documents (findOne only)
+ * @property skip - Number of documents to skip before returning the first match (findOne only)
  */
 export interface FindOptions {
   projection?: ProjectionSpec;
+  sort?: SortSpec;
+  skip?: number;
 }
 
 /**

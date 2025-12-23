@@ -38,6 +38,8 @@ export interface UpdateOptions {
 
 export interface FindOptions {
   projection?: Document;
+  sort?: Document;
+  skip?: number;
 }
 
 export interface IndexInfo {
