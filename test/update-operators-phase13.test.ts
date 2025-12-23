@@ -871,26 +871,26 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
       );
     });
 
-    it("$currentDate with false value should throw error", async () => {
+    it("$currentDate with false value should still set current date", async () => {
       const collection = client.db(dbName).collection("currentdate_false");
-      await collection.insertOne({ name: "Alice", lastModified: new Date() });
+      const oldDate = new Date("2020-01-01");
+      await collection.insertOne({ name: "Alice", lastModified: oldDate });
 
-      // MongoDB does not accept false as a valid $currentDate spec
-      await assert.rejects(
-        async () =>
-          await collection.updateOne(
-            { name: "Alice" },
-            { $currentDate: { lastModified: false as unknown as true } }
-          ),
-        (err: Error) => {
-          // MongoDB throws an error for invalid $currentDate spec
-          return (
-            err.message.includes("$currentDate") ||
-            err.message.includes("expected") ||
-            err.message.includes("type")
-          );
-        }
+      const beforeUpdate = Date.now();
+      // MongoDB treats false the same as true - it sets the current date
+      await collection.updateOne(
+        { name: "Alice" },
+        { $currentDate: { lastModified: false as unknown as true } }
       );
+      const afterUpdate = Date.now();
+
+      const doc = await collection.findOne({ name: "Alice" });
+      const updatedTime = (doc?.lastModified as Date).getTime();
+
+      // Field should be updated to current date (not the old date)
+      assert.ok(updatedTime >= beforeUpdate - 1000, "Date should be recent");
+      assert.ok(updatedTime <= afterUpdate + 1000, "Date should not be in future");
+      assert.notStrictEqual(updatedTime, oldDate.getTime(), "Date should have changed");
     });
 
     it("$mul should throw error for null field value", async () => {

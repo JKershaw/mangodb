@@ -347,8 +347,8 @@ export function applyUpdateOperators<T extends Document>(
   if (update.$currentDate) {
     for (const [path, spec] of Object.entries(update.$currentDate)) {
       const now = new Date();
-      if (spec === true) {
-        // Simple boolean true means Date type
+      if (spec === true || spec === false) {
+        // MongoDB treats both true and false as "set to current date"
         setValueByPath(result as Record<string, unknown>, path, now);
       } else if (typeof spec === "object" && spec !== null && "$type" in spec) {
         const typeSpec = spec as { $type: string };
