@@ -11,7 +11,7 @@ import {
   setValueByPath,
   compareValuesForSort,
 } from "./utils.ts";
-import { cloneDocument } from "./document-utils.ts";
+import { cloneDocument, compareValues } from "./document-utils.ts";
 import type {
   Document,
   Filter,
@@ -85,7 +85,7 @@ function deepEquals(a: unknown, b: unknown): boolean {
  * @param doc - The document context
  * @returns The evaluated value
  */
-function evaluateExpression(expr: unknown, doc: Document): unknown {
+export function evaluateExpression(expr: unknown, doc: Document): unknown {
   // String starting with $ is a field reference
   if (typeof expr === "string" && expr.startsWith("$")) {
     const fieldPath = expr.slice(1);
@@ -151,18 +151,19 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
       return evalIfNull(args as unknown[], doc);
 
     // Comparison operators (for $cond conditions)
+    // Uses BSON type ordering for cross-type comparisons
     case "$gt":
-      return evalComparison(args as unknown[], doc, (a, b) => (a as number) > (b as number));
+      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) > 0);
     case "$gte":
-      return evalComparison(args as unknown[], doc, (a, b) => (a as number) >= (b as number));
+      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) >= 0);
     case "$lt":
-      return evalComparison(args as unknown[], doc, (a, b) => (a as number) < (b as number));
+      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) < 0);
     case "$lte":
-      return evalComparison(args as unknown[], doc, (a, b) => (a as number) <= (b as number));
+      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) <= 0);
     case "$eq":
-      return evalComparison(args as unknown[], doc, (a, b) => a === b);
+      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) === 0);
     case "$ne":
-      return evalComparison(args as unknown[], doc, (a, b) => a !== b);
+      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) !== 0);
 
     // Array operators
     case "$size":

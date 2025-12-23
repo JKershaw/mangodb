@@ -44,6 +44,8 @@ export interface QueryOperators {
   $elemMatch?: Record<string, unknown>;
   $regex?: string | RegExp;
   $options?: string;
+  $type?: string | number | (string | number)[];
+  $mod?: [number, number];
 }
 
 /**
@@ -65,6 +67,7 @@ export type Filter<T> = {
   $and?: Filter<T>[];
   $or?: Filter<T>[];
   $nor?: Filter<T>[];
+  $expr?: unknown;
 };
 
 /**

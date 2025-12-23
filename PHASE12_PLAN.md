@@ -9,6 +9,17 @@ Add remaining useful query operators to MangoDB: `$type`, `$mod`, `$expr`, and `
 
 ---
 
+## Status
+
+| Step | Operator | Status | Notes |
+|------|----------|--------|-------|
+| 1 | `$type` | ✅ COMPLETE | Type checking with BSON aliases (19 tests) |
+| 2 | `$mod` | ✅ COMPLETE | Modulo arithmetic queries (13 tests) |
+| 3 | `$expr` | ✅ COMPLETE | Compare fields using aggregation expressions (17 tests) |
+| 4 | `$text` | ✅ COMPLETE | Implemented in collection.ts with 18 tests |
+
+---
+
 ## Operations
 
 ### Step 1: `$type` Query Operator
@@ -348,7 +359,7 @@ await collection.find({
 
 ---
 
-### Step 4: `$text` Query Operator (Simplified)
+### Step 4: `$text` Query Operator (Simplified) ✅ COMPLETE
 
 **Syntax**:
 ```typescript
@@ -648,20 +659,147 @@ After implementation:
 
 ## Summary
 
-Phase 12 adds three query operators:
-- **$type**: Type checking with BSON type aliases and numeric codes
-- **$mod**: Modular arithmetic for finding documents with specific remainders
-- **$expr**: Compare fields within same document using aggregation expressions
+Phase 12 adds four query operators:
+- **$text**: ✅ COMPLETE - Simplified text search with text indexes (18 tests)
+- **$type**: ✅ COMPLETE - Type checking with BSON type aliases and numeric codes (19 tests)
+- **$mod**: ✅ COMPLETE - Modular arithmetic for finding documents with specific remainders (13 tests)
+- **$expr**: ✅ COMPLETE - Compare fields within same document using aggregation expressions (17 tests)
+
+**Phase 12 Complete!** Total: 67 new tests (556 total tests)
 
 These operators complete the core query operator set and enable more expressive queries.
-
-**Estimated Work**:
-- Implementation: ~200-300 lines of code
-- Tests: 35-45 test cases
-- Files modified: 3 (types.ts, query-matcher.ts, aggregation.ts)
 
 **Sources**:
 - [MongoDB $type documentation](https://www.mongodb.com/docs/manual/reference/operator/query/type/)
 - [MongoDB $mod documentation](https://www.mongodb.com/docs/manual/reference/operator/query/mod/)
 - [MongoDB $expr documentation](https://www.mongodb.com/docs/manual/reference/operator/query/expr/)
 - [MongoDB BSON Types](https://www.mongodb.com/docs/manual/reference/bson-types/)
+
+---
+
+## Remaining Implementation Plan
+
+### Step 1: Implement `$type` Operator
+
+**Files to modify:**
+1. `src/types.ts` - Add `$type` to QueryOperators interface
+2. `src/query-matcher.ts` - Add `$type` case in `matchesOperators`
+
+**Implementation details:**
+```typescript
+// In types.ts - add to QueryOperators:
+$type?: string | number | (string | number)[];
+
+// In query-matcher.ts - add BSON type mapping and matching logic
+const BSON_TYPE_MAP: Record<string, number> = {
+  double: 1, string: 2, object: 3, array: 4, binData: 5,
+  undefined: 6, objectId: 7, bool: 8, date: 9, null: 10,
+  regex: 11, javascript: 13, int: 16, timestamp: 17, long: 18,
+  decimal: 19, minKey: -1, maxKey: 127
+};
+
+// Special "number" alias matches: double, int, long, decimal
+const NUMBER_TYPES = [1, 16, 18, 19];
+```
+
+**Key behaviors:**
+- Missing fields do NOT match any type (including "null")
+- "number" alias matches int, long, double, decimal
+- Array syntax `["string", "null"]` matches if field is ANY of those types
+- Throws for unknown type alias or invalid numeric code
+
+**Test cases to add:** ~15 tests
+
+---
+
+### Step 2: Implement `$mod` Operator
+
+**Files to modify:**
+1. `src/types.ts` - Add `$mod` to QueryOperators interface
+2. `src/query-matcher.ts` - Add `$mod` case in `matchesOperators`
+
+**Implementation details:**
+```typescript
+// In types.ts:
+$mod?: [number, number];
+
+// In query-matcher.ts:
+case "$mod": {
+  const modArr = opValue as unknown[];
+  // Validate array length
+  if (!Array.isArray(modArr)) throw new Error("malformed mod, needs to be an array");
+  if (modArr.length < 2) throw new Error("malformed mod, not enough elements");
+  if (modArr.length > 2) throw new Error("malformed mod, too many elements");
+
+  const [divisor, remainder] = modArr;
+  // Validate divisor/remainder are numbers
+  // Validate no NaN, Infinity, or zero divisor
+  // Return false for non-numeric docValue
+  // Use Math.trunc for decimal truncation
+  return Math.trunc(docValue) % Math.trunc(divisor) === Math.trunc(remainder);
+}
+```
+
+**Key behaviors:**
+- Non-numeric fields silently don't match (no error)
+- NaN/Infinity in document value → no match
+- Decimal values truncated toward zero
+- Negative dividend produces negative remainder
+
+**Test cases to add:** ~12 tests
+
+---
+
+### Step 3: Implement `$expr` Operator
+
+**Files to modify:**
+1. `src/types.ts` - Add `$expr` to Filter type
+2. `src/query-matcher.ts` - Handle `$expr` in `matchesFilter`
+3. `src/aggregation.ts` - Export `evaluateExpression` function
+
+**Implementation details:**
+```typescript
+// In types.ts - add to Filter type:
+$expr?: unknown;
+
+// In aggregation.ts - export the function:
+export function evaluateExpression(expr: unknown, doc: Document): unknown { ... }
+
+// In query-matcher.ts - add to matchesFilter:
+import { evaluateExpression } from "./aggregation.ts";
+
+// Handle $expr at top level
+if (key === "$expr") {
+  const result = evaluateExpression(filterValue, doc);
+  if (!result) return false;  // Falsy result = no match
+  continue;
+}
+```
+
+**Key behaviors:**
+- Reuses existing `evaluateExpression` from aggregation.ts
+- Supports: `$gt`, `$gte`, `$lt`, `$lte`, `$eq`, `$ne` comparisons
+- Supports: `$add`, `$subtract`, `$multiply`, `$divide` arithmetic
+- Supports: `$and`, `$or` logical operators
+- Field references: `"$fieldName"` resolves to field value
+- Missing fields evaluate to `null`
+- Result is truthy/falsy check
+
+**Test cases to add:** ~15 tests
+
+---
+
+### Step 4: Extend Test File
+
+**Current state:** `test/query-operators.test.ts` has only $text tests (18 tests)
+
+**Tests to add:**
+- `$type Operator` section (~15 tests)
+- `$mod Operator` section (~12 tests)
+- `$expr Operator` section (~15 tests)
+
+**Test patterns to follow:** (from regex.test.ts)
+- Group by functionality (Basic, Edge Cases, Error Cases)
+- Use `assert.rejects` for error cases
+- Create unique collection names per test
+- Clean up after tests with `cleanup()` function
