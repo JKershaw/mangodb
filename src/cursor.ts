@@ -4,9 +4,17 @@ import {
   compareValuesForSort,
   type ProjectionSpec,
 } from "./utils.ts";
+import { BadHintError } from "./errors.ts";
 
 type Document = Record<string, unknown>;
 type SortSpec = Record<string, 1 | -1>;
+type HintSpec = string | Record<string, unknown>;
+
+/**
+ * Function to validate an index hint.
+ * Returns true if the hint is valid, false otherwise.
+ */
+export type HintValidator = (hint: HintSpec) => Promise<boolean>;
 
 /**
  * Information about an index.
@@ -86,19 +94,24 @@ export class MangoDBCursor<T extends Document = Document> {
   private limitValue: number | null = null;
   private skipValue: number | null = null;
   private projectionSpec: ProjectionSpec | null = null;
+  private hintSpec: HintSpec | null = null;
+  private readonly hintValidator: HintValidator | null = null;
 
   /**
    * Creates a new MangoDBCursor instance.
    *
    * @param fetchDocuments - Function that returns a promise resolving to an array of documents
    * @param projection - Optional projection specification to apply to all results
+   * @param hintValidator - Optional function to validate index hints
    */
   constructor(
     fetchDocuments: () => Promise<T[]>,
-    projection?: ProjectionSpec | null
+    projection?: ProjectionSpec | null,
+    hintValidator?: HintValidator | null
   ) {
     this.fetchDocuments = fetchDocuments;
     this.projectionSpec = projection || null;
+    this.hintValidator = hintValidator || null;
   }
 
   /**
@@ -180,14 +193,43 @@ export class MangoDBCursor<T extends Document = Document> {
   }
 
   /**
+   * Forces the query to use a specific index.
+   * The hint can be an index name (string) or a key pattern (object).
+   * Returns this cursor for chaining.
+   *
+   * @param indexHint - Index name or key pattern to use
+   * @returns This cursor instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * // Hint by index name
+   * cursor.hint("email_1");
+   *
+   * // Hint by key pattern
+   * cursor.hint({ email: 1 });
+   *
+   * // $natural hint for collection scan order
+   * cursor.hint({ $natural: 1 });  // Forward scan
+   * cursor.hint({ $natural: -1 }); // Reverse scan
+   * ```
+   */
+  hint(indexHint: string | Record<string, unknown>): MangoDBCursor<T> {
+    this.hintSpec = indexHint;
+    return this;
+  }
+
+  /**
    * Executes the query and returns all matching documents as an array.
    * Applies all cursor modifiers in the following order:
-   * 1. Sort - Orders documents by specified fields
-   * 2. Skip - Skips the first n documents
-   * 3. Limit - Restricts the number of documents returned
-   * 4. Projection - Shapes the documents by including/excluding fields
+   * 1. Hint validation - Validates the specified index exists
+   * 2. $natural hint - Applies reverse scan if $natural: -1
+   * 3. Sort - Orders documents by specified fields
+   * 4. Skip - Skips the first n documents
+   * 5. Limit - Restricts the number of documents returned
+   * 6. Projection - Shapes the documents by including/excluding fields
    *
    * @returns Promise resolving to an array of documents matching the query and cursor options
+   * @throws BadHintError if hint specifies a non-existent index
    *
    * @example
    * ```typescript
@@ -211,7 +253,32 @@ export class MangoDBCursor<T extends Document = Document> {
    * ```
    */
   async toArray(): Promise<T[]> {
+    // Validate hint if specified (but not for $natural which is always valid)
+    if (this.hintSpec) {
+      const isNaturalHint =
+        typeof this.hintSpec === "object" && "$natural" in this.hintSpec;
+
+      if (!isNaturalHint && this.hintValidator) {
+        const isValid = await this.hintValidator(this.hintSpec);
+        if (!isValid) {
+          throw new BadHintError(this.hintSpec);
+        }
+      }
+    }
+
     let docs = await this.fetchDocuments();
+
+    // Handle $natural hint for scan direction
+    if (
+      this.hintSpec &&
+      typeof this.hintSpec === "object" &&
+      "$natural" in this.hintSpec
+    ) {
+      const direction = this.hintSpec.$natural;
+      if (direction === -1) {
+        docs = [...docs].reverse();
+      }
+    }
 
     // Apply sort
     if (this.sortSpec) {

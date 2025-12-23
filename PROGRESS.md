@@ -4,12 +4,88 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 12.5 - Find Options Parity
+**Phase**: 14 - Extended Index Features
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-23 - Phase 14: Extended Index Features
+
+#### Added
+- **Sparse Indexes**: `sparse: true` option for unique indexes
+  - Multiple documents with missing indexed fields are allowed
+  - `null` values are still indexed (only missing fields are skipped)
+  - Compound sparse indexes include doc if at least one field exists
+- **TTL Indexes**: `expireAfterSeconds` option (metadata storage)
+  - TTL silently ignored on compound indexes (MongoDB behavior)
+  - MangoDB stores metadata but doesn't auto-delete (suitable for testing)
+- **Partial Indexes**: `partialFilterExpression` option
+  - Unique constraints only apply to documents matching the filter
+  - Supports `$eq`, `$exists: true`, `$gt`, `$gte`, `$lt`, `$lte`, `$type`
+  - Cannot combine with `sparse` option (throws error code 67)
+- **Index Hints**: `cursor.hint()` method
+  - Accepts index name (string) or key pattern (object)
+  - Validates index exists (throws "bad hint" error if not)
+  - `$natural: 1` for forward scan, `$natural: -1` for reverse scan
+
+#### Behaviors Implemented
+- Missing fields are treated as `null` in unique index key extraction
+- Sparse + partial combination throws `InvalidIndexOptionsError` (code 67)
+- TTL on compound indexes is silently ignored (not an error)
+- Hint validation occurs at query execution time
+
+#### New Error Classes
+- `InvalidIndexOptionsError` (code 67) - For invalid index option combinations
+- `BadHintError` (code 17007) - For invalid index hints
+
+#### Examples
+```typescript
+// Sparse unique index - allows multiple documents without email
+await collection.createIndex({ email: 1 }, { unique: true, sparse: true });
+await collection.insertOne({ name: "Alice" }); // OK - no email
+await collection.insertOne({ name: "Bob" });   // OK - no email (sparse allows this)
+await collection.insertOne({ email: null });   // OK
+await collection.insertOne({ email: null });   // ERROR - duplicate null
+
+// Partial unique index - uniqueness only for active users
+await collection.createIndex(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { status: "active" } }
+);
+await collection.insertOne({ email: "a@test.com", status: "active" });
+await collection.insertOne({ email: "a@test.com", status: "inactive" }); // OK
+
+// TTL index
+await collection.createIndex({ createdAt: 1 }, { expireAfterSeconds: 3600 });
+
+// Index hints
+await collection.find({ email: "test@test.com" }).hint("email_1").toArray();
+await collection.find({}).hint({ $natural: -1 }).toArray(); // Reverse scan
+```
+
+#### Files Changed
+- `src/types.ts` - Added `expireAfterSeconds`, `partialFilterExpression` to options
+- `src/index-manager.ts` - Sparse/partial logic in `checkUniqueConstraints()`
+- `src/cursor.ts` - Added `hint()` method with validation
+- `src/collection.ts` - Pass hint validator to cursor
+- `src/errors.ts` - Added `InvalidIndexOptionsError`, `BadHintError`
+- `test/indexes-extended.test.ts` - New test file (26 tests)
+
+---
+
+### 2025-12-23 - Phase 13: Advanced Update Operators
+
+#### Added
+- `$min` - Updates field only if specified value is less than current
+- `$max` - Updates field only if specified value is greater than current
+- `$mul` - Multiplies the value of a field by a number
+- `$rename` - Renames a field
+- `$currentDate` - Sets field to current date/timestamp
+- `$setOnInsert` - Sets fields only during upsert insert operations
+
+---
 
 ### 2025-12-23 - Phase 12.5: Find Options Parity
 

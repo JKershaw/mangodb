@@ -5,7 +5,8 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Document, IndexKeySpec, IndexInfo, CreateIndexOptions } from "./types.ts";
 import { getValueByPath } from "./document-utils.ts";
-import { MongoDuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError } from "./errors.ts";
+import { MongoDuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError, InvalidIndexOptionsError } from "./errors.ts";
+import { matchesFilter } from "./query-matcher.ts";
 
 /**
  * Default _id index that exists on all collections.
@@ -98,13 +99,21 @@ export class IndexManager {
    * Create an index on the collection.
    * If an index with the same key specification already exists, returns its name.
    * @param keySpec - Fields to index (e.g., { email: 1 })
-   * @param options - Index options (unique, name, sparse)
+   * @param options - Index options (unique, name, sparse, expireAfterSeconds, partialFilterExpression)
    * @returns The name of the created or existing index
+   * @throws InvalidIndexOptionsError if sparse and partialFilterExpression are both specified
    */
   async createIndex(
     keySpec: IndexKeySpec,
     options: CreateIndexOptions = {}
   ): Promise<string> {
+    // Validate: cannot combine sparse and partialFilterExpression
+    if (options.sparse && options.partialFilterExpression) {
+      throw new InvalidIndexOptionsError(
+        "cannot mix 'partialFilterExpression' with 'sparse'"
+      );
+    }
+
     const indexes = await this.loadIndexes();
     const indexName = options.name || this.generateIndexName(keySpec);
 
@@ -125,6 +134,17 @@ export class IndexManager {
 
     if (options.sparse) {
       newIndex.sparse = true;
+    }
+
+    // TTL indexes only work on single-field indexes
+    // Compound indexes silently ignore expireAfterSeconds (MongoDB behavior)
+    const isCompoundIndex = Object.keys(keySpec).length > 1;
+    if (options.expireAfterSeconds !== undefined && !isCompoundIndex) {
+      newIndex.expireAfterSeconds = options.expireAfterSeconds;
+    }
+
+    if (options.partialFilterExpression) {
+      newIndex.partialFilterExpression = options.partialFilterExpression;
     }
 
     indexes.push(newIndex);
@@ -202,6 +222,7 @@ export class IndexManager {
   /**
    * Extract the key value from a document for a given index key specification.
    * Supports nested field paths using dot notation.
+   * Missing fields are treated as null (matching MongoDB behavior).
    * @param doc - Document to extract values from
    * @param keySpec - Index key specification
    * @returns Object mapping field names to their values in the document
@@ -212,14 +233,51 @@ export class IndexManager {
   ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const field of Object.keys(keySpec)) {
-      result[field] = getValueByPath(doc, field);
+      const value = getValueByPath(doc, field);
+      // Missing fields (undefined) are treated as null for uniqueness checks
+      // This matches MongoDB behavior where { a: 1 } and { a: 1, b: null }
+      // have the same index key for index { a: 1, b: 1 }
+      result[field] = value === undefined ? null : value;
     }
     return result;
   }
 
   /**
+   * Check if a document should be included in a sparse index.
+   * For sparse indexes, documents are only indexed if at least one indexed field exists.
+   * @param doc - Document to check
+   * @param indexFields - Array of field names in the index
+   * @returns true if document should be indexed, false if it should be skipped
+   */
+  private shouldIncludeInSparseIndex<T extends Document>(
+    doc: T,
+    indexFields: string[]
+  ): boolean {
+    // Include if at least one indexed field exists (is not undefined)
+    return indexFields.some((field) => {
+      const value = getValueByPath(doc, field);
+      return value !== undefined;
+    });
+  }
+
+  /**
+   * Check if a document matches a partial index filter.
+   * @param doc - Document to check
+   * @param filter - Partial filter expression
+   * @returns true if document matches the filter
+   */
+  private matchesPartialFilter<T extends Document>(
+    doc: T,
+    filter: Record<string, unknown>
+  ): boolean {
+    return matchesFilter(doc, filter);
+  }
+
+  /**
    * Check unique constraints for documents being inserted or updated.
    * Validates that no unique index constraints would be violated by the operation.
+   * Handles sparse indexes (skip if all indexed fields missing) and partial indexes
+   * (only enforce uniqueness for documents matching the filter).
    * @param docs - Documents to be inserted or updated
    * @param existingDocs - All existing documents in the collection
    * @param excludeIds - Document IDs to exclude from constraint checking (for updates)
@@ -240,11 +298,26 @@ export class IndexManager {
     const existingValues = new Map<string, Map<string, T>>();
     for (const idx of uniqueIndexes) {
       const valueMap = new Map<string, T>();
+      const indexFields = Object.keys(idx.key);
+      const isSparse = idx.sparse === true;
+      const partialFilter = idx.partialFilterExpression;
+
       for (const doc of existingDocs) {
         const docId = (doc as { _id?: { toHexString(): string } })._id;
         if (docId && excludeIds.has(docId.toHexString())) {
           continue;
         }
+
+        // For sparse indexes: skip if ALL indexed fields are missing
+        if (isSparse && !this.shouldIncludeInSparseIndex(doc, indexFields)) {
+          continue;
+        }
+
+        // For partial indexes: skip if document doesn't match the filter
+        if (partialFilter && !this.matchesPartialFilter(doc, partialFilter)) {
+          continue;
+        }
+
         const keyValue = this.extractKeyValue(doc, idx.key);
         const keyStr = JSON.stringify(keyValue);
         valueMap.set(keyStr, doc);
@@ -254,6 +327,20 @@ export class IndexManager {
 
     for (const doc of docs) {
       for (const idx of uniqueIndexes) {
+        const indexFields = Object.keys(idx.key);
+        const isSparse = idx.sparse === true;
+        const partialFilter = idx.partialFilterExpression;
+
+        // For sparse indexes: skip if ALL indexed fields are missing
+        if (isSparse && !this.shouldIncludeInSparseIndex(doc, indexFields)) {
+          continue;
+        }
+
+        // For partial indexes: skip if document doesn't match the filter
+        if (partialFilter && !this.matchesPartialFilter(doc, partialFilter)) {
+          continue;
+        }
+
         const keyValue = this.extractKeyValue(doc, idx.key);
         const keyStr = JSON.stringify(keyValue);
         const valueMap = existingValues.get(idx.name)!;

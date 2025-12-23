@@ -2,9 +2,9 @@
 
 This document outlines the implementation phases for MangoDB. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 14 - Extended Index Features (Next)
+## Current Phase: Phase 15 - Change Streams (Next)
 
-See [ROADMAP_REMAINING.md](./ROADMAP_REMAINING.md) for detailed plans on remaining phases (14-16).
+See [ROADMAP_REMAINING.md](./ROADMAP_REMAINING.md) for detailed plans on remaining phases (15-16).
 
 ---
 
@@ -323,6 +323,28 @@ See Phase 9 below for complete aggregation pipeline implementation.
 - `$unwind` supports `preserveNullAndEmptyArrays` and `includeArrayIndex` options
 - Non-array values are treated as single-element arrays in `$unwind`
 - Pipeline stages execute sequentially, each transforming the document stream
+
+---
+
+## Phase 14: Extended Index Features (Complete)
+
+**Goal**: Support advanced index options for specialized use cases.
+
+### Operations
+- [x] Sparse indexes (`sparse: true`) - Skip documents without indexed field
+- [x] TTL indexes (`expireAfterSeconds`) - Document expiration metadata
+- [x] Partial indexes (`partialFilterExpression`) - Index only matching documents
+- [x] Index hints (`cursor.hint()`) - Force use of specific index
+
+### Implementation Details
+- Sparse indexes allow multiple documents with missing indexed fields
+- TTL indexes store metadata but don't auto-delete (suitable for testing)
+- Partial indexes scope unique constraints to matching documents
+- Index hints validate existence and support `$natural` for scan direction
+
+### New Error Classes
+- `InvalidIndexOptionsError` (code 67) - Cannot combine sparse and partial
+- `BadHintError` (code 17007) - Invalid index hint
 
 ---
 
