@@ -511,18 +511,35 @@ describe(`Query Operators Tests (${getTestModeName()})`, () => {
         assert.strictEqual(docs[0].value, null);
       });
 
-      it("should check array field type not element types", async () => {
+      it("should match array elements by type (MongoDB behavior)", async () => {
         const collection = client.db(dbName).collection("type_array_elements");
         await collection.insertMany([
           { tags: ["a", "b", "c"] },
+          { values: [1, 2, 3] },
+          { mixed: ["a", 1, true] },
         ]);
 
-        // Should match "array" type, not "string"
+        // $type: "array" matches fields that ARE arrays
         const arrayDocs = await collection.find({ tags: { $type: "array" } }).toArray();
         assert.strictEqual(arrayDocs.length, 1);
 
+        // $type: "string" matches arrays containing string elements
         const stringDocs = await collection.find({ tags: { $type: "string" } }).toArray();
-        assert.strictEqual(stringDocs.length, 0);
+        assert.strictEqual(stringDocs.length, 1);
+
+        // $type: "number" matches arrays containing number elements
+        const numberDocs = await collection.find({ values: { $type: "number" } }).toArray();
+        assert.strictEqual(numberDocs.length, 1);
+
+        // Mixed array matches multiple types
+        const mixedStringDocs = await collection.find({ mixed: { $type: "string" } }).toArray();
+        assert.strictEqual(mixedStringDocs.length, 1);
+
+        const mixedNumberDocs = await collection.find({ mixed: { $type: "number" } }).toArray();
+        assert.strictEqual(mixedNumberDocs.length, 1);
+
+        const mixedBoolDocs = await collection.find({ mixed: { $type: "bool" } }).toArray();
+        assert.strictEqual(mixedBoolDocs.length, 1);
       });
 
       it("should work with nested fields", async () => {
@@ -536,6 +553,50 @@ describe(`Query Operators Tests (${getTestModeName()})`, () => {
 
         assert.strictEqual(docs.length, 1);
         assert.strictEqual((docs[0].user as any).name, "Alice");
+      });
+    });
+
+    describe("Error Cases", () => {
+      it("should throw for unknown type alias", async () => {
+        const collection = client.db(dbName).collection("type_err_alias");
+        await collection.insertOne({ value: "test" });
+
+        await assert.rejects(
+          async () => {
+            await collection.find({ value: { $type: "unknown" as any } }).toArray();
+          },
+          (err: Error) => {
+            return err.message.includes("Unknown type name alias");
+          }
+        );
+      });
+
+      it("should throw for invalid type alias case", async () => {
+        const collection = client.db(dbName).collection("type_err_case");
+        await collection.insertOne({ value: "test" });
+
+        await assert.rejects(
+          async () => {
+            await collection.find({ value: { $type: "String" as any } }).toArray();
+          },
+          (err: Error) => {
+            return err.message.includes("Unknown type name alias");
+          }
+        );
+      });
+
+      it("should throw for invalid numeric type code", async () => {
+        const collection = client.db(dbName).collection("type_err_code");
+        await collection.insertOne({ value: "test" });
+
+        await assert.rejects(
+          async () => {
+            await collection.find({ value: { $type: 999 } }).toArray();
+          },
+          (err: Error) => {
+            return err.message.includes("Invalid numerical type code");
+          }
+        );
       });
     });
   });
@@ -662,6 +723,33 @@ describe(`Query Operators Tests (${getTestModeName()})`, () => {
         const docs = await collection.find({ value: { $mod: [2, 0] } }).toArray();
 
         assert.strictEqual(docs.length, 1);
+      });
+
+      it("should not match NaN document values", async () => {
+        const collection = client.db(dbName).collection("mod_nan_doc");
+        await collection.insertMany([
+          { value: NaN },
+          { value: 4 },
+        ]);
+
+        const docs = await collection.find({ value: { $mod: [2, 0] } }).toArray();
+
+        assert.strictEqual(docs.length, 1);
+        assert.strictEqual(docs[0].value, 4);
+      });
+
+      it("should not match Infinity document values", async () => {
+        const collection = client.db(dbName).collection("mod_infinity_doc");
+        await collection.insertMany([
+          { value: Infinity },
+          { value: -Infinity },
+          { value: 6 },
+        ]);
+
+        const docs = await collection.find({ value: { $mod: [3, 0] } }).toArray();
+
+        assert.strictEqual(docs.length, 1);
+        assert.strictEqual(docs[0].value, 6);
       });
 
       it("should handle floating point divisor (truncation)", async () => {

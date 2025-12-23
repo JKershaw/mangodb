@@ -458,12 +458,27 @@ export function matchesOperators(
 
         const typeSpec = opValue as string | number | (string | number)[];
 
-        // Handle array of types (match if any type matches)
+        // Helper to check if a single type spec matches
+        const matchesType = (val: unknown, spec: string | number): boolean => {
+          // For array fields: check if any element matches the type
+          // Exception: $type: "array" (4) checks if the field itself is an array
+          if (Array.isArray(val)) {
+            const isArrayTypeCheck = spec === "array" || spec === 4;
+            if (isArrayTypeCheck) {
+              return true; // The field IS an array
+            }
+            // Check if any array element matches the type
+            return val.some((elem) => matchesBSONType(elem, spec));
+          }
+          return matchesBSONType(val, spec);
+        };
+
+        // Handle array of type specs (match if any type matches)
         if (Array.isArray(typeSpec)) {
-          const matches = typeSpec.some((t) => matchesBSONType(docValue, t));
+          const matches = typeSpec.some((t) => matchesType(docValue, t));
           if (!matches) return false;
         } else {
-          if (!matchesBSONType(docValue, typeSpec)) return false;
+          if (!matchesType(docValue, typeSpec)) return false;
         }
         break;
       }
