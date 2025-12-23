@@ -50,7 +50,7 @@ src/
 
 ---
 
-## Current State (Phases 1-12 Complete)
+## Current State (Phases 1-12.5 Complete)
 
 | Phase | Feature | Status | Test Cases |
 |-------|---------|--------|------------|
@@ -66,7 +66,8 @@ src/
 | 10 | Aggregation Pipeline (Advanced) | ✅ Complete | 57 |
 | 11 | Regular Expressions | ✅ Complete | 38 |
 | 12 | Additional Query Operators | ✅ Complete | 67 |
-| **Total** | | | **675** |
+| 12.5 | Find Options Parity | ✅ Complete | 15 |
+| **Total** | | | **690** |
 
 **Approximate MongoDB Coverage**: 90%+ of common operations
 
@@ -76,13 +77,13 @@ src/
 
 | Phase | Feature | Priority | Effort | Est. Tests |
 |-------|---------|----------|--------|------------|
-| 12.5 | Find Options Parity | **High** | Small | 8-12 |
+| 12.5 | Find Options Parity | ✅ Complete | Small | 15 |
 | 13 | Additional Update Operators | Medium | Small | 30-40 |
 | 14 | Extended Index Features | Low | Medium | 25-30 |
 | 15 | Administrative Operations | Low | Small | 15-20 |
 | 16 | Extended Expression Operators | Low | Medium | 50-70 |
 
-**Total Remaining**: ~130-170 additional test cases
+**Total Remaining**: ~120-160 additional test cases
 
 ---
 
@@ -751,20 +752,20 @@ test/query-operators.test.ts
 
 ---
 
-## Phase 12.5: Find Options Parity
+## Phase 12.5: Find Options Parity ✅ COMPLETE
 
 **Goal**: Ensure `findOne` supports the same options available on cursor methods.
 
-**Priority**: HIGH — Enables common "get latest" query pattern.
+**Status**: COMPLETE — All find options implemented and tested (15 tests).
 
 **Background**: The `findOneAnd*` methods support `sort`, but plain `findOne` only accepts `projection`. This is a gap discovered during real-world usage testing.
 
 ### Operations
 
 #### Step 1: Add `sort` option to `findOne`
-- [ ] Extend `FindOptions` interface to include `sort`
-- [ ] Apply sort before selecting first document
-- [ ] Reuse existing `sortDocuments` from utils
+- [x] Extend `FindOptions` interface to include `sort`
+- [x] Apply sort before selecting first document
+- [x] Reuse existing `sortDocuments` from utils
 
 **Use Case**:
 ```typescript
@@ -775,10 +776,10 @@ const latest = await collection.findOne(
 );
 ```
 
-#### Step 2: Add `skip` option to `findOne` (optional)
-- [ ] Extend `FindOptions` interface to include `skip`
-- [ ] Apply skip after sort, before selecting first document
-- [ ] Useful for "get Nth matching document" pattern
+#### Step 2: Add `skip` option to `findOne`
+- [x] Extend `FindOptions` interface to include `skip`
+- [x] Apply skip after sort, before selecting first document
+- [x] Useful for "get Nth matching document" pattern
 
 **Use Case**:
 ```typescript
@@ -1558,14 +1559,9 @@ test/[feature].test.ts
 
 ### Current Status
 
-Phases 1-12 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **675 tests**.
+Phases 1-12.5 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **690 tests**.
 
-### High Priority (Phase 12.5)
-
-Consistency fix discovered during real-world usage testing:
-- **Phase 12.5**: Find options parity (`findOne` + sort/skip)
-
-### Medium Priority (Phase 13)
+### Next Up: Medium Priority (Phase 13)
 
 Additional operators to complete the update API:
 - **Phase 13**: $min, $max, $mul, $rename, positional operators
@@ -1581,9 +1577,9 @@ Extended features for completeness:
 
 | Metric | Value |
 |--------|-------|
-| Remaining Phases | 5 |
-| Estimated New Tests | 130-170 |
-| Estimated Code Lines | 800-1200 |
+| Remaining Phases | 4 |
+| Estimated New Tests | 120-160 |
+| Estimated Code Lines | 700-1100 |
 | Estimated Time | Varies based on scope per phase |
 
 After completing all phases, MangoDB will be a comprehensive file-based MongoDB replacement suitable for:

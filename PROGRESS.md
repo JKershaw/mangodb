@@ -4,12 +4,59 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 11 - Regular Expressions
+**Phase**: 12.5 - Find Options Parity
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-23 - Phase 12.5: Find Options Parity
+
+#### Added
+- `sort` option to `findOne()` method
+- `skip` option to `findOne()` method
+- Extended `FindOptions` interface in `types.ts`
+- New test file `test/find-options.test.ts` (15 tests)
+
+#### Behaviors Implemented
+- `findOne({ filter }, { sort: { field: -1 } })` returns highest match
+- `findOne({ filter }, { sort: { field: 1 } })` returns lowest match
+- `findOne({ filter }, { skip: N })` skips first N matches
+- Sort is applied before skip
+- Works with compound sort (multiple fields)
+- Works combined with projection
+- Works with nested field sort using dot notation
+- Returns `null` if skip exceeds number of matches
+
+#### Examples
+```typescript
+// Get most recent active order
+const latest = await collection.findOne(
+  { status: "active" },
+  { sort: { createdAt: -1 } }
+);
+
+// Get runner-up (second highest scorer)
+const runnerUp = await collection.findOne(
+  { tournament: "finals" },
+  { sort: { score: -1 }, skip: 1 }
+);
+
+// Combined with projection
+const result = await collection.findOne(
+  { type: "premium" },
+  { sort: { value: -1 }, projection: { name: 1 } }
+);
+```
+
+#### Files Changed
+- `src/types.ts` - Extended `FindOptions` interface
+- `src/collection.ts` - Updated `findOne` method
+- `test/test-harness.ts` - Updated test harness interface
+- `test/find-options.test.ts` - New test file
+
+---
 
 ### 2025-12-22 - Phase 11: Regular Expressions
 
