@@ -87,12 +87,6 @@ function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
 
   const valueType = getBSONTypeCode(value);
 
-  // Special case: "double" (1) should also match integers in JavaScript
-  // since MongoDB's double encompasses all numeric values
-  if (targetCode === 1 && typeof value === "number") {
-    return true;
-  }
-
   return valueType === targetCode;
 }
 
