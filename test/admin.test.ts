@@ -360,8 +360,10 @@ describe(`Administrative Operations Tests (${getTestModeName()})`, () => {
           await collection.rename("rename_same");
         },
         (err: Error) => {
-          return err.message.includes("cannot rename collection to itself") ||
-                 err.message.includes("same");
+          // MongoDB: "Can't rename a collection to itself"
+          // MangoDB: "cannot rename collection to itself"
+          return err.message.toLowerCase().includes("rename") &&
+                 err.message.toLowerCase().includes("itself");
         }
       );
     });
