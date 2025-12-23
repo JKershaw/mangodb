@@ -85,7 +85,7 @@ function deepEquals(a: unknown, b: unknown): boolean {
  * @param doc - The document context
  * @returns The evaluated value
  */
-function evaluateExpression(expr: unknown, doc: Document): unknown {
+export function evaluateExpression(expr: unknown, doc: Document): unknown {
   // String starting with $ is a field reference
   if (typeof expr === "string" && expr.startsWith("$")) {
     const fieldPath = expr.slice(1);

@@ -13,9 +13,9 @@ Add remaining useful query operators to MangoDB: `$type`, `$mod`, `$expr`, and `
 
 | Step | Operator | Status | Notes |
 |------|----------|--------|-------|
-| 1 | `$type` | ⬜ TODO | Type checking with BSON aliases |
-| 2 | `$mod` | ⬜ TODO | Modulo arithmetic queries |
-| 3 | `$expr` | ⬜ TODO | Compare fields using aggregation expressions |
+| 1 | `$type` | ✅ COMPLETE | Type checking with BSON aliases (19 tests) |
+| 2 | `$mod` | ✅ COMPLETE | Modulo arithmetic queries (13 tests) |
+| 3 | `$expr` | ✅ COMPLETE | Compare fields using aggregation expressions (17 tests) |
 | 4 | `$text` | ✅ COMPLETE | Implemented in collection.ts with 18 tests |
 
 ---
@@ -660,17 +660,14 @@ After implementation:
 ## Summary
 
 Phase 12 adds four query operators:
-- **$text**: ✅ COMPLETE - Simplified text search with text indexes
-- **$type**: ⬜ TODO - Type checking with BSON type aliases and numeric codes
-- **$mod**: ⬜ TODO - Modular arithmetic for finding documents with specific remainders
-- **$expr**: ⬜ TODO - Compare fields within same document using aggregation expressions
+- **$text**: ✅ COMPLETE - Simplified text search with text indexes (18 tests)
+- **$type**: ✅ COMPLETE - Type checking with BSON type aliases and numeric codes (19 tests)
+- **$mod**: ✅ COMPLETE - Modular arithmetic for finding documents with specific remainders (13 tests)
+- **$expr**: ✅ COMPLETE - Compare fields within same document using aggregation expressions (17 tests)
+
+**Phase 12 Complete!** Total: 67 new tests (556 total tests)
 
 These operators complete the core query operator set and enable more expressive queries.
-
-**Remaining Work**:
-- Implementation: ~200-250 lines of code
-- Tests: 35-40 new test cases
-- Files modified: 3 (types.ts, query-matcher.ts, aggregation.ts)
 
 **Sources**:
 - [MongoDB $type documentation](https://www.mongodb.com/docs/manual/reference/operator/query/type/)

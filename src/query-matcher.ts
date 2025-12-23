@@ -9,6 +9,92 @@ import {
   compareValues,
   valuesEqual,
 } from "./document-utils.ts";
+import { evaluateExpression } from "./aggregation.ts";
+
+// BSON type name to numeric code mapping
+const BSON_TYPE_ALIASES: Record<string, number> = {
+  double: 1,
+  string: 2,
+  object: 3,
+  array: 4,
+  binData: 5,
+  undefined: 6,
+  objectId: 7,
+  bool: 8,
+  date: 9,
+  null: 10,
+  regex: 11,
+  javascript: 13,
+  int: 16,
+  timestamp: 17,
+  long: 18,
+  decimal: 19,
+  minKey: -1,
+  maxKey: 127,
+};
+
+// Special "number" alias matches these types
+const NUMBER_TYPE_CODES = new Set([1, 16, 18, 19]); // double, int, long, decimal
+
+// Valid numeric type codes
+const VALID_TYPE_CODES = new Set(Object.values(BSON_TYPE_ALIASES));
+
+/**
+ * Get the BSON type code for a JavaScript value.
+ */
+function getBSONTypeCode(value: unknown): number {
+  if (value === undefined) return 6; // undefined
+  if (value === null) return 10; // null
+  if (typeof value === "string") return 2; // string
+  if (typeof value === "boolean") return 8; // bool
+  if (typeof value === "number") {
+    // In JavaScript, we can distinguish integers from floats
+    return Number.isInteger(value) ? 16 : 1; // int or double
+  }
+  if (Array.isArray(value)) return 4; // array
+  if (value instanceof Date) return 9; // date
+  if (value instanceof RegExp) return 11; // regex
+  if (value instanceof ObjectId || (value && typeof (value as { toHexString?: unknown }).toHexString === "function")) {
+    return 7; // objectId
+  }
+  if (typeof value === "object") return 3; // object
+  return -999; // unknown type (should not happen)
+}
+
+/**
+ * Check if a value matches a BSON type specification.
+ */
+function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
+  // Handle "number" alias specially
+  if (typeSpec === "number") {
+    const valueType = getBSONTypeCode(value);
+    return NUMBER_TYPE_CODES.has(valueType);
+  }
+
+  // Convert string alias to numeric code
+  let targetCode: number;
+  if (typeof typeSpec === "string") {
+    if (!(typeSpec in BSON_TYPE_ALIASES)) {
+      throw new Error(`Unknown type name alias: ${typeSpec}`);
+    }
+    targetCode = BSON_TYPE_ALIASES[typeSpec];
+  } else {
+    if (!VALID_TYPE_CODES.has(typeSpec)) {
+      throw new Error(`Invalid numerical type code: ${typeSpec}`);
+    }
+    targetCode = typeSpec;
+  }
+
+  const valueType = getBSONTypeCode(value);
+
+  // Special case: "double" (1) should also match integers in JavaScript
+  // since MongoDB's double encompasses all numeric values
+  if (targetCode === 1 && typeof value === "number") {
+    return true;
+  }
+
+  return valueType === targetCode;
+}
 
 /**
  * Check if an object contains query operators (keys starting with $).
@@ -366,6 +452,79 @@ export function matchesOperators(
         break;
       }
 
+      case "$type": {
+        // Missing fields (undefined) don't match any type
+        if (docValue === undefined) return false;
+
+        const typeSpec = opValue as string | number | (string | number)[];
+
+        // Handle array of types (match if any type matches)
+        if (Array.isArray(typeSpec)) {
+          const matches = typeSpec.some((t) => matchesBSONType(docValue, t));
+          if (!matches) return false;
+        } else {
+          if (!matchesBSONType(docValue, typeSpec)) return false;
+        }
+        break;
+      }
+
+      case "$mod": {
+        // Validate $mod argument
+        if (!Array.isArray(opValue)) {
+          throw new Error("malformed mod, needs to be an array");
+        }
+        if (opValue.length < 2) {
+          throw new Error("malformed mod, not enough elements");
+        }
+        if (opValue.length > 2) {
+          throw new Error("malformed mod, too many elements");
+        }
+
+        const [divisor, remainder] = opValue as [unknown, unknown];
+
+        // Validate divisor
+        if (typeof divisor !== "number") {
+          throw new Error("malformed mod, divisor not a number");
+        }
+        if (!Number.isFinite(divisor)) {
+          throw new Error(
+            `malformed mod, divisor value is invalid :: caused by :: ${
+              Number.isNaN(divisor) ? "NaN" : "Infinity"
+            } is an invalid argument`
+          );
+        }
+        if (Math.trunc(divisor) === 0) {
+          throw new Error("divisor cannot be 0");
+        }
+
+        // Validate remainder
+        if (typeof remainder !== "number") {
+          throw new Error("malformed mod, remainder not a number");
+        }
+        if (!Number.isFinite(remainder)) {
+          throw new Error(
+            `malformed mod, remainder value is invalid :: caused by :: ${
+              Number.isNaN(remainder) ? "NaN" : "Infinity"
+            } is an invalid argument`
+          );
+        }
+
+        // Non-numeric document values don't match
+        if (typeof docValue !== "number" || !Number.isFinite(docValue)) {
+          return false;
+        }
+
+        // Perform modulo with truncation toward zero
+        const truncDivisor = Math.trunc(divisor);
+        const truncRemainder = Math.trunc(remainder);
+        const truncDocValue = Math.trunc(docValue);
+
+        if (truncDocValue % truncDivisor !== truncRemainder) {
+          return false;
+        }
+        break;
+      }
+
       case "$and":
         throw new Error("unknown operator: $and");
 
@@ -484,6 +643,16 @@ export function matchesFilter<T extends Document>(
   for (const [key, filterValue] of Object.entries(filter)) {
     if (key === "$and" || key === "$or" || key === "$nor") {
       if (!evaluateLogicalOperator(doc, key, filterValue)) {
+        return false;
+      }
+      continue;
+    }
+
+    // Handle $expr - evaluates aggregation expression against the document
+    if (key === "$expr") {
+      const result = evaluateExpression(filterValue, doc);
+      // Truthy result means match, falsy means no match
+      if (!result) {
         return false;
       }
       continue;
