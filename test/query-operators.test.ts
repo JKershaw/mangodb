@@ -274,14 +274,15 @@ describe(`Query Operators Tests (${getTestModeName()})`, () => {
         const collection = client.db(dbName).collection("type_double");
         await collection.insertMany([
           { value: 3.14 },
-          { value: 42 },
+          { value: 2.718 },
           { value: "3.14" },
         ]);
 
         const docs = await collection.find({ value: { $type: "double" } }).toArray();
 
-        // In JavaScript context, all numbers are doubles
+        // Float values are stored as doubles in both MongoDB and MangoDB
         assert.strictEqual(docs.length, 2);
+        assert.ok(docs.every(d => typeof d.value === "number"));
       });
 
       it("should match int type (integers only)", async () => {
