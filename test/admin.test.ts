@@ -18,6 +18,7 @@ import assert from "node:assert";
 import {
   createTestClient,
   getTestModeName,
+  isMongoDBMode,
   type TestClient,
 } from "./test-harness.ts";
 
@@ -246,7 +247,10 @@ describe(`Administrative Operations Tests (${getTestModeName()})`, () => {
 
       await collection.drop();
 
-      // After drop, should only have _id_ index on fresh collection
+      // Re-create collection by inserting a document (needed for MongoDB mode)
+      await collection.insertOne({ email: "new@test.com" });
+
+      // After drop and re-create, should only have _id_ index
       indexes = await collection.indexes();
       assert.strictEqual(indexes.length, 1);
       assert.strictEqual(indexes[0].name, "_id_");
@@ -254,7 +258,9 @@ describe(`Administrative Operations Tests (${getTestModeName()})`, () => {
   });
 
   // ==================== collection.stats ====================
-  describe("collection.stats", () => {
+  // Note: MongoDB driver doesn't have collection.stats() method directly.
+  // These tests only run in MangoDB mode.
+  describe("collection.stats", { skip: isMongoDBMode() }, () => {
     it("should return stats object", async () => {
       const collection = client.db(dbName).collection("stats_basic");
       await collection.insertMany([{ a: 1 }, { b: 2 }, { c: 3 }]);
