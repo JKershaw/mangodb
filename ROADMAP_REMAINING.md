@@ -68,8 +68,8 @@ src/
 | 12 | Additional Query Operators | ✅ Complete | 67 |
 | 12.5 | Find Options Parity | ✅ Complete | 15 |
 | 13 | Additional Update Operators | ✅ Complete | 60 |
-| 14 | Extended Index Features | ✅ Complete | 26 |
-| **Total** | | | **776** |
+| 14 | Extended Index Features | ✅ Complete | 35 |
+| **Total** | | | **785** |
 
 **Approximate MongoDB Coverage**: 90%+ of common operations
 
@@ -995,7 +995,7 @@ test/update-operators.test.ts
 
 **Goal**: Enhance index functionality for edge cases.
 
-**Status**: COMPLETE — All extended index features implemented and tested (26 tests).
+**Status**: COMPLETE — All extended index features implemented and tested (35 tests).
 
 ### Operations
 
@@ -1510,7 +1510,7 @@ test/[feature].test.ts
 
 ### Current Status
 
-Phases 1-14 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **776 tests**.
+Phases 1-14 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **785 tests**.
 
 ### Low Priority (Phases 15-16)
 

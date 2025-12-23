@@ -34,7 +34,10 @@ This document tracks implementation progress and notable discoveries.
 - Missing fields are treated as `null` in unique index key extraction
 - Sparse + partial combination throws `InvalidIndexOptionsError` (code 67)
 - TTL on compound indexes is silently ignored (not an error)
+- TTL on `_id` field is rejected (error code 67)
+- TTL `expireAfterSeconds` must be in range 0-2147483647
 - Hint validation occurs at query execution time
+- Sparse indexes work with nested fields (dot notation)
 
 #### New Error Classes
 - `InvalidIndexOptionsError` (code 67) - For invalid index option combinations
@@ -71,7 +74,7 @@ await collection.find({}).hint({ $natural: -1 }).toArray(); // Reverse scan
 - `src/cursor.ts` - Added `hint()` method with validation
 - `src/collection.ts` - Pass hint validator to cursor
 - `src/errors.ts` - Added `InvalidIndexOptionsError`, `BadHintError`
-- `test/indexes-extended.test.ts` - New test file (26 tests)
+- `test/indexes-extended.test.ts` - New test file (35 tests)
 
 ---
 
