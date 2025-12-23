@@ -50,7 +50,7 @@ src/
 
 ---
 
-## Current State (Phases 1-14 Complete)
+## Current State (Phases 1-15 Complete)
 
 | Phase | Feature | Status | Test Cases |
 |-------|---------|--------|------------|
@@ -69,9 +69,10 @@ src/
 | 12.5 | Find Options Parity | ✅ Complete | 15 |
 | 13 | Additional Update Operators | ✅ Complete | 60 |
 | 14 | Extended Index Features | ✅ Complete | 35 |
-| **Total** | | | **785** |
+| 15 | Administrative Operations | ✅ Complete | 42 |
+| **Total** | | | **827** |
 
-**Approximate MongoDB Coverage**: 90%+ of common operations
+**Approximate MongoDB Coverage**: 92%+ of common operations
 
 ---
 
@@ -79,10 +80,9 @@ src/
 
 | Phase | Feature | Priority | Effort | Est. Tests |
 |-------|---------|----------|--------|------------|
-| 15 | Administrative Operations | Low | Small | 15-20 |
 | 16 | Extended Expression Operators | Low | Medium | 50-70 |
 
-**Total Remaining**: ~65-90 additional test cases
+**Total Remaining**: ~50-70 additional test cases
 
 ---
 
@@ -1025,80 +1025,38 @@ test/update-operators.test.ts
 
 ---
 
-## Phase 15: Administrative Operations
+## Phase 15: Administrative Operations ✅ COMPLETE
 
 **Goal**: Implement database-level and collection-level admin operations.
 
-**Priority**: LOW — Useful for testing and management.
+**Status**: COMPLETE — All administrative operations implemented and tested (42 tests).
 
 ### Operations
 
 #### Step 1: Database Operations
-- [ ] `db.listCollections()` — List all collections
-- [ ] `db.dropDatabase()` — Drop entire database (already exists but enhance)
-- [ ] `db.stats()` — Database statistics
+- [x] `db.listCollections()` — List all collections with filter and nameOnly option
+- [x] `db.stats()` — Database statistics (collections, objects, sizes, indexes)
 
 #### Step 2: Collection Operations
-- [ ] `collection.drop()` — Drop the collection
-- [ ] `collection.rename(newName)` — Rename collection
-- [ ] `collection.stats()` — Collection statistics
+- [x] `collection.drop()` — Drop the collection (returns true even for non-existent)
+- [x] `collection.rename(newName, options)` — Rename collection with dropTarget option
+- [x] `collection.stats()` — Collection statistics (count, sizes, indexes)
 
 #### Step 3: `distinct()` Method
-- [ ] Get distinct values for a field
-- [ ] Support query filter
-
-**Test Cases**:
-```typescript
-await collection.distinct("category");
-await collection.distinct("tags", { active: true });
-```
+- [x] Get distinct values for a field
+- [x] Support query filter
+- [x] Array elements treated as separate values
+- [x] Skips missing fields (undefined) but includes null
 
 #### Step 4: `estimatedDocumentCount()`
-- [ ] Fast count without filter
-- [ ] Returns total document count
+- [x] Fast count without filter
+- [x] Returns total document count
 
-**Test Cases**:
-```typescript
-const count = await collection.estimatedDocumentCount();
-```
-
-### Test File Structure
-
-```
-test/admin.test.ts
-├── Database Operations
-│   ├── listCollections
-│   │   ├── should list all collections
-│   │   └── should return empty for new db
-│   │
-│   ├── dropDatabase
-│   │   └── should remove all collections
-│   │
-│   └── stats
-│       └── should return database statistics
-│
-├── Collection Operations
-│   ├── drop
-│   │   ├── should remove collection
-│   │   └── should remove data file
-│   │
-│   ├── rename
-│   │   ├── should rename collection
-│   │   └── should preserve data
-│   │
-│   └── stats
-│       └── should return collection statistics
-│
-├── distinct
-│   ├── should return unique values
-│   ├── should support filter
-│   ├── should handle array fields
-│   └── should handle nested fields
-│
-└── estimatedDocumentCount
-    ├── should return count
-    └── should be faster than countDocuments
-```
+### New Error Classes
+- `NamespaceNotFoundError` (code 26) - Source namespace does not exist
+- `TargetNamespaceExistsError` (code 48) - Target namespace already exists
+- `IllegalOperationError` (code 20) - Cannot rename collection to itself
+- `InvalidNamespaceError` (code 73) - Invalid collection name
 
 ---
 
@@ -1510,22 +1468,21 @@ test/[feature].test.ts
 
 ### Current Status
 
-Phases 1-14 are now complete. MangoDB has approximately **90%+ coverage** of common MongoDB usage with **785 tests**.
+Phases 1-15 are now complete. MangoDB has approximately **92%+ coverage** of common MongoDB usage with **827 tests**.
 
-### Low Priority (Phases 15-16)
+### Low Priority (Phase 16)
 
 Extended features for completeness:
-- **Phase 15**: Admin operations, distinct()
 - **Phase 16**: Extended expression operators (arithmetic, string, array, date)
 
 ### Estimated Total Work
 
 | Metric | Value |
 |--------|-------|
-| Remaining Phases | 2 |
-| Estimated New Tests | 65-90 |
-| Estimated Code Lines | 300-500 |
-| Estimated Time | Varies based on scope per phase |
+| Remaining Phases | 1 |
+| Estimated New Tests | 50-70 |
+| Estimated Code Lines | 200-300 |
+| Estimated Time | Varies based on scope |
 
 After completing all phases, MangoDB will be a comprehensive file-based MongoDB replacement suitable for:
 - Local development

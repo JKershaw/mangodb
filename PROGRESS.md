@@ -4,12 +4,75 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 14 - Extended Index Features
+**Phase**: 15 - Administrative Operations
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-23 - Phase 15: Administrative Operations
+
+#### Added
+- **Database Operations**:
+  - `db.listCollections(filter, options)` - List all collections with filter and nameOnly option
+  - `db.stats()` - Database statistics (collections, objects, sizes, indexes)
+- **Collection Operations**:
+  - `collection.drop()` - Drop the collection (returns true even for non-existent)
+  - `collection.rename(newName, options)` - Rename collection with dropTarget option
+  - `collection.stats()` - Collection statistics (count, sizes, indexes)
+  - `collection.distinct(field, filter)` - Get distinct values for a field
+  - `collection.estimatedDocumentCount()` - Fast count without filter
+
+#### Behaviors Implemented
+- `distinct()` treats array elements as separate values
+- `distinct()` skips missing fields (undefined) but includes null
+- `drop()` returns `true` even for non-existent collections (MongoDB 5.0+ behavior)
+- `rename()` validates collection names (empty, starts/ends with dot, contains $)
+- `rename()` error code 26 (NamespaceNotFound) if source missing
+- `rename()` error code 48 (NamespaceExists) if target exists without dropTarget
+- `listCollections()` returns cursor with `toArray()` method
+- `listCollections()` supports filter by name and regex
+
+#### New Error Classes
+- `NamespaceNotFoundError` (code 26) - Source namespace does not exist
+- `TargetNamespaceExistsError` (code 48) - Target namespace already exists
+- `IllegalOperationError` (code 20) - Cannot rename collection to itself
+- `InvalidNamespaceError` (code 73) - Invalid collection name
+
+#### Examples
+```typescript
+// List collections
+const collections = await db.listCollections().toArray();
+const filtered = await db.listCollections({ name: { $regex: /^test/ } }).toArray();
+
+// Database stats
+const dbStats = await db.stats();
+console.log(`Collections: ${dbStats.collections}, Documents: ${dbStats.objects}`);
+
+// Collection operations
+await collection.drop();
+const renamed = await collection.rename('newName', { dropTarget: true });
+const collStats = await collection.stats();
+
+// Distinct values
+const categories = await collection.distinct('category');
+const activeCategories = await collection.distinct('category', { active: true });
+
+// Estimated count
+const count = await collection.estimatedDocumentCount();
+```
+
+#### Files Changed
+- `src/types.ts` - Added admin operation interfaces (ListCollectionsOptions, CollectionInfo, RenameOptions, DbStats, CollectionStats)
+- `src/errors.ts` - Added NamespaceNotFoundError, TargetNamespaceExistsError, IllegalOperationError, InvalidNamespaceError
+- `src/collection.ts` - Added estimatedDocumentCount(), distinct(), drop(), stats(), rename() methods
+- `src/db.ts` - Added listCollections(), stats() methods and ListCollectionsCursor class
+- `src/index-manager.ts` - Added reset() method
+- `test/admin.test.ts` - New test file (42 tests)
+- `test/test-harness.ts` - Updated with Phase 15 interfaces
+
+---
 
 ### 2025-12-23 - Phase 14: Extended Index Features
 
