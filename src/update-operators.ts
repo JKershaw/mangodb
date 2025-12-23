@@ -350,6 +350,9 @@ export function applyUpdateOperators<T extends Document>(
       if (spec === true) {
         // Simple boolean true means Date type
         setValueByPath(result as Record<string, unknown>, path, now);
+      } else if (spec === false) {
+        // MongoDB accepts false as a no-op (does nothing)
+        continue;
       } else if (typeof spec === "object" && spec !== null && "$type" in spec) {
         const typeSpec = spec as { $type: string };
         if (typeSpec.$type === "date") {
@@ -361,13 +364,13 @@ export function applyUpdateOperators<T extends Document>(
         } else {
           // Invalid $type value - MongoDB errors on this
           throw new Error(
-            `$currentDate: unrecognized type specification '${typeSpec.$type}', expected 'date' or 'timestamp'`
+            `The '$type' string field is required to be 'date' or 'timestamp': {$currentDate: {${path}: {$type: '${typeSpec.$type}'}}}`
           );
         }
       } else {
-        // Invalid spec format (not true, not an object with $type)
+        // Invalid spec format (not boolean, not an object with $type)
         throw new Error(
-          `$currentDate: expected boolean true or { $type: 'date' | 'timestamp' }`
+          `$currentDate: expected boolean or { $type: 'date' | 'timestamp' }`
         );
       }
     }

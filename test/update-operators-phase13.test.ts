@@ -862,30 +862,31 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
             { $currentDate: { lastModified: { $type: "invalid" as "date" } } }
           ),
         (err: Error) => {
+          // MongoDB error: "The '$type' string field is required to be 'date' or 'timestamp'"
           return (
-            err.message.includes("unrecognized type") ||
-            err.message.includes("expected")
+            err.message.includes("required to be") ||
+            err.message.includes("'date' or 'timestamp'")
           );
         }
       );
     });
 
-    it("$currentDate should throw error for false value", async () => {
+    it("$currentDate with false value should be a no-op", async () => {
       const collection = client.db(dbName).collection("currentdate_false");
-      await collection.insertOne({ name: "Alice" });
+      const existingDate = new Date("2020-01-01");
+      await collection.insertOne({ name: "Alice", lastModified: existingDate });
 
-      await assert.rejects(
-        async () =>
-          await collection.updateOne(
-            { name: "Alice" },
-            { $currentDate: { lastModified: false as unknown as true } }
-          ),
-        (err: Error) => {
-          return (
-            err.message.includes("expected") ||
-            err.message.includes("$currentDate")
-          );
-        }
+      // MongoDB accepts false as a no-op (field is not updated)
+      await collection.updateOne(
+        { name: "Alice" },
+        { $currentDate: { lastModified: false as unknown as true } }
+      );
+
+      const doc = await collection.findOne({ name: "Alice" });
+      // Field should remain unchanged
+      assert.strictEqual(
+        (doc?.lastModified as Date).getTime(),
+        existingDate.getTime()
       );
     });
 
