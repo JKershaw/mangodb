@@ -268,25 +268,26 @@ describe(`TTL Index Tests (${getTestModeName()})`, () => {
       );
     });
 
-    it("should silently ignore TTL on compound indexes", async () => {
+    it("should reject TTL on compound indexes", async () => {
       const collection = client.db(dbName).collection("ttl_compound");
 
-      // MongoDB silently ignores expireAfterSeconds on compound indexes
-      const name = await collection.createIndex(
-        { a: 1, b: 1 },
-        { expireAfterSeconds: 3600 }
-      );
-
-      assert.strictEqual(name, "a_1_b_1");
-
-      // The index should exist but without TTL
-      const indexes = await collection.indexes();
-      const compoundIndex = indexes.find((i) => i.name === "a_1_b_1");
-      assert(compoundIndex);
-      // TTL should not be present on compound index
-      assert.strictEqual(
-        (compoundIndex as { expireAfterSeconds?: number }).expireAfterSeconds,
-        undefined
+      // MongoDB rejects TTL on compound indexes with error code 67
+      await assert.rejects(
+        async () => {
+          await collection.createIndex(
+            { a: 1, b: 1 },
+            { expireAfterSeconds: 3600 }
+          );
+        },
+        (err: Error) => {
+          assert(
+            err.message.includes("TTL") ||
+              err.message.includes("compound") ||
+              err.message.includes("single-field") ||
+              (err as { code?: number }).code === 67
+          );
+          return true;
+        }
       );
     });
   });

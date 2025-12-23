@@ -1006,7 +1006,7 @@ test/update-operators.test.ts
 
 #### Step 2: TTL Indexes
 - [x] `expireAfterSeconds` option (metadata storage)
-- [x] TTL silently ignored on compound indexes (MongoDB behavior)
+- [x] TTL rejected on compound indexes (error code 67)
 - [x] MangoDB stores metadata but doesn't auto-delete
 
 #### Step 3: Partial Indexes

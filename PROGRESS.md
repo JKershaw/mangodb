@@ -19,7 +19,7 @@ This document tracks implementation progress and notable discoveries.
   - `null` values are still indexed (only missing fields are skipped)
   - Compound sparse indexes include doc if at least one field exists
 - **TTL Indexes**: `expireAfterSeconds` option (metadata storage)
-  - TTL silently ignored on compound indexes (MongoDB behavior)
+  - TTL rejected on compound indexes (error code 67)
   - MangoDB stores metadata but doesn't auto-delete (suitable for testing)
 - **Partial Indexes**: `partialFilterExpression` option
   - Unique constraints only apply to documents matching the filter
@@ -33,7 +33,7 @@ This document tracks implementation progress and notable discoveries.
 #### Behaviors Implemented
 - Missing fields are treated as `null` in unique index key extraction
 - Sparse + partial combination throws `InvalidIndexOptionsError` (code 67)
-- TTL on compound indexes is silently ignored (not an error)
+- TTL on compound indexes is rejected (error code 67)
 - TTL on `_id` field is rejected (error code 67)
 - TTL `expireAfterSeconds` must be in range 0-2147483647
 - Hint validation occurs at query execution time

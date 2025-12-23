@@ -139,6 +139,13 @@ export class IndexManager {
           "The field 'expireAfterSeconds' is not valid for an _id index"
         );
       }
+
+      // TTL indexes must be single-field indexes
+      if (indexFields.length > 1) {
+        throw new InvalidIndexOptionsError(
+          "TTL indexes are single-field indexes, compound indexes do not support TTL"
+        );
+      }
     }
 
     const indexes = await this.loadIndexes();
@@ -163,10 +170,8 @@ export class IndexManager {
       newIndex.sparse = true;
     }
 
-    // TTL indexes only work on single-field indexes
-    // Compound indexes silently ignore expireAfterSeconds (MongoDB behavior)
-    const isCompoundIndex = Object.keys(keySpec).length > 1;
-    if (options.expireAfterSeconds !== undefined && !isCompoundIndex) {
+    // TTL index expireAfterSeconds (already validated above - single-field only)
+    if (options.expireAfterSeconds !== undefined) {
       newIndex.expireAfterSeconds = options.expireAfterSeconds;
     }
 

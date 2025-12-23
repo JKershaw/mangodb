@@ -339,6 +339,7 @@ See Phase 9 below for complete aggregation pipeline implementation.
 ### Implementation Details
 - Sparse indexes allow multiple documents with missing indexed fields
 - TTL indexes store metadata but don't auto-delete (suitable for testing)
+- TTL indexes rejected on compound indexes (error code 67)
 - Partial indexes scope unique constraints to matching documents
 - Index hints validate existence and support `$natural` for scan direction
 
