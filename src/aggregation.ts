@@ -11,7 +11,7 @@ import {
   setValueByPath,
   compareValuesForSort,
 } from "./utils.ts";
-import { cloneDocument, compareValues } from "./document-utils.ts";
+import { cloneDocument, compareValues, valuesEqual } from "./document-utils.ts";
 import type {
   Document,
   Filter,
@@ -46,30 +46,6 @@ function getBSONTypeName(value: unknown): string {
   return typeof value;
 }
 
-/**
- * Deep equality check that handles primitives and objects.
- */
-function deepEquals(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (a === null || b === null) return a === b;
-  if (typeof a !== typeof b) return false;
-
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((val, i) => deepEquals(val, b[i]));
-  }
-
-  if (typeof a === "object" && typeof b === "object") {
-    const aKeys = Object.keys(a as object);
-    const bKeys = Object.keys(b as object);
-    if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every(key =>
-      deepEquals((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
-    );
-  }
-
-  return false;
-}
 
 // ==================== Expression Evaluation ====================
 
@@ -1502,7 +1478,7 @@ class AddToSetAccumulator implements Accumulator {
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
     // Check if already exists (using deep equality that handles primitives)
-    if (!this.values.some((v) => deepEquals(v, value))) {
+    if (!this.values.some((v) => valuesEqual(v, value))) {
       this.values.push(value);
     }
   }
@@ -2025,7 +2001,7 @@ export class AggregationCursor<T extends Document = Document> {
       // Find matching foreign documents
       const matches = foreignDocs.filter((foreignDoc) => {
         const foreignValue = getValueByPath(foreignDoc, lookupSpec.foreignField);
-        return deepEquals(localValue, foreignValue);
+        return valuesEqual(localValue, foreignValue);
       });
 
       return {
