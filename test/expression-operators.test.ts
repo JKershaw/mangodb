@@ -463,4 +463,367 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Part 2: String Operators ====================
+
+  describe("String Operators", () => {
+    describe("$substrCP", () => {
+      it("should extract substring from start", async () => {
+        const collection = client.db(dbName).collection("substr_basic");
+        await collection.insertOne({ value: "hello world" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $substrCP: ["$value", 0, 5] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "hello");
+      });
+
+      it("should extract substring from middle", async () => {
+        const collection = client.db(dbName).collection("substr_middle");
+        await collection.insertOne({ value: "hello world" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $substrCP: ["$value", 6, 5] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "world");
+      });
+
+      it("should handle out of bounds gracefully", async () => {
+        const collection = client.db(dbName).collection("substr_oob");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $substrCP: ["$value", 3, 100] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "lo");
+      });
+
+      it("should return empty string for null input", async () => {
+        const collection = client.db(dbName).collection("substr_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $substrCP: ["$value", 0, 5] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "");
+      });
+
+      it("should return empty string for missing field", async () => {
+        const collection = client.db(dbName).collection("substr_missing");
+        await collection.insertOne({ other: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $substrCP: ["$value", 0, 5] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "");
+      });
+    });
+
+    describe("$strLenCP", () => {
+      it("should return string length", async () => {
+        const collection = client.db(dbName).collection("strlen_basic");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $strLenCP: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 5);
+      });
+
+      it("should return 0 for empty string", async () => {
+        const collection = client.db(dbName).collection("strlen_empty");
+        await collection.insertOne({ value: "" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $strLenCP: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 0);
+      });
+
+      it("should throw for null input", async () => {
+        const collection = client.db(dbName).collection("strlen_null");
+        await collection.insertOne({ value: null });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([{ $project: { result: { $strLenCP: "$value" }, _id: 0 } }])
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(err.message.includes("$strLenCP requires a string argument"));
+            return true;
+          }
+        );
+      });
+
+      it("should throw for non-string input", async () => {
+        const collection = client.db(dbName).collection("strlen_number");
+        await collection.insertOne({ value: 123 });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([{ $project: { result: { $strLenCP: "$value" }, _id: 0 } }])
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(err.message.includes("$strLenCP requires a string argument"));
+            return true;
+          }
+        );
+      });
+    });
+
+    describe("$split", () => {
+      it("should split string by delimiter", async () => {
+        const collection = client.db(dbName).collection("split_basic");
+        await collection.insertOne({ value: "a,b,c" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $split: ["$value", ","] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, ["a", "b", "c"]);
+      });
+
+      it("should return single-element array when delimiter not found", async () => {
+        const collection = client.db(dbName).collection("split_notfound");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $split: ["$value", ","] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, ["hello"]);
+      });
+
+      it("should handle empty parts", async () => {
+        const collection = client.db(dbName).collection("split_empty");
+        await collection.insertOne({ value: ",a,,b," });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $split: ["$value", ","] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, ["", "a", "", "b", ""]);
+      });
+
+      it("should throw for null string", async () => {
+        const collection = client.db(dbName).collection("split_null");
+        await collection.insertOne({ value: null });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([{ $project: { result: { $split: ["$value", ","] }, _id: 0 } }])
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(err.message.includes("$split"));
+            return true;
+          }
+        );
+      });
+    });
+
+    describe("$trim", () => {
+      it("should trim whitespace by default", async () => {
+        const collection = client.db(dbName).collection("trim_basic");
+        await collection.insertOne({ value: "  hello  " });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $trim: { input: "$value" } }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "hello");
+      });
+
+      it("should trim custom characters", async () => {
+        const collection = client.db(dbName).collection("trim_custom");
+        await collection.insertOne({ value: "xxhelloxx" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $trim: { input: "$value", chars: "x" } }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "hello");
+      });
+
+      it("should throw for non-string input", async () => {
+        const collection = client.db(dbName).collection("trim_number");
+        await collection.insertOne({ value: 123 });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([{ $project: { result: { $trim: { input: "$value" } }, _id: 0 } }])
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(err.message.includes("$trim"));
+            return true;
+          }
+        );
+      });
+    });
+
+    describe("$ltrim", () => {
+      it("should trim left whitespace only", async () => {
+        const collection = client.db(dbName).collection("ltrim_basic");
+        await collection.insertOne({ value: "  hello  " });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $ltrim: { input: "$value" } }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "hello  ");
+      });
+    });
+
+    describe("$rtrim", () => {
+      it("should trim right whitespace only", async () => {
+        const collection = client.db(dbName).collection("rtrim_basic");
+        await collection.insertOne({ value: "  hello  " });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $rtrim: { input: "$value" } }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "  hello");
+      });
+    });
+
+    describe("$toString", () => {
+      it("should convert number to string", async () => {
+        const collection = client.db(dbName).collection("tostring_num");
+        await collection.insertOne({ value: 123 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toString: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "123");
+      });
+
+      it("should convert boolean true to string", async () => {
+        const collection = client.db(dbName).collection("tostring_true");
+        await collection.insertOne({ value: true });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toString: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "true");
+      });
+
+      it("should convert boolean false to string", async () => {
+        const collection = client.db(dbName).collection("tostring_false");
+        await collection.insertOne({ value: false });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toString: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "false");
+      });
+
+      it("should return null for null input", async () => {
+        const collection = client.db(dbName).collection("tostring_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toString: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should return null for missing field", async () => {
+        const collection = client.db(dbName).collection("tostring_missing");
+        await collection.insertOne({ other: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toString: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should keep string unchanged", async () => {
+        const collection = client.db(dbName).collection("tostring_string");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toString: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "hello");
+      });
+    });
+
+    describe("$indexOfCP", () => {
+      it("should return index of substring", async () => {
+        const collection = client.db(dbName).collection("indexof_found");
+        await collection.insertOne({ value: "hello world" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $indexOfCP: ["$value", "world"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 6);
+      });
+
+      it("should return -1 when not found", async () => {
+        const collection = client.db(dbName).collection("indexof_notfound");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $indexOfCP: ["$value", "xyz"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, -1);
+      });
+
+      it("should return null for null string", async () => {
+        const collection = client.db(dbName).collection("indexof_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $indexOfCP: ["$value", "x"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should return 0 for match at beginning", async () => {
+        const collection = client.db(dbName).collection("indexof_start");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $indexOfCP: ["$value", "hel"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 0);
+      });
+
+      it("should support start index", async () => {
+        const collection = client.db(dbName).collection("indexof_startidx");
+        await collection.insertOne({ value: "hello hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $indexOfCP: ["$value", "hello", 1] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 6);
+      });
+    });
+  });
 });

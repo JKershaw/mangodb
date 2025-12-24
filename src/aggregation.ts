@@ -153,6 +153,22 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
       return evalToUpper(args, doc);
     case "$toLower":
       return evalToLower(args, doc);
+    case "$substrCP":
+      return evalSubstrCP(args as unknown[], doc);
+    case "$strLenCP":
+      return evalStrLenCP(args, doc);
+    case "$split":
+      return evalSplit(args as unknown[], doc);
+    case "$trim":
+      return evalTrim(args, doc);
+    case "$ltrim":
+      return evalLTrim(args, doc);
+    case "$rtrim":
+      return evalRTrim(args, doc);
+    case "$toString":
+      return evalToString(args, doc);
+    case "$indexOfCP":
+      return evalIndexOfCP(args as unknown[], doc);
 
     // Conditional operators
     case "$cond":
@@ -405,6 +421,204 @@ function evalToLower(args: unknown, doc: Document): string {
   }
 
   return value.toLowerCase();
+}
+
+function evalSubstrCP(args: unknown[], doc: Document): string {
+  const [strExpr, startExpr, countExpr] = args;
+  const str = evaluateExpression(strExpr, doc);
+  const start = evaluateExpression(startExpr, doc) as number;
+  const count = evaluateExpression(countExpr, doc) as number;
+
+  // MongoDB returns empty string for null/undefined
+  if (str === null || str === undefined) {
+    return "";
+  }
+
+  if (typeof str !== "string") {
+    const typeName = getBSONTypeName(str);
+    throw new Error(`$substrCP requires a string argument, found: ${typeName}`);
+  }
+
+  // Handle out of bounds gracefully
+  return str.substring(start, start + count);
+}
+
+function evalStrLenCP(args: unknown, doc: Document): number {
+  const value = evaluateExpression(args, doc);
+
+  // $strLenCP throws error for null/missing (unlike other string operators)
+  if (value === null || value === undefined) {
+    const typeName = value === null ? "null" : "missing";
+    throw new Error(`$strLenCP requires a string argument, found: ${typeName}`);
+  }
+
+  if (typeof value !== "string") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$strLenCP requires a string argument, found: ${typeName}`);
+  }
+
+  return value.length;
+}
+
+function evalSplit(args: unknown[], doc: Document): string[] {
+  const [strExpr, delimExpr] = args;
+  const str = evaluateExpression(strExpr, doc);
+  const delim = evaluateExpression(delimExpr, doc);
+
+  if (str === null || str === undefined) {
+    throw new Error("$split requires a string as the first argument, found: null");
+  }
+
+  if (typeof str !== "string") {
+    const typeName = getBSONTypeName(str);
+    throw new Error(`$split requires a string as the first argument, found: ${typeName}`);
+  }
+
+  if (delim === null || delim === undefined) {
+    throw new Error("$split requires a string as the second argument, found: null");
+  }
+
+  if (typeof delim !== "string") {
+    const typeName = getBSONTypeName(delim);
+    throw new Error(`$split requires a string as the second argument, found: ${typeName}`);
+  }
+
+  return str.split(delim);
+}
+
+function evalTrim(args: unknown, doc: Document): string {
+  const spec = args as { input: unknown; chars?: unknown };
+  const input = evaluateExpression(spec.input, doc);
+  const chars = spec.chars ? evaluateExpression(spec.chars, doc) as string : undefined;
+
+  if (typeof input !== "string") {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$trim requires its input to be a string, got ${typeName}`);
+  }
+
+  if (chars) {
+    // Trim custom characters
+    const charSet = new Set(chars.split(""));
+    let start = 0;
+    let end = input.length;
+    while (start < end && charSet.has(input[start])) start++;
+    while (end > start && charSet.has(input[end - 1])) end--;
+    return input.substring(start, end);
+  }
+
+  return input.trim();
+}
+
+function evalLTrim(args: unknown, doc: Document): string {
+  const spec = args as { input: unknown; chars?: unknown };
+  const input = evaluateExpression(spec.input, doc);
+  const chars = spec.chars ? evaluateExpression(spec.chars, doc) as string : undefined;
+
+  if (typeof input !== "string") {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$ltrim requires its input to be a string, got ${typeName}`);
+  }
+
+  if (chars) {
+    const charSet = new Set(chars.split(""));
+    let start = 0;
+    while (start < input.length && charSet.has(input[start])) start++;
+    return input.substring(start);
+  }
+
+  return input.trimStart();
+}
+
+function evalRTrim(args: unknown, doc: Document): string {
+  const spec = args as { input: unknown; chars?: unknown };
+  const input = evaluateExpression(spec.input, doc);
+  const chars = spec.chars ? evaluateExpression(spec.chars, doc) as string : undefined;
+
+  if (typeof input !== "string") {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$rtrim requires its input to be a string, got ${typeName}`);
+  }
+
+  if (chars) {
+    const charSet = new Set(chars.split(""));
+    let end = input.length;
+    while (end > 0 && charSet.has(input[end - 1])) end--;
+    return input.substring(0, end);
+  }
+
+  return input.trimEnd();
+}
+
+function evalToString(args: unknown, doc: Document): string | null {
+  const value = evaluateExpression(args, doc);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // String unchanged
+  if (typeof value === "string") {
+    return value;
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  // Number
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  // Date
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  // ObjectId (has toHexString method)
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+    return (value as { toHexString: () => string }).toHexString();
+  }
+
+  // Array and object not supported
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Unsupported conversion from ${typeName} to string`);
+}
+
+function evalIndexOfCP(args: unknown[], doc: Document): number | null {
+  const [strExpr, substrExpr, startExpr, endExpr] = args;
+  const str = evaluateExpression(strExpr, doc);
+  const substr = evaluateExpression(substrExpr, doc);
+  const start = startExpr !== undefined ? evaluateExpression(startExpr, doc) as number : 0;
+  const end = endExpr !== undefined ? evaluateExpression(endExpr, doc) as number : undefined;
+
+  // Null string returns null
+  if (str === null || str === undefined) {
+    return null;
+  }
+
+  // Null substring is an error
+  if (substr === null || substr === undefined) {
+    throw new Error("$indexOfCP requires a string as the second argument, found: null");
+  }
+
+  if (typeof str !== "string") {
+    const typeName = getBSONTypeName(str);
+    throw new Error(`$indexOfCP requires a string as the first argument, found: ${typeName}`);
+  }
+
+  if (typeof substr !== "string") {
+    const typeName = getBSONTypeName(substr);
+    throw new Error(`$indexOfCP requires a string as the second argument, found: ${typeName}`);
+  }
+
+  // Search within bounds
+  const searchStr = end !== undefined ? str.substring(0, end) : str;
+  const index = searchStr.indexOf(substr, start);
+
+  return index;
 }
 
 // ==================== Conditional Operators ====================
