@@ -71,7 +71,7 @@ After completing each phase:
 | 9 | Expression Operators (Date) | ✅ Complete ($millisecond, $dayOfYear, $week, $isoWeek, $isoWeekYear, $isoDayOfWeek, $dateAdd, $dateSubtract, $dateDiff, $dateFromParts, $dateToParts, $dateFromString) |
 | 10 | Expression Operators (Other) | ✅ Complete ($cmp, $switch, $isNumber, $toLong, $toDecimal, $toObjectId, $convert, $count, $mergeObjects, $stdDevPop, $stdDevSamp) |
 | 11 | Index Types & Options | ⬜ Not Started |
-| 12 | Collection Methods | ⬜ Not Started |
+| 12 | Collection Methods | ✅ Complete (replaceOne, createIndexes, dropIndexes) |
 | 13 | Final Polish | ⬜ Not Started |
 
 ---
@@ -559,4 +559,4 @@ Remember: Each subagent is stateless. Give complete context in the prompt.
 
 ---
 
-*Last updated: Phases 1-4, 6-10 Complete*
+*Last updated: Phases 1-4, 6-10, 12 Complete*

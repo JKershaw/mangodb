@@ -324,25 +324,22 @@ These features don't apply to a file-based implementation:
 All core CRUD methods:
 - `insertOne`, `insertMany`
 - `find`, `findOne`
-- `updateOne`, `updateMany`
+- `updateOne`, `updateMany`, `replaceOne`
 - `deleteOne`, `deleteMany`
 - `findOneAndUpdate`, `findOneAndReplace`, `findOneAndDelete`
 - `bulkWrite` (ordered and unordered)
 - `aggregate`
 - `countDocuments`, `estimatedDocumentCount`, `distinct`
-- `createIndex`, `dropIndex`, `indexes`, `listIndexes`
+- `createIndex`, `createIndexes`, `dropIndex`, `dropIndexes`, `indexes`, `listIndexes`
 - `drop`, `rename`, `stats`
 
 ### Not Implemented ❌
 
 | Method | Workaround |
 |--------|------------|
-| `replaceOne` | Use `bulkWrite` with `replaceOne` operation |
 | `watch` | Not available - poll with `find()` |
 | `initializeOrderedBulkOp` | Use `bulkWrite()` with `ordered: true` |
 | `initializeUnorderedBulkOp` | Use `bulkWrite()` with `ordered: false` |
-| `createIndexes` | Call `createIndex` in a loop |
-| `dropIndexes` | Call `dropIndex` in a loop |
 
 ### Method Options Not Supported ❌
 
