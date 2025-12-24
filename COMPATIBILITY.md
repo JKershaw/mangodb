@@ -780,6 +780,148 @@ await collection.insertOne({ firstName: "John", lastName: "Doe" });  // Error!
 
 ---
 
+## Aggregation Expression Operators
+
+### Arithmetic Operators
+
+**$abs, $ceil, $floor, $round**:
+- Return `null` for null/missing input (null propagation)
+- Throw error for non-numeric input with BSON type name in message
+
+**$round**:
+```typescript
+// Single argument - rounds to integer
+{ $round: "$value" }  // 3.7 -> 4
+
+// Two arguments - rounds to decimal places
+{ $round: ["$value", 2] }  // 3.14159 -> 3.14
+```
+
+**$mod**:
+```typescript
+{ $mod: ["$dividend", "$divisor"] }  // dividend % divisor
+// Returns null for division by zero (no error)
+```
+
+### String Operators
+
+**Null handling varies by operator**:
+- `$substrCP`, `$toUpper`, `$toLower` return empty string for null
+- `$strLenCP`, `$split` throw error for null input
+- `$toString` returns null for null input
+
+**$split**:
+```typescript
+{ $split: ["$string", ","] }  // "a,b,c" -> ["a", "b", "c"]
+// Delimiter must be non-null string (throws otherwise)
+```
+
+**$indexOfCP**:
+```typescript
+{ $indexOfCP: ["$string", "substr"] }  // Returns position or -1
+{ $indexOfCP: ["$string", "substr", 5] }  // Start from position 5
+{ $indexOfCP: ["$string", "substr", 0, 10] }  // Search within range
+```
+
+### Array Operators with Variable Scoping
+
+**Variable syntax**: `$$varName` references scoped variables
+
+**$filter**:
+```typescript
+{
+  $filter: {
+    input: "$scores",
+    as: "score",  // Optional, defaults to "this"
+    cond: { $gte: ["$$score", 60] }  // Use $$varName
+  }
+}
+```
+
+**$map**:
+```typescript
+{
+  $map: {
+    input: "$items",
+    as: "item",
+    in: { $multiply: ["$$item.price", "$$item.quantity"] }
+  }
+}
+```
+
+**$reduce**:
+```typescript
+{
+  $reduce: {
+    input: "$numbers",
+    initialValue: 0,
+    in: { $add: ["$$value", "$$this"] }  // $$value = accumulator, $$this = current
+  }
+}
+```
+
+**Behaviors**:
+- All return `null` for null/missing input array
+- Variable scope is isolated to each iteration
+- Nested variable references work: `$$item.nested.field`
+
+### Type Conversion Operators
+
+**$toBool - Critical behavior**:
+```typescript
+// ALL strings are truthy, including empty string!
+{ $toBool: "" }     // true (!)
+{ $toBool: "false" }  // true (!)
+{ $toBool: 0 }      // false
+{ $toBool: null }   // null
+```
+
+**$toInt**:
+```typescript
+{ $toInt: 3.9 }    // 3 (truncates toward zero)
+{ $toInt: -3.9 }   // -3 (toward zero, not floor!)
+{ $toInt: "123" }  // 123
+{ $toInt: true }   // 1
+```
+
+**$type - Return values**:
+- `"double"` - numbers (JavaScript doesn't distinguish int/double)
+- `"string"`, `"bool"`, `"array"`, `"object"`, `"date"`, `"objectId"`
+- `"null"` - for null values
+- `"missing"` - for undefined/missing fields
+
+### Date Operators
+
+**All date operators use UTC**:
+```typescript
+// Date: 2023-06-15T14:30:45Z
+{ $year: "$date" }      // 2023
+{ $month: "$date" }     // 6 (1-12, not 0-11)
+{ $dayOfMonth: "$date" } // 15
+{ $hour: "$date" }      // 14 (UTC)
+{ $minute: "$date" }    // 30
+{ $second: "$date" }    // 45
+{ $dayOfWeek: "$date" } // 5 (1=Sunday, 7=Saturday)
+```
+
+**$dateToString**:
+```typescript
+// Default format (ISO 8601)
+{ $dateToString: { date: "$createdAt" } }
+// Result: "2023-06-15T14:30:45.123Z"
+
+// Custom format
+{ $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+// Result: "2023-06-15"
+
+// With onNull fallback
+{ $dateToString: { date: "$maybeNull", onNull: "No date" } }
+
+// Format specifiers: %Y, %m, %d, %H, %M, %S, %L (ms)
+```
+
+---
+
 ## Notes
 
 This document will be updated as more behaviors are discovered through testing. Each entry should include:
