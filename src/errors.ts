@@ -14,14 +14,14 @@ import type { IndexKeySpec } from "./types.ts";
  *   await collection.insertOne({ email: 'user@example.com' });
  *   await collection.insertOne({ email: 'user@example.com' }); // Duplicate!
  * } catch (err) {
- *   if (err instanceof MongoDuplicateKeyError) {
+ *   if (err instanceof DuplicateKeyError) {
  *     console.log('Duplicate key error:', err.keyValue);
  *     console.log('Index pattern:', err.keyPattern);
  *   }
  * }
  * ```
  */
-export class MongoDuplicateKeyError extends Error {
+export class DuplicateKeyError extends Error {
   /** MongoDB error code for duplicate key */
   readonly code = 11000;
 
@@ -32,7 +32,7 @@ export class MongoDuplicateKeyError extends Error {
   readonly keyValue: Record<string, unknown>;
 
   /**
-   * Create a new MongoDuplicateKeyError.
+   * Create a new DuplicateKeyError.
    *
    * @param db - Database name where the error occurred
    * @param collection - Collection name where the error occurred
@@ -53,7 +53,7 @@ export class MongoDuplicateKeyError extends Error {
     super(
       `E11000 duplicate key error collection: ${db}.${collection} index: ${indexName} dup key: { ${keyStr} }`
     );
-    this.name = "MongoDuplicateKeyError";
+    this.name = "DuplicateKeyError";
     this.keyPattern = keyPattern;
     this.keyValue = keyValue;
   }

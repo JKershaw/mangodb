@@ -61,7 +61,7 @@ export class IndexCursor {
 }
 
 /**
- * MangoDBCursor represents a cursor over query results.
+ * MangoCursor represents a cursor over query results.
  * It mirrors the Cursor API from the official MongoDB driver, providing chainable methods
  * for sorting, limiting, skipping, and projecting query results.
  *
@@ -77,7 +77,7 @@ export class IndexCursor {
  *   .toArray();
  * ```
  */
-export class MangoDBCursor<T extends Document = Document> {
+export class MangoCursor<T extends Document = Document> {
   private readonly fetchDocuments: () => Promise<T[]>;
   private sortSpec: SortSpec | null = null;
   private limitValue: number | null = null;
@@ -87,7 +87,7 @@ export class MangoDBCursor<T extends Document = Document> {
   private readonly hintValidator: HintValidator | null = null;
 
   /**
-   * Creates a new MangoDBCursor instance.
+   * Creates a new MangoCursor instance.
    *
    * @param fetchDocuments - Function that returns a promise resolving to an array of documents
    * @param projection - Optional projection specification to apply to all results
@@ -120,7 +120,7 @@ export class MangoDBCursor<T extends Document = Document> {
    * cursor.sort({ createdAt: -1 });
    * ```
    */
-  sort(spec: SortSpec): MangoDBCursor<T> {
+  sort(spec: SortSpec): MangoCursor<T> {
     this.sortSpec = spec;
     return this;
   }
@@ -146,7 +146,7 @@ export class MangoDBCursor<T extends Document = Document> {
    * cursor.limit(-5); // Same as limit(5)
    * ```
    */
-  limit(n: number): MangoDBCursor<T> {
+  limit(n: number): MangoCursor<T> {
     const absN = Math.abs(n);
     // limit(0) means no limit in MongoDB
     this.limitValue = absN === 0 ? null : absN;
@@ -173,7 +173,7 @@ export class MangoDBCursor<T extends Document = Document> {
    * cursor.skip((page - 1) * pageSize).limit(pageSize);
    * ```
    */
-  skip(n: number): MangoDBCursor<T> {
+  skip(n: number): MangoCursor<T> {
     if (n < 0) {
       throw new Error("Skip value must be non-negative");
     }
@@ -202,7 +202,7 @@ export class MangoDBCursor<T extends Document = Document> {
    * cursor.hint({ $natural: -1 }); // Reverse scan
    * ```
    */
-  hint(indexHint: string | Record<string, unknown>): MangoDBCursor<T> {
+  hint(indexHint: string | Record<string, unknown>): MangoCursor<T> {
     this.hintSpec = indexHint;
     return this;
   }

@@ -1,5 +1,5 @@
 /**
- * MangoDBCollection - File-based MongoDB-compatible collection.
+ * MangoCollection - File-based MongoDB-compatible collection.
  *
  * This module provides the main collection class that uses extracted modules:
  * - types.ts: Type definitions
@@ -9,7 +9,7 @@
  * - index-manager.ts: Index management
  */
 import { ObjectId } from "bson";
-import { MangoDBCursor, IndexCursor } from "./cursor.ts";
+import { MangoCursor, IndexCursor } from "./cursor.ts";
 import { AggregationCursor, type AggregationDbContext } from "./aggregation/index.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
 import { readFile, writeFile, mkdir, unlink, rename as renameFile, access, stat } from "node:fs/promises";
@@ -70,7 +70,7 @@ import {
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
 
 /**
- * MangoDBCollection - A file-based MongoDB-compatible collection.
+ * MangoCollection - A file-based MongoDB-compatible collection.
  *
  * This class provides MongoDB Collection API methods backed by JSON file storage.
  * It supports standard CRUD operations, indexing, bulk writes, and advanced queries
@@ -80,19 +80,19 @@ export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
  *
  * @example
  * ```typescript
- * const collection = new MangoDBCollection<User>('./data', 'mydb', 'users');
+ * const collection = new MangoCollection<User>('./data', 'mydb', 'users');
  * await collection.insertOne({ name: 'John', age: 30 });
  * const user = await collection.findOne({ name: 'John' });
  * ```
  */
-export class MangoDBCollection<T extends Document = Document> {
+export class MangoCollection<T extends Document = Document> {
   private readonly filePath: string;
   private readonly indexManager: IndexManager;
   private readonly dataDir: string;
   private readonly dbName: string;
 
   /**
-   * Create a new MangoDBCollection instance.
+   * Create a new MangoCollection instance.
    *
    * @param dataDir - Base directory for data storage
    * @param dbName - Database name
@@ -100,7 +100,7 @@ export class MangoDBCollection<T extends Document = Document> {
    *
    * @example
    * ```typescript
-   * const collection = new MangoDBCollection('./data', 'mydb', 'users');
+   * const collection = new MangoCollection('./data', 'mydb', 'users');
    * ```
    */
   constructor(dataDir: string, dbName: string, collectionName: string) {
@@ -235,7 +235,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * @param keySpec - The fields to index, e.g., { name: 1 } for ascending or { age: -1 } for descending
    * @param options - Index creation options, including unique constraint
    * @returns The name of the created index
-   * @throws MongoDuplicateKeyError if unique constraint is violated by existing documents
+   * @throws DuplicateKeyError if unique constraint is violated by existing documents
    *
    * @example
    * ```typescript
@@ -315,7 +315,7 @@ export class MangoDBCollection<T extends Document = Document> {
    *
    * @param doc - The document to insert
    * @returns Result containing the inserted document's ObjectId
-   * @throws MongoDuplicateKeyError if a unique constraint is violated
+   * @throws DuplicateKeyError if a unique constraint is violated
    *
    * @example
    * ```typescript
@@ -353,7 +353,7 @@ export class MangoDBCollection<T extends Document = Document> {
    *
    * @param docs - Array of documents to insert
    * @returns Result containing a map of inserted document ObjectIds
-   * @throws MongoDuplicateKeyError if any unique constraint is violated
+   * @throws DuplicateKeyError if any unique constraint is violated
    *
    * @example
    * ```typescript
@@ -468,7 +468,7 @@ export class MangoDBCollection<T extends Document = Document> {
    *
    * @param filter - Query filter to match documents (default: empty object matches all)
    * @param options - Query options including projection
-   * @returns A MangoDBCursor for iterating through matching documents
+   * @returns A MangoCursor for iterating through matching documents
    *
    * @example
    * ```typescript
@@ -494,7 +494,7 @@ export class MangoDBCollection<T extends Document = Document> {
    *   .toArray();
    * ```
    */
-  find(filter: Filter<T> = {}, options: FindOptions = {}): MangoDBCursor<T> {
+  find(filter: Filter<T> = {}, options: FindOptions = {}): MangoCursor<T> {
     // Create hint validator that checks if the specified index exists
     const hintValidator = async (hint: string | Record<string, unknown>): Promise<boolean> => {
       const indexes = await this.indexManager.indexes();
@@ -511,7 +511,7 @@ export class MangoDBCollection<T extends Document = Document> {
       }
     };
 
-    return new MangoDBCursor<T>(
+    return new MangoCursor<T>(
       async () => {
         const documents = await this.readDocuments();
         return this.filterWithTextSupport(documents, filter);
@@ -573,7 +573,7 @@ export class MangoDBCollection<T extends Document = Document> {
     // Create database context for $lookup and $out stages
     const dbContext: AggregationDbContext = {
       getCollection: (name: string) => {
-        return new MangoDBCollection(this.dataDir, this.dbName, name);
+        return new MangoCollection(this.dataDir, this.dbName, name);
       },
     };
 
@@ -768,7 +768,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * @param update - Update operations to apply (must use update operators)
    * @param options - Update options including upsert
    * @returns Result containing matched, modified, and upserted counts
-   * @throws MongoDuplicateKeyError if upsert violates a unique constraint
+   * @throws DuplicateKeyError if upsert violates a unique constraint
    *
    * @example
    * ```typescript
@@ -811,7 +811,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * @param update - Update operations to apply (must use update operators)
    * @param options - Update options including upsert
    * @returns Result containing matched, modified, and upserted counts
-   * @throws MongoDuplicateKeyError if upsert violates a unique constraint
+   * @throws DuplicateKeyError if upsert violates a unique constraint
    *
    * @example
    * ```typescript
@@ -919,7 +919,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * @param options - Options including upsert, sort, projection, and returnDocument
    * @returns The original or replaced document, or null if not found and no upsert
    * @throws Error if replacement contains update operators
-   * @throws MongoDuplicateKeyError if replacement or upsert violates a unique constraint
+   * @throws DuplicateKeyError if replacement or upsert violates a unique constraint
    *
    * @example
    * ```typescript
@@ -1028,7 +1028,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * @param update - Update operations to apply (must use update operators)
    * @param options - Options including upsert, sort, projection, and returnDocument
    * @returns The original or updated document, or null if not found and no upsert
-   * @throws MongoDuplicateKeyError if update or upsert violates a unique constraint
+   * @throws DuplicateKeyError if update or upsert violates a unique constraint
    *
    * @example
    * ```typescript
@@ -1160,7 +1160,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * @returns Result containing counts for all operations and any upserted IDs
    * @throws Error if ordered is true and any operation fails
    * @throws Error with writeErrors property if ordered is false and any operations fail
-   * @throws MongoDuplicateKeyError if any operation violates a unique constraint
+   * @throws DuplicateKeyError if any operation violates a unique constraint
    *
    * @example
    * ```typescript
@@ -1532,7 +1532,7 @@ export class MangoDBCollection<T extends Document = Document> {
    * const newCollection = await collection.rename('existingName', { dropTarget: true });
    * ```
    */
-  async rename(newName: string, options: RenameOptions = {}): Promise<MangoDBCollection<T>> {
+  async rename(newName: string, options: RenameOptions = {}): Promise<MangoCollection<T>> {
     // Validate new name
     if (!newName || newName.length === 0) {
       throw new InvalidNamespaceError("collection names cannot be empty");
@@ -1600,6 +1600,6 @@ export class MangoDBCollection<T extends Document = Document> {
     }
 
     // Return new collection instance
-    return new MangoDBCollection(this.dataDir, this.dbName, newName);
+    return new MangoCollection(this.dataDir, this.dbName, newName);
   }
 }
