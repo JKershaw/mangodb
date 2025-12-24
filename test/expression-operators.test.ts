@@ -1838,27 +1838,27 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
           ])
           .toArray();
 
-        assert.strictEqual(results[0].w, "4"); // Thursday is 4 (Sunday=0)
+        assert.strictEqual(results[0].w, "5"); // Thursday is 5 (Sunday=1)
         assert.strictEqual(results[0].u, "4"); // Thursday is 4 (Monday=1)
       });
 
-      it("should throw error for non-string onNull value", async () => {
-        const collection = client.db(dbName).collection("datetostring_onnull_err");
+      it("should convert non-string onNull value to string", async () => {
+        const collection = client.db(dbName).collection("datetostring_onnull_convert");
         await collection.insertOne({ date: null });
 
-        await assert.rejects(
-          collection
-            .aggregate([
-              {
-                $project: {
-                  result: { $dateToString: { date: "$date", onNull: 123 } },
-                  _id: 0,
-                },
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: { $dateToString: { date: "$date", onNull: 123 } },
+                _id: 0,
               },
-            ])
-            .toArray(),
-          (err: Error) => err.message.includes("onNull must be a string")
-        );
+            },
+          ])
+          .toArray();
+
+        // MongoDB converts non-string onNull values to strings
+        assert.strictEqual(results[0].result, "123");
       });
     });
   });

@@ -1253,12 +1253,11 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
   if (dateValue === null || dateValue === undefined) {
     if (spec.onNull !== undefined) {
       const onNullValue = evaluateExpression(spec.onNull, doc, vars);
-      // onNull should evaluate to string or null
-      if (onNullValue !== null && typeof onNullValue !== "string") {
-        const typeName = getBSONTypeName(onNullValue);
-        throw new Error(`$dateToString onNull must be a string, found: ${typeName}`);
+      // MongoDB allows any value for onNull - convert to string if not null
+      if (onNullValue === null) {
+        return null;
       }
-      return onNullValue as string | null;
+      return String(onNullValue);
     }
     return null;
   }
@@ -1290,7 +1289,7 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
  *   %S - Seconds (00-59)
  *   %L - Milliseconds (000-999)
  *   %j - Day of year (001-366)
- *   %w - Day of week (0=Sunday, 6=Saturday)
+ *   %w - Day of week (1=Sunday, 7=Saturday)
  *   %u - ISO day of week (1=Monday, 7=Sunday)
  *   %U - Week of year (00-53, Sunday start)
  *   %V - ISO week of year (01-53)
@@ -1331,7 +1330,7 @@ function formatDate(date: Date, format: string): string {
     .replace(/%S/g, pad2(date.getUTCSeconds()))
     .replace(/%L/g, pad3(date.getUTCMilliseconds()))
     .replace(/%j/g, pad3(dayOfYear))
-    .replace(/%w/g, date.getUTCDay().toString())
+    .replace(/%w/g, (date.getUTCDay() + 1).toString())
     .replace(/%u/g, isoDayOfWeek.toString())
     .replace(/%U/g, pad2(weekOfYear))
     .replace(/%V/g, pad2(isoWeek));
