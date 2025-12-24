@@ -277,8 +277,8 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
           .aggregate([{ $project: { result: { $round: "$value" }, _id: 0 } }])
           .toArray();
 
-        // JavaScript rounds 2.5 to 3 (banker's rounding varies, but Math.round goes to 3)
-        assert.strictEqual(results[0].result, 3);
+        // MongoDB uses banker's rounding (round half to even): 2.5 -> 2
+        assert.strictEqual(results[0].result, 2);
       });
 
       it("should round to specified decimal places", async () => {

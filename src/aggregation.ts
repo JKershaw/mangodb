@@ -408,13 +408,33 @@ function evalRound(args: unknown, doc: Document): number | null {
     throw new Error(`$round only supports numeric types, not ${typeName}`);
   }
 
-  if (place === 0) {
-    return Math.round(value);
+  // MongoDB uses banker's rounding (round half to even)
+  return bankersRound(value, place);
+}
+
+/**
+ * Banker's rounding (round half to even).
+ * When the value is exactly halfway, round to the nearest even number.
+ * This is the rounding method MongoDB uses for $round.
+ */
+function bankersRound(value: number, decimalPlaces: number): number {
+  const multiplier = Math.pow(10, decimalPlaces);
+  const shifted = value * multiplier;
+  const floor = Math.floor(shifted);
+  const decimal = shifted - floor;
+
+  // Check if exactly halfway (with floating point tolerance)
+  if (Math.abs(decimal - 0.5) < 1e-10) {
+    // Round to even
+    if (floor % 2 === 0) {
+      return floor / multiplier;
+    } else {
+      return (floor + 1) / multiplier;
+    }
   }
 
-  // Round to specified decimal places
-  const multiplier = Math.pow(10, place);
-  return Math.round(value * multiplier) / multiplier;
+  // Standard rounding for non-halfway cases
+  return Math.round(shifted) / multiplier;
 }
 
 function evalMod(args: unknown[], doc: Document): number | null {
