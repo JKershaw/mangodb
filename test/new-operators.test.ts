@@ -2301,4 +2301,117 @@ describe(`New Operators (${getTestModeName()})`, () => {
       assert.strictEqual(docs[0].stdDev, null);
     });
   });
+
+  // Phase 12: Collection Methods
+  describe("replaceOne method", () => {
+    it("should replace a document", async () => {
+      const collection = client.db(dbName).collection("replaceOne_basic");
+      await collection.insertOne({ name: "John", age: 30 });
+
+      const result = await collection.replaceOne(
+        { name: "John" },
+        { name: "John Doe", age: 31, email: "john@example.com" }
+      );
+
+      assert.strictEqual(result.matchedCount, 1);
+      assert.strictEqual(result.modifiedCount, 1);
+
+      const doc = await collection.findOne({ name: "John Doe" });
+      assert.strictEqual(doc?.age, 31);
+      assert.strictEqual(doc?.email, "john@example.com");
+    });
+
+    it("should preserve _id when replacing", async () => {
+      const collection = client.db(dbName).collection("replaceOne_id");
+      const insertResult = await collection.insertOne({ name: "Jane", age: 25 });
+      const originalId = insertResult.insertedId;
+
+      await collection.replaceOne(
+        { name: "Jane" },
+        { name: "Jane Smith", age: 26 }
+      );
+
+      const doc = await collection.findOne({ name: "Jane Smith" });
+      const docId = doc?._id as { equals: (id: unknown) => boolean };
+      assert.ok(docId.equals(originalId));
+    });
+
+    it("should upsert when document not found", async () => {
+      const collection = client.db(dbName).collection("replaceOne_upsert");
+
+      const result = await collection.replaceOne(
+        { name: "NotFound" },
+        { name: "NewUser", age: 20 },
+        { upsert: true }
+      );
+
+      assert.strictEqual(result.matchedCount, 0);
+      assert.strictEqual(result.upsertedCount, 1);
+      assert.ok(result.upsertedId);
+
+      const doc = await collection.findOne({ name: "NewUser" });
+      assert.strictEqual(doc?.age, 20);
+    });
+
+    it("should return matchedCount 0 when no match and no upsert", async () => {
+      const collection = client.db(dbName).collection("replaceOne_nomatch");
+
+      const result = await collection.replaceOne(
+        { name: "NonExistent" },
+        { name: "NewDoc", age: 30 }
+      );
+
+      assert.strictEqual(result.matchedCount, 0);
+      assert.strictEqual(result.modifiedCount, 0);
+    });
+  });
+
+  describe("createIndexes method", () => {
+    it("should create multiple indexes", async () => {
+      const collection = client.db(dbName).collection("createIndexes_basic");
+      await collection.insertOne({ email: "test@example.com", name: "Test" });
+
+      const names = await collection.createIndexes([
+        { key: { email: 1 }, unique: true },
+        { key: { name: 1 } },
+      ]);
+
+      assert.strictEqual(names.length, 2);
+      assert.ok(names.includes("email_1"));
+      assert.ok(names.includes("name_1"));
+
+      const indexes = await collection.indexes();
+      const indexNames = indexes.map((idx) => idx.name);
+      assert.ok(indexNames.includes("email_1"));
+      assert.ok(indexNames.includes("name_1"));
+    });
+  });
+
+  describe("dropIndexes method", () => {
+    it("should drop all indexes except _id", async () => {
+      const collection = client.db(dbName).collection("dropIndexes_all");
+      await collection.insertOne({ email: "test@example.com", name: "Test" });
+      await collection.createIndex({ email: 1 });
+      await collection.createIndex({ name: 1 });
+
+      await collection.dropIndexes();
+
+      const indexes = await collection.indexes();
+      assert.strictEqual(indexes.length, 1);
+      assert.strictEqual(indexes[0].name, "_id_");
+    });
+
+    it("should drop all indexes when passed *", async () => {
+      const collection = client.db(dbName).collection("dropIndexes_star");
+      await collection.insertOne({ email: "test@example.com", name: "Test" });
+      await collection.createIndex({ email: 1 });
+      await collection.createIndex({ name: 1 });
+
+      await collection.dropIndexes("*");
+
+      const indexes = await collection.indexes();
+      assert.strictEqual(indexes.length, 1);
+      assert.strictEqual(indexes[0].name, "_id_");
+    });
+  });
 });

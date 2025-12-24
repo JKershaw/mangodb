@@ -276,6 +276,72 @@ export class MangoCollection<T extends Document = Document> {
   }
 
   /**
+   * Create multiple indexes on the collection.
+   *
+   * @param indexSpecs - Array of index specifications, each with key and optional options
+   * @returns Array of created index names
+   *
+   * @example
+   * ```typescript
+   * const names = await collection.createIndexes([
+   *   { key: { email: 1 }, unique: true },
+   *   { key: { lastName: 1, firstName: 1 } },
+   *   { key: { createdAt: 1 }, expireAfterSeconds: 3600 }
+   * ]);
+   * ```
+   */
+  async createIndexes(
+    indexSpecs: Array<{ key: IndexKeySpec } & CreateIndexOptions>
+  ): Promise<string[]> {
+    const names: string[] = [];
+    for (const spec of indexSpecs) {
+      const { key, ...options } = spec;
+      const name = await this.indexManager.createIndex(key, options);
+      names.push(name);
+    }
+    return names;
+  }
+
+  /**
+   * Drop all indexes on the collection except _id.
+   *
+   * When called with no arguments, drops all non-_id indexes.
+   * When called with "*", drops all non-_id indexes.
+   * When called with an array of names, drops those specific indexes.
+   *
+   * @param indexNames - Optional: "*" to drop all, or array of index names
+   *
+   * @example
+   * ```typescript
+   * // Drop all indexes except _id
+   * await collection.dropIndexes();
+   *
+   * // Drop all indexes except _id (explicit)
+   * await collection.dropIndexes("*");
+   *
+   * // Drop specific indexes
+   * await collection.dropIndexes(["email_1", "name_1"]);
+   * ```
+   */
+  async dropIndexes(indexNames?: "*" | string[]): Promise<void> {
+    const indexes = await this.indexManager.indexes();
+
+    if (indexNames === "*" || indexNames === undefined) {
+      // Drop all non-_id indexes
+      for (const idx of indexes) {
+        if (idx.name !== "_id_") {
+          await this.indexManager.dropIndex(idx.name);
+        }
+      }
+    } else {
+      // Drop specific indexes
+      for (const name of indexNames) {
+        await this.indexManager.dropIndex(name);
+      }
+    }
+  }
+
+  /**
    * Get all indexes on the collection.
    *
    * @returns Array of index information objects
@@ -835,6 +901,105 @@ export class MangoCollection<T extends Document = Document> {
     options: UpdateOptions = {}
   ): Promise<UpdateResult> {
     return this.performUpdate(filter, update, options, false);
+  }
+
+  /**
+   * Replace a single document matching the filter.
+   *
+   * Finds the first document matching the filter and replaces it entirely with
+   * the replacement document. The _id field is preserved from the original document.
+   *
+   * @param filter - Query filter to match the document
+   * @param replacement - Replacement document (must not contain update operators)
+   * @param options - Options including upsert
+   * @returns Result containing matchedCount, modifiedCount, and optionally upsertedId
+   * @throws Error if replacement contains update operators
+   * @throws DuplicateKeyError if replacement or upsert violates a unique constraint
+   *
+   * @example
+   * ```typescript
+   * // Replace a document
+   * const result = await collection.replaceOne(
+   *   { name: 'John' },
+   *   { name: 'John Doe', age: 31, email: 'john@example.com' }
+   * );
+   *
+   * // Replace with upsert
+   * const result = await collection.replaceOne(
+   *   { name: 'New User' },
+   *   { name: 'New User', age: 25 },
+   *   { upsert: true }
+   * );
+   * ```
+   */
+  async replaceOne(
+    filter: Filter<T>,
+    replacement: T,
+    options: { upsert?: boolean } = {}
+  ): Promise<UpdateResult> {
+    validateReplacement(replacement);
+
+    const documents = await this.readDocuments();
+    const matches = documents.filter((doc) => matchesFilter(doc, filter));
+
+    if (matches.length === 0) {
+      if (options.upsert) {
+        const newDoc = { ...replacement } as T;
+        if (!("_id" in newDoc)) {
+          (newDoc as Record<string, unknown>)._id = new ObjectId();
+        }
+        await this.indexManager.checkUniqueConstraints([newDoc], documents);
+        documents.push(newDoc);
+        await this.writeDocuments(documents);
+
+        return {
+          acknowledged: true,
+          matchedCount: 0,
+          modifiedCount: 0,
+          upsertedCount: 1,
+          upsertedId: (newDoc as unknown as { _id: ObjectId })._id,
+        };
+      }
+      return {
+        acknowledged: true,
+        matchedCount: 0,
+        modifiedCount: 0,
+        upsertedCount: 0,
+        upsertedId: null,
+      };
+    }
+
+    const docToReplace = matches[0];
+    const originalId = (docToReplace as { _id?: ObjectId })._id;
+    const newDoc = { ...replacement } as T;
+    if (originalId) {
+      (newDoc as Record<string, unknown>)._id = originalId;
+    }
+
+    await this.indexManager.checkUniqueConstraints(
+      [newDoc],
+      documents,
+      originalId ? new Set([originalId.toHexString()]) : new Set()
+    );
+
+    const idx = documents.findIndex((doc) => {
+      const id = (doc as { _id?: ObjectId })._id;
+      return id && originalId && id.equals(originalId);
+    });
+
+    if (idx !== -1) {
+      documents[idx] = newDoc;
+    }
+
+    await this.writeDocuments(documents);
+
+    return {
+      acknowledged: true,
+      matchedCount: 1,
+      modifiedCount: 1,
+      upsertedCount: 0,
+      upsertedId: null,
+    };
   }
 
   // ==================== FindOneAnd* Operations ====================
