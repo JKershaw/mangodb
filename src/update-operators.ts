@@ -13,6 +13,16 @@ import {
 import { isOperatorObject, matchesOperators, matchesPullCondition } from "./query-matcher.ts";
 
 /**
+ * Push modifier object structure.
+ */
+interface PushModifiers {
+  $each: unknown[];
+  $position?: number;
+  $slice?: number;
+  $sort?: number | Record<string, 1 | -1>;
+}
+
+/**
  * Check if a value is a $push/$addToSet $each modifier.
  *
  * The $each modifier is used with $push and $addToSet to append multiple values
@@ -25,7 +35,7 @@ import { isOperatorObject, matchesOperators, matchesPullCondition } from "./quer
  * isPushEachModifier([1, 2, 3]) // false
  * isPushEachModifier({ $each: "not an array" }) // false
  */
-export function isPushEachModifier(value: unknown): value is { $each: unknown[] } {
+export function isPushEachModifier(value: unknown): value is PushModifiers {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -40,6 +50,7 @@ export function isPushEachModifier(value: unknown): value is { $each: unknown[] 
  *
  * Adds values to an array field. If the field doesn't exist, it creates a new array.
  * Supports the $each modifier to add multiple values at once.
+ * Supports $position, $slice, and $sort modifiers.
  *
  * @param doc - The document to modify
  * @param path - The dot-notation path to the array field
@@ -54,37 +65,100 @@ function applyArrayPush(
   unique: boolean
 ): void {
   const currentValue = getValueAtPath(doc, path);
-  const valuesToAdd = isPushEachModifier(value)
-    ? (value as { $each: unknown[] }).$each
-    : [value];
+  const isModifier = isPushEachModifier(value);
+  const valuesToAdd = isModifier ? value.$each : [value];
+  const position = isModifier ? value.$position : undefined;
+  const sliceValue = isModifier ? value.$slice : undefined;
+  const sortSpec = isModifier ? value.$sort : undefined;
 
+  // Get or create the array
+  let arr: unknown[];
   if (currentValue === undefined) {
-    if (unique) {
-      const uniqueValues: unknown[] = [];
-      for (const v of valuesToAdd) {
-        if (!uniqueValues.some((existing) => valuesEqual(existing, v, true))) {
-          uniqueValues.push(v);
-        }
-      }
-      setValueByPath(doc, path, uniqueValues);
-    } else {
-      setValueByPath(doc, path, [...valuesToAdd]);
-    }
+    arr = [];
+    setValueByPath(doc, path, arr);
   } else if (Array.isArray(currentValue)) {
-    for (const v of valuesToAdd) {
-      if (unique) {
-        if (!currentValue.some((existing) => valuesEqual(existing, v, true))) {
-          currentValue.push(v);
-        }
-      } else {
-        currentValue.push(v);
-      }
-    }
+    arr = currentValue;
   } else {
     const fieldType = currentValue === null ? "null" : typeof currentValue;
     throw new Error(
       `The field '${path}' must be an array but is of type ${fieldType}`
     );
+  }
+
+  // Add values (with uniqueness check if needed)
+  const newValues: unknown[] = [];
+  for (const v of valuesToAdd) {
+    if (unique) {
+      if (!arr.some((existing) => valuesEqual(existing, v, true)) &&
+          !newValues.some((existing) => valuesEqual(existing, v, true))) {
+        newValues.push(v);
+      }
+    } else {
+      newValues.push(v);
+    }
+  }
+
+  // Apply $position - insert at specific index
+  if (position !== undefined) {
+    if (!Number.isInteger(position)) {
+      throw new Error("$position must be an integer");
+    }
+    // Negative positions count from end
+    const insertAt = position < 0 ? Math.max(0, arr.length + position) : Math.min(position, arr.length);
+    arr.splice(insertAt, 0, ...newValues);
+  } else {
+    // Default: append to end
+    arr.push(...newValues);
+  }
+
+  // Apply $sort - sort the array after adding
+  if (sortSpec !== undefined) {
+    if (typeof sortSpec === "number") {
+      // Sort array of primitives
+      if (sortSpec !== 1 && sortSpec !== -1) {
+        throw new Error("$sort must be 1 or -1 for primitive arrays");
+      }
+      arr.sort((a, b) => {
+        const cmp = compareValues(a, b);
+        return sortSpec === 1 ? cmp : -cmp;
+      });
+    } else if (typeof sortSpec === "object" && sortSpec !== null) {
+      // Sort array of objects by fields
+      const sortFields = Object.entries(sortSpec);
+      arr.sort((a, b) => {
+        for (const [field, dir] of sortFields) {
+          const aVal = getValueAtPath(a as Record<string, unknown>, field);
+          const bVal = getValueAtPath(b as Record<string, unknown>, field);
+          const cmp = compareValues(aVal, bVal);
+          if (cmp !== 0) {
+            return dir === 1 ? cmp : -cmp;
+          }
+        }
+        return 0;
+      });
+    }
+  }
+
+  // Apply $slice - limit array size
+  if (sliceValue !== undefined) {
+    if (!Number.isInteger(sliceValue)) {
+      throw new Error("$slice must be an integer");
+    }
+    if (sliceValue === 0) {
+      // Remove all elements
+      arr.length = 0;
+    } else if (sliceValue > 0) {
+      // Keep first N elements
+      if (arr.length > sliceValue) {
+        arr.length = sliceValue;
+      }
+    } else {
+      // Keep last N elements (negative slice)
+      const keep = -sliceValue;
+      if (arr.length > keep) {
+        arr.splice(0, arr.length - keep);
+      }
+    }
   }
 }
 

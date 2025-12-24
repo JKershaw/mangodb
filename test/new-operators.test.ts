@@ -72,6 +72,261 @@ describe(`New Update Operators (${getTestModeName()})`, () => {
     });
   });
 
+  describe("$push array modifiers", () => {
+    describe("$position modifier", () => {
+      it("should insert at specified position", async () => {
+        const collection = client.db(dbName).collection("push_position");
+        await collection.insertOne({ items: ["a", "b", "c"] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: ["x", "y"], $position: 1 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, ["a", "x", "y", "b", "c"]);
+      });
+
+      it("should insert at beginning with position 0", async () => {
+        const collection = client.db(dbName).collection("push_position_zero");
+        await collection.insertOne({ items: [1, 2, 3] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [0], $position: 0 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [0, 1, 2, 3]);
+      });
+
+      it("should handle negative position (from end)", async () => {
+        const collection = client.db(dbName).collection("push_position_neg");
+        await collection.insertOne({ items: ["a", "b", "c"] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: ["x"], $position: -1 } } }
+        );
+
+        const doc = await collection.findOne({});
+        // Position -1 means insert before the last element
+        assert.deepStrictEqual(doc?.items, ["a", "b", "x", "c"]);
+      });
+
+      it("should append if position exceeds array length", async () => {
+        const collection = client.db(dbName).collection("push_position_exceed");
+        await collection.insertOne({ items: [1, 2] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [3], $position: 100 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [1, 2, 3]);
+      });
+    });
+
+    describe("$slice modifier", () => {
+      it("should keep first N elements with positive slice", async () => {
+        const collection = client.db(dbName).collection("push_slice_pos");
+        await collection.insertOne({ items: [1, 2, 3] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [4, 5, 6], $slice: 4 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [1, 2, 3, 4]);
+      });
+
+      it("should keep last N elements with negative slice", async () => {
+        const collection = client.db(dbName).collection("push_slice_neg");
+        await collection.insertOne({ items: [1, 2, 3] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [4, 5, 6], $slice: -3 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [4, 5, 6]);
+      });
+
+      it("should remove all elements with slice 0", async () => {
+        const collection = client.db(dbName).collection("push_slice_zero");
+        await collection.insertOne({ items: [1, 2, 3] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [4, 5], $slice: 0 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, []);
+      });
+
+      it("should not truncate if slice exceeds array length", async () => {
+        const collection = client.db(dbName).collection("push_slice_exceed");
+        await collection.insertOne({ items: [1, 2] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [3], $slice: 10 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [1, 2, 3]);
+      });
+    });
+
+    describe("$sort modifier", () => {
+      it("should sort array ascending with $sort: 1", async () => {
+        const collection = client.db(dbName).collection("push_sort_asc");
+        await collection.insertOne({ items: [3, 1, 2] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [5, 4], $sort: 1 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [1, 2, 3, 4, 5]);
+      });
+
+      it("should sort array descending with $sort: -1", async () => {
+        const collection = client.db(dbName).collection("push_sort_desc");
+        await collection.insertOne({ items: [3, 1, 2] });
+
+        await collection.updateOne(
+          {},
+          { $push: { items: { $each: [5, 4], $sort: -1 } } }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [5, 4, 3, 2, 1]);
+      });
+
+      it("should sort objects by field", async () => {
+        const collection = client.db(dbName).collection("push_sort_field");
+        await collection.insertOne({
+          items: [{ score: 80 }, { score: 60 }],
+        });
+
+        await collection.updateOne(
+          {},
+          {
+            $push: {
+              items: {
+                $each: [{ score: 70 }, { score: 90 }],
+                $sort: { score: 1 },
+              },
+            },
+          }
+        );
+
+        const doc = await collection.findOne({});
+        const scores = (doc?.items as { score: number }[]).map((i) => i.score);
+        assert.deepStrictEqual(scores, [60, 70, 80, 90]);
+      });
+
+      it("should sort objects by field descending", async () => {
+        const collection = client.db(dbName).collection("push_sort_field_desc");
+        await collection.insertOne({
+          items: [{ name: "B" }, { name: "C" }],
+        });
+
+        await collection.updateOne(
+          {},
+          {
+            $push: {
+              items: {
+                $each: [{ name: "A" }, { name: "D" }],
+                $sort: { name: -1 },
+              },
+            },
+          }
+        );
+
+        const doc = await collection.findOne({});
+        const names = (doc?.items as { name: string }[]).map((i) => i.name);
+        assert.deepStrictEqual(names, ["D", "C", "B", "A"]);
+      });
+    });
+
+    describe("Combined modifiers", () => {
+      it("should apply $position, $sort, and $slice together", async () => {
+        const collection = client.db(dbName).collection("push_combined");
+        await collection.insertOne({ items: [5, 3, 7] });
+
+        // Add values, sort, then slice to top 4
+        await collection.updateOne(
+          {},
+          {
+            $push: {
+              items: {
+                $each: [1, 9, 2],
+                $sort: -1,
+                $slice: 4,
+              },
+            },
+          }
+        );
+
+        const doc = await collection.findOne({});
+        // After adding: [5, 3, 7, 1, 9, 2]
+        // After sort -1: [9, 7, 5, 3, 2, 1]
+        // After slice 4: [9, 7, 5, 3]
+        assert.deepStrictEqual(doc?.items, [9, 7, 5, 3]);
+      });
+
+      it("should apply $position before $slice", async () => {
+        const collection = client.db(dbName).collection("push_pos_slice");
+        await collection.insertOne({ items: ["a", "b", "c"] });
+
+        await collection.updateOne(
+          {},
+          {
+            $push: {
+              items: {
+                $each: ["x"],
+                $position: 0,
+                $slice: 3,
+              },
+            },
+          }
+        );
+
+        const doc = await collection.findOne({});
+        // After position 0: ["x", "a", "b", "c"]
+        // After slice 3: ["x", "a", "b"]
+        assert.deepStrictEqual(doc?.items, ["x", "a", "b"]);
+      });
+
+      it("should handle empty $each with $slice", async () => {
+        const collection = client.db(dbName).collection("push_empty_slice");
+        await collection.insertOne({ items: [1, 2, 3, 4, 5] });
+
+        await collection.updateOne(
+          {},
+          {
+            $push: {
+              items: {
+                $each: [],
+                $slice: 3,
+              },
+            },
+          }
+        );
+
+        const doc = await collection.findOne({});
+        assert.deepStrictEqual(doc?.items, [1, 2, 3]);
+      });
+    });
+  });
+
   describe("$bit operator", () => {
     it("should apply bitwise AND", async () => {
       const collection = client.db(dbName).collection("bit_and");
