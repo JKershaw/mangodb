@@ -1280,4 +1280,307 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Part 4: Type Conversion Operators ====================
+
+  describe("Type Conversion Operators", () => {
+    describe("$toInt", () => {
+      it("should convert double to int (truncate)", async () => {
+        const collection = client.db(dbName).collection("toint_double");
+        await collection.insertOne({ value: 3.9 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 3);
+      });
+
+      it("should truncate negative numbers toward zero", async () => {
+        const collection = client.db(dbName).collection("toint_neg");
+        await collection.insertOne({ value: -3.9 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, -3);
+      });
+
+      it("should convert string to int", async () => {
+        const collection = client.db(dbName).collection("toint_string");
+        await collection.insertOne({ value: "123" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 123);
+      });
+
+      it("should convert bool true to 1", async () => {
+        const collection = client.db(dbName).collection("toint_true");
+        await collection.insertOne({ value: true });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 1);
+      });
+
+      it("should convert bool false to 0", async () => {
+        const collection = client.db(dbName).collection("toint_false");
+        await collection.insertOne({ value: false });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 0);
+      });
+
+      it("should return null for null", async () => {
+        const collection = client.db(dbName).collection("toint_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$toDouble", () => {
+      it("should convert int to double", async () => {
+        const collection = client.db(dbName).collection("todouble_int");
+        await collection.insertOne({ value: 5 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDouble: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 5.0);
+      });
+
+      it("should convert string to double", async () => {
+        const collection = client.db(dbName).collection("todouble_string");
+        await collection.insertOne({ value: "3.14" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDouble: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 3.14);
+      });
+
+      it("should convert bool to double", async () => {
+        const collection = client.db(dbName).collection("todouble_bool");
+        await collection.insertOne({ value: true });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDouble: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 1.0);
+      });
+
+      it("should return null for null", async () => {
+        const collection = client.db(dbName).collection("todouble_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDouble: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$toBool", () => {
+      it("should convert 0 to false", async () => {
+        const collection = client.db(dbName).collection("tobool_zero");
+        await collection.insertOne({ value: 0 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toBool: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should convert non-zero to true", async () => {
+        const collection = client.db(dbName).collection("tobool_nonzero");
+        await collection.insertOne({ value: 42 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toBool: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should convert empty string to true", async () => {
+        // Critical: MongoDB treats ALL strings as truthy
+        const collection = client.db(dbName).collection("tobool_emptystr");
+        await collection.insertOne({ value: "" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toBool: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should convert non-empty string to true", async () => {
+        const collection = client.db(dbName).collection("tobool_string");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toBool: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return null for null", async () => {
+        const collection = client.db(dbName).collection("tobool_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toBool: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$toDate", () => {
+      it("should convert epoch milliseconds to date", async () => {
+        const collection = client.db(dbName).collection("todate_epoch");
+        // Jan 1, 2020 00:00:00 UTC = 1577836800000
+        await collection.insertOne({ value: 1577836800000 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDate: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.ok(results[0].result instanceof Date);
+        assert.strictEqual((results[0].result as Date).getUTCFullYear(), 2020);
+      });
+
+      it("should convert ISO string to date", async () => {
+        const collection = client.db(dbName).collection("todate_string");
+        await collection.insertOne({ value: "2020-01-15T10:30:00Z" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDate: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.ok(results[0].result instanceof Date);
+      });
+
+      it("should return null for null", async () => {
+        const collection = client.db(dbName).collection("todate_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $toDate: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$type", () => {
+      it("should return 'double' for numbers", async () => {
+        const collection = client.db(dbName).collection("type_double");
+        await collection.insertOne({ value: 3.14 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "double");
+      });
+
+      it("should return 'string' for strings", async () => {
+        const collection = client.db(dbName).collection("type_string");
+        await collection.insertOne({ value: "hello" });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "string");
+      });
+
+      it("should return 'bool' for booleans", async () => {
+        const collection = client.db(dbName).collection("type_bool");
+        await collection.insertOne({ value: true });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "bool");
+      });
+
+      it("should return 'array' for arrays", async () => {
+        const collection = client.db(dbName).collection("type_array");
+        await collection.insertOne({ value: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "array");
+      });
+
+      it("should return 'object' for objects", async () => {
+        const collection = client.db(dbName).collection("type_object");
+        await collection.insertOne({ value: { a: 1 } });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "object");
+      });
+
+      it("should return 'null' for null", async () => {
+        const collection = client.db(dbName).collection("type_null");
+        await collection.insertOne({ value: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "null");
+      });
+
+      it("should return 'missing' for missing field", async () => {
+        const collection = client.db(dbName).collection("type_missing");
+        await collection.insertOne({ other: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "missing");
+      });
+
+      it("should return 'date' for dates", async () => {
+        const collection = client.db(dbName).collection("type_date");
+        await collection.insertOne({ value: new Date() });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $type: "$value" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "date");
+      });
+    });
+  });
 });

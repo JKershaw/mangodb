@@ -235,6 +235,18 @@ function evaluateOperator(op: string, args: unknown, doc: Document, vars?: Varia
     case "$in":
       return evalIn(args as unknown[], doc, vars);
 
+    // Type conversion operators
+    case "$toInt":
+      return evalToInt(args, doc, vars);
+    case "$toDouble":
+      return evalToDouble(args, doc, vars);
+    case "$toBool":
+      return evalToBool(args, doc, vars);
+    case "$toDate":
+      return evalToDate(args, doc, vars);
+    case "$type":
+      return evalType(args, doc, vars);
+
     default:
       throw new Error(`Unrecognized expression operator: '${op}'`);
   }
@@ -913,6 +925,200 @@ function evalIn(args: unknown[], doc: Document, vars?: VariableContext): boolean
   }
 
   return false;
+}
+
+// ==================== Type Conversion Operators ====================
+
+function evalToInt(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Number - truncate toward zero
+  if (typeof value === "number") {
+    return Math.trunc(value);
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? 1 : 0;
+  }
+
+  // String - parse as integer
+  if (typeof value === "string") {
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed)) {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
+    return parsed;
+  }
+
+  // Date - milliseconds since epoch as int
+  if (value instanceof Date) {
+    return Math.trunc(value.getTime());
+  }
+
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Unsupported conversion from ${typeName} to int`);
+}
+
+function evalToDouble(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Number - already double in JS
+  if (typeof value === "number") {
+    return value;
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? 1.0 : 0.0;
+  }
+
+  // String - parse as float
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    if (isNaN(parsed)) {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
+    return parsed;
+  }
+
+  // Date - milliseconds since epoch
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Unsupported conversion from ${typeName} to double`);
+}
+
+function evalToBool(args: unknown, doc: Document, vars?: VariableContext): boolean | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Number - only 0 is false
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  // Boolean - as-is
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  // String - ALL strings are truthy (including empty string!)
+  if (typeof value === "string") {
+    return true;
+  }
+
+  // Date - always true
+  if (value instanceof Date) {
+    return true;
+  }
+
+  // Array and object - true
+  if (Array.isArray(value) || typeof value === "object") {
+    return true;
+  }
+
+  return true;
+}
+
+function evalToDate(args: unknown, doc: Document, vars?: VariableContext): Date | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Date - as-is
+  if (value instanceof Date) {
+    return value;
+  }
+
+  // Number - milliseconds since epoch
+  if (typeof value === "number") {
+    return new Date(value);
+  }
+
+  // String - parse ISO date
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (isNaN(parsed.getTime())) {
+      throw new Error(`Failed to parse date string '${value}'`);
+    }
+    return parsed;
+  }
+
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Can't convert from BSON type ${typeName} to Date`);
+}
+
+function evalType(args: unknown, doc: Document, vars?: VariableContext): string {
+  // Special handling for $type - we need to detect "missing" before evaluating
+  // Check if args is a field reference to a missing field
+  if (typeof args === "string" && args.startsWith("$") && !args.startsWith("$$")) {
+    const fieldPath = args.slice(1);
+    const value = getValueByPath(doc, fieldPath);
+    if (value === undefined) {
+      return "missing";
+    }
+  }
+
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === undefined) {
+    return "missing";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  if (typeof value === "boolean") {
+    return "bool";
+  }
+
+  if (typeof value === "number") {
+    return "double"; // JavaScript numbers are doubles
+  }
+
+  if (typeof value === "string") {
+    return "string";
+  }
+
+  if (value instanceof Date) {
+    return "date";
+  }
+
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  // Check for ObjectId (has toHexString method)
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+    return "objectId";
+  }
+
+  if (typeof value === "object") {
+    return "object";
+  }
+
+  return "unknown";
 }
 
 // ==================== Accumulator Classes ====================
