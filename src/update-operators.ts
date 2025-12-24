@@ -8,62 +8,9 @@ import {
   getValueAtPath,
   cloneDocument,
   valuesEqual,
+  compareValues,
 } from "./document-utils.ts";
 import { isOperatorObject, matchesOperators, matchesPullCondition } from "./query-matcher.ts";
-
-/**
- * Compare two values using MongoDB's BSON comparison order.
- * Returns: negative if a < b, 0 if equal, positive if a > b
- *
- * @param a - First value to compare
- * @param b - Second value to compare
- * @returns Negative number if a < b, 0 if equal, positive if a > b
- */
-function compareValues(a: unknown, b: unknown): number {
-  // Handle same type comparisons first
-  if (typeof a === "number" && typeof b === "number") {
-    return a - b;
-  }
-  if (typeof a === "string" && typeof b === "string") {
-    return a.localeCompare(b);
-  }
-  if (a instanceof Date && b instanceof Date) {
-    return a.getTime() - b.getTime();
-  }
-
-  // For different types, use simplified BSON type ordering
-  const typeOrderA = getBsonTypeOrder(a);
-  const typeOrderB = getBsonTypeOrder(b);
-
-  if (typeOrderA !== typeOrderB) {
-    return typeOrderA - typeOrderB;
-  }
-
-  // Same type but not handled above - try generic comparison
-  if (a === b) return 0;
-  if (a === null) return -1;
-  if (b === null) return 1;
-  return String(a).localeCompare(String(b));
-}
-
-/**
- * Get the BSON type order for a value (simplified).
- * MongoDB uses a specific ordering for type comparison.
- * Order: MinKey < Null < Numbers < String < Object < Array < BinData < ObjectId < Boolean < Date < Timestamp < RegExp < MaxKey
- */
-function getBsonTypeOrder(value: unknown): number {
-  if (value === undefined) return 0;
-  if (value === null) return 1;
-  if (typeof value === "number") return 2;
-  if (typeof value === "string") return 3;
-  if (typeof value === "object") {
-    if (Array.isArray(value)) return 5;
-    if (value instanceof Date) return 8; // Date comes AFTER Boolean in MongoDB
-    return 4; // Regular object (including ObjectId)
-  }
-  if (typeof value === "boolean") return 7; // Boolean comes BEFORE Date
-  return 10;
-}
 
 /**
  * Check if a value is a $push/$addToSet $each modifier.

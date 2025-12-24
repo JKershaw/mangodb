@@ -10,7 +10,7 @@
  */
 import { ObjectId } from "mongodb";
 import { MangoDBCursor, IndexCursor } from "./cursor.ts";
-import { AggregationCursor, type AggregationDbContext } from "./aggregation.ts";
+import { AggregationCursor, type AggregationDbContext } from "./aggregation/index.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
 import { readFile, writeFile, mkdir, unlink, rename as renameFile, access, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
