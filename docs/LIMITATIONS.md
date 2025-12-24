@@ -20,7 +20,7 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 | Query Operators | 28/39 (72%) | Missing geospatial, projection |
 | Update Operators | 18/20 (90%) | Missing positional operators only |
 | Aggregation Stages | 19/34 (56%) | Core and priority stages implemented |
-| Expression Operators | 96/112 (86%) | Most operators now implemented |
+| Expression Operators | 106/112 (95%) | Nearly complete coverage |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
 
@@ -233,29 +233,27 @@ All date operators are now implemented:
 - `$dateToString`, `$dayOfMonth`, `$dayOfWeek`, `$dayOfYear`, `$hour`, `$isoDayOfWeek`
 - `$isoWeek`, `$isoWeekYear`, `$millisecond`, `$minute`, `$month`, `$second`, `$week`, `$year`
 
-### Comparison Operators ✅ Nearly Complete (6/7)
+### Comparison Operators ✅ Complete (7/7)
+
+All comparison expression operators are implemented:
+- `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$cmp`
+
+### Conditional Operators ✅ Complete (3/3)
+
+All conditional expression operators are implemented:
+- `$cond`, `$ifNull`, `$switch`
+
+### Type Operators ✅ Nearly Complete (10/11)
 
 | Implemented | Not Implemented |
 |-------------|-----------------|
-| `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne` | `$cmp` |
+| `$toBool`, `$toDate`, `$toDouble`, `$toInt`, `$type`, `$convert`, `$isNumber`, `$toDecimal`, `$toLong`, `$toObjectId` | `$accumulator` (custom JS) |
 
-### Conditional Operators ⚠️ Partial (2/3)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$cond`, `$ifNull` | `$switch` |
-
-### Type Operators ⚠️ Partial (5/11)
+### Accumulator Operators ✅ Nearly Complete (12/13)
 
 | Implemented | Not Implemented |
 |-------------|-----------------|
-| `$toBool`, `$toDate`, `$toDouble`, `$toInt`, `$type` | `$convert`, `$isNumber`, `$toDecimal`, `$toLong`, `$toObjectId` |
-
-### Accumulator Operators ⚠️ Partial (8/13)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$addToSet`, `$avg`, `$first`, `$last`, `$max`, `$min`, `$push`, `$sum` | `$accumulator`, `$count`, `$mergeObjects`, `$stdDevPop`, `$stdDevSamp` |
+| `$addToSet`, `$avg`, `$first`, `$last`, `$max`, `$min`, `$push`, `$sum`, `$count`, `$mergeObjects`, `$stdDevPop`, `$stdDevSamp` | `$accumulator` (custom JS) |
 
 ---
 

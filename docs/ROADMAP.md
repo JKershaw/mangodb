@@ -69,7 +69,7 @@ After completing each phase:
 | 7 | Expression Operators (Array) | ✅ Complete ($first, $last, $indexOfArray, $isArray, $range, $reverseArray, $arrayToObject, $objectToArray, $zip, $sortArray) |
 | 8 | Expression Operators (String) | ✅ Complete ($regexFind, $regexFindAll, $regexMatch, $replaceOne, $replaceAll, $strcasecmp, $strLenBytes, $indexOfBytes, $substrBytes) |
 | 9 | Expression Operators (Date) | ✅ Complete ($millisecond, $dayOfYear, $week, $isoWeek, $isoWeekYear, $isoDayOfWeek, $dateAdd, $dateSubtract, $dateDiff, $dateFromParts, $dateToParts, $dateFromString) |
-| 10 | Expression Operators (Other) | ⬜ Not Started |
+| 10 | Expression Operators (Other) | ✅ Complete ($cmp, $switch, $isNumber, $toLong, $toDecimal, $toObjectId, $convert, $count, $mergeObjects, $stdDevPop, $stdDevSamp) |
 | 11 | Index Types & Options | ⬜ Not Started |
 | 12 | Collection Methods | ⬜ Not Started |
 | 13 | Final Polish | ⬜ Not Started |
@@ -559,4 +559,4 @@ Remember: Each subagent is stateless. Give complete context in the prompt.
 
 ---
 
-*Last updated: Phases 1-4, 6-9 Complete*
+*Last updated: Phases 1-4, 6-10 Complete*
