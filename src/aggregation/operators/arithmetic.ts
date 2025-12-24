@@ -227,3 +227,19 @@ export function evalMod(
 
   return dividend % divisor;
 }
+
+/**
+ * $rand - Returns a random float between 0 (inclusive) and 1 (exclusive).
+ * Syntax: { $rand: {} }
+ *
+ * Each invocation generates a new random value.
+ */
+export function evalRand(
+  _args: unknown,
+  _doc: Document,
+  _vars: VariableContext | undefined,
+  _evaluate: EvaluateExpressionFn
+): number {
+  // $rand takes no arguments (empty object) and returns a random float in [0, 1)
+  return Math.random();
+}

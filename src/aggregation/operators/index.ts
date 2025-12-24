@@ -24,6 +24,7 @@ export const operators = {
   $floor: arithmetic.evalFloor,
   $round: arithmetic.evalRound,
   $mod: arithmetic.evalMod,
+  $rand: arithmetic.evalRand,
 
   // String
   $concat: string.evalConcat,

@@ -13,7 +13,7 @@ import {
   type TestClient,
 } from "./test-harness.ts";
 
-describe(`New Query Operators (${getTestModeName()})`, () => {
+describe(`New Operators (${getTestModeName()})`, () => {
   let client: TestClient;
   let cleanup: () => Promise<void>;
   let dbName: string;
@@ -357,6 +357,93 @@ describe(`New Query Operators (${getTestModeName()})`, () => {
 
         assert.strictEqual(docs.length, 1);
       });
+    });
+  });
+
+  describe("$rand expression operator", () => {
+    it("should return a number between 0 and 1 in aggregation", async () => {
+      const collection = client.db(dbName).collection("rand_agg");
+      await collection.insertMany([{ name: "test" }]);
+
+      const docs = await collection
+        .aggregate([{ $project: { randomValue: { $rand: {} } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      const randomValue = docs[0].randomValue as number;
+      assert.strictEqual(typeof randomValue, "number");
+      assert.ok(randomValue >= 0, "random value should be >= 0");
+      assert.ok(randomValue < 1, "random value should be < 1");
+    });
+
+    it("should generate different values for each document", async () => {
+      const collection = client.db(dbName).collection("rand_multi");
+      await collection.insertMany([
+        { name: "doc1" },
+        { name: "doc2" },
+        { name: "doc3" },
+        { name: "doc4" },
+        { name: "doc5" },
+      ]);
+
+      const docs = await collection
+        .aggregate([{ $project: { name: 1, randomValue: { $rand: {} } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 5);
+
+      // Check all values are numbers in range
+      for (const doc of docs) {
+        const randomValue = doc.randomValue as number;
+        assert.strictEqual(typeof randomValue, "number");
+        assert.ok(randomValue >= 0);
+        assert.ok(randomValue < 1);
+      }
+
+      // Collect unique values - with 5 docs, we should get at least 2 unique values
+      // (probability of all 5 being the same is essentially 0)
+      const uniqueValues = new Set(docs.map((d) => d.randomValue as number));
+      assert.ok(uniqueValues.size >= 2, "should have multiple unique random values");
+    });
+
+    it("should work with $expr in find queries for random sampling", async () => {
+      const collection = client.db(dbName).collection("rand_expr");
+      // Insert many documents so we can test random sampling
+      const manyDocs = Array.from({ length: 100 }, (_, i) => ({ index: i }));
+      await collection.insertMany(manyDocs);
+
+      // Use $expr with $rand to randomly sample ~50% of documents
+      // Since it's random, we can't assert exact count, but should be in a reasonable range
+      const docs = await collection
+        .find({ $expr: { $lt: [{ $rand: {} }, 0.5] } })
+        .toArray();
+
+      // With 100 documents and 50% sampling, we should get roughly 30-70 documents
+      // (3 standard deviations from 50)
+      assert.ok(docs.length >= 20, `Expected at least 20 documents, got ${docs.length}`);
+      assert.ok(docs.length <= 80, `Expected at most 80 documents, got ${docs.length}`);
+    });
+
+    it("should work with scaling to generate larger random numbers", async () => {
+      const collection = client.db(dbName).collection("rand_scale");
+      await collection.insertMany([{ name: "test" }]);
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              randomInt: { $floor: { $multiply: [{ $rand: {} }, 100] } },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      const randomInt = docs[0].randomInt as number;
+      assert.strictEqual(typeof randomInt, "number");
+      assert.ok(Number.isInteger(randomInt), "should be an integer");
+      assert.ok(randomInt >= 0, "should be >= 0");
+      assert.ok(randomInt < 100, "should be < 100");
     });
   });
 });
