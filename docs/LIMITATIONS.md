@@ -18,9 +18,9 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 | Category | Coverage | Notes |
 |----------|----------|-------|
 | Query Operators | 28/39 (72%) | Missing geospatial, projection |
-| Update Operators | 13/20 (65%) | Missing positional operators |
+| Update Operators | 18/20 (90%) | Missing positional operators only |
 | Aggregation Stages | 13/34 (38%) | Core stages implemented |
-| Expression Operators | 58/112 (52%) | Missing advanced math, regex |
+| Expression Operators | 65/112 (58%) | Core operators implemented |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
 
@@ -112,7 +112,7 @@ All field update operators are fully implemented:
 | `$pull` | ✅ | Supports query conditions |
 | `$addToSet` | ✅ | Supports `$each` modifier |
 | `$pop` | ✅ | Supports 1 (last) and -1 (first) |
-| `$pullAll` | ❌ | Use `$pull` with `$in` as workaround |
+| `$pullAll` | ✅ | Remove all matching values |
 
 ### Positional Update Operators ❌ Not Implemented
 
@@ -126,20 +126,20 @@ All field update operators are fully implemented:
 
 **Workaround**: Read the document, modify the array in application code, then replace.
 
-### Array Update Modifiers ⚠️ Partial
+### Array Update Modifiers ✅ Complete
 
 | Modifier | Status | Notes |
 |----------|--------|-------|
 | `$each` | ✅ | Works with `$push` and `$addToSet` |
-| `$position` | ❌ | Insert at specific array index |
-| `$slice` | ❌ | Limit array size after push |
-| `$sort` | ❌ | Sort array after push |
+| `$position` | ✅ | Insert at specific array index (negative counts from end) |
+| `$slice` | ✅ | Limit array size after push (positive/negative/zero) |
+| `$sort` | ✅ | Sort array after push (ascending/descending, by field) |
 
-### Bitwise Update Operator ❌ Not Implemented
+### Bitwise Update Operator ✅ Implemented
 
-| Operator | Status |
-|----------|--------|
-| `$bit` | ❌ |
+| Operator | Status | Notes |
+|----------|--------|-------|
+| `$bit` | ✅ | Supports `and`, `or`, `xor` operations |
 
 ---
 
@@ -206,11 +206,11 @@ Only the basic form is supported:
 
 ## Aggregation Expression Operators
 
-### Arithmetic Operators ⚠️ Partial (10/16)
+### Arithmetic Operators ✅ Complete (17/17)
 
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$abs`, `$add`, `$ceil`, `$divide`, `$floor`, `$mod`, `$multiply`, `$rand`, `$round`, `$subtract` | `$exp`, `$ln`, `$log`, `$log10`, `$pow`, `$sqrt`, `$trunc` |
+All arithmetic expression operators are implemented:
+- `$abs`, `$add`, `$ceil`, `$divide`, `$exp`, `$floor`, `$ln`, `$log`, `$log10`
+- `$mod`, `$multiply`, `$pow`, `$rand`, `$round`, `$sqrt`, `$subtract`, `$trunc`
 
 ### Array Operators ⚠️ Partial (8/24)
 
