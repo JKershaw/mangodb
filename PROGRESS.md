@@ -4,12 +4,104 @@ This document tracks implementation progress and notable discoveries.
 
 ## Current Status
 
-**Phase**: 15 - Administrative Operations
+**Phase**: 16 - Extended Expression Operators
 **Status**: Complete
 
 ---
 
 ## Changelog
+
+### 2025-12-24 - Phase 16: Extended Expression Operators
+
+#### Added
+- **Arithmetic Operators**:
+  - `$abs` - Absolute value
+  - `$ceil` - Ceiling (round up)
+  - `$floor` - Floor (round down)
+  - `$round` - Round to specified decimal places
+  - `$mod` - Modulo (remainder)
+
+- **String Operators**:
+  - `$substrCP` - Substring by code point position
+  - `$strLenCP` - String length in code points
+  - `$split` - Split string by delimiter
+  - `$trim`, `$ltrim`, `$rtrim` - Trim whitespace or custom characters
+  - `$toString` - Convert value to string
+  - `$indexOfCP` - Find substring position
+
+- **Array Operators**:
+  - `$arrayElemAt` - Get array element by index (supports negative)
+  - `$slice` - Extract array subset (2-arg and 3-arg forms)
+  - `$concatArrays` - Concatenate multiple arrays
+  - `$filter` - Filter array elements by condition
+  - `$map` - Transform array elements
+  - `$reduce` - Reduce array to single value
+  - `$in` - Check if element exists in array
+
+- **Type Conversion Operators**:
+  - `$toInt` - Convert to integer (truncates toward zero)
+  - `$toDouble` - Convert to double
+  - `$toBool` - Convert to boolean (all strings are truthy!)
+  - `$toDate` - Convert to date from epoch ms or ISO string
+  - `$type` - Get BSON type name of value
+
+- **Date Operators**:
+  - `$year`, `$month`, `$dayOfMonth` - Extract date components
+  - `$hour`, `$minute`, `$second` - Extract time components
+  - `$dayOfWeek` - Day of week (1=Sunday, 7=Saturday)
+  - `$dateToString` - Format date with custom format specifiers
+
+#### Variable Scoping
+- Added `$$varName` syntax for referencing scoped variables
+- Supported in `$filter` (as/cond), `$map` (as/in), `$reduce` (value/this/in)
+- Default variable name is "this" when not specified
+
+#### Behaviors Implemented
+- Null propagation: Most operators return null for null/missing input
+- Type checking: Operators throw descriptive errors for wrong types
+- All date operators use UTC (consistent with MongoDB)
+- `$toBool` treats ALL strings as truthy (including empty string)
+- `$round` supports optional decimal places parameter
+
+#### Examples
+```typescript
+// Arithmetic
+await collection.aggregate([
+  { $project: { rounded: { $round: ["$price", 2] } } }
+]).toArray();
+
+// String processing
+await collection.aggregate([
+  { $project: { parts: { $split: ["$fullName", " "] } } }
+]).toArray();
+
+// Array operations with variables
+await collection.aggregate([
+  { $project: {
+    passing: {
+      $filter: {
+        input: "$scores",
+        as: "score",
+        cond: { $gte: ["$$score", 60] }
+      }
+    }
+  }}
+]).toArray();
+
+// Date formatting
+await collection.aggregate([
+  { $project: {
+    formatted: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+  }}
+]).toArray();
+```
+
+#### Files Changed
+- `src/aggregation.ts` - Added all new expression operators
+- `test/expression-operators.test.ts` - New test file (90 tests)
+- `test/test-harness.ts` - No changes needed
+
+---
 
 ### 2025-12-23 - Phase 15: Administrative Operations
 

@@ -2,9 +2,18 @@
 
 This document outlines the implementation phases for MangoDB. Each phase builds on the previous and includes specific MongoDB operations to implement.
 
-## Current Phase: Phase 15 - Change Streams (Next)
+## Current Phase: 16 - Extended Expression Operators (Complete)
 
-See [ROADMAP_REMAINING.md](./ROADMAP_REMAINING.md) for detailed plans on remaining phases (15-16).
+Phase 16 added 30+ aggregation expression operators across 5 categories:
+- Arithmetic: `$abs`, `$ceil`, `$floor`, `$round`, `$mod`
+- String: `$substrCP`, `$strLenCP`, `$split`, `$trim`, `$ltrim`, `$rtrim`, `$toString`, `$indexOfCP`
+- Array: `$arrayElemAt`, `$slice`, `$concatArrays`, `$filter`, `$map`, `$reduce`, `$in`
+- Type: `$toInt`, `$toDouble`, `$toBool`, `$toDate`, `$type`
+- Date: `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$dayOfWeek`, `$dateToString`
+
+Also added variable scoping support (`$$varName`) for `$filter`, `$map`, and `$reduce`.
+
+See [PROGRESS.md](./PROGRESS.md) for detailed changelog.
 
 ---
 

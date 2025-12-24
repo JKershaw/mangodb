@@ -74,18 +74,44 @@ function deepEquals(a: unknown, b: unknown): boolean {
 // ==================== Expression Evaluation ====================
 
 /**
+ * Variable context for $filter, $map, $reduce expressions.
+ */
+type VariableContext = Record<string, unknown>;
+
+/**
  * Evaluate an aggregation expression against a document.
  *
  * Expressions can be:
  * - Field references: "$fieldName" or "$nested.field"
+ * - Variable references: "$$varName" or "$$varName.field"
  * - Literal values: numbers, strings, booleans, null
  * - Operator expressions: { $add: [...] }, { $concat: [...] }, etc.
  *
  * @param expr - The expression to evaluate
  * @param doc - The document context
+ * @param vars - Optional variable context for scoped variables
  * @returns The evaluated value
  */
-export function evaluateExpression(expr: unknown, doc: Document): unknown {
+export function evaluateExpression(expr: unknown, doc: Document, vars?: VariableContext): unknown {
+  // String starting with $$ is a variable reference
+  if (typeof expr === "string" && expr.startsWith("$$")) {
+    const varPath = expr.slice(2);
+    const dotIndex = varPath.indexOf(".");
+    if (dotIndex === -1) {
+      // Simple variable reference: $$varName
+      return vars?.[varPath];
+    } else {
+      // Nested variable reference: $$varName.field
+      const varName = varPath.slice(0, dotIndex);
+      const fieldPath = varPath.slice(dotIndex + 1);
+      const varValue = vars?.[varName];
+      if (varValue && typeof varValue === "object") {
+        return getValueByPath(varValue as Document, fieldPath);
+      }
+      return undefined;
+    }
+  }
+
   // String starting with $ is a field reference
   if (typeof expr === "string" && expr.startsWith("$")) {
     const fieldPath = expr.slice(1);
@@ -99,7 +125,7 @@ export function evaluateExpression(expr: unknown, doc: Document): unknown {
 
   // Arrays - evaluate each element
   if (Array.isArray(expr)) {
-    return expr.map((item) => evaluateExpression(item, doc));
+    return expr.map((item) => evaluateExpression(item, doc, vars));
   }
 
   // Object with operator key
@@ -107,13 +133,13 @@ export function evaluateExpression(expr: unknown, doc: Document): unknown {
   const keys = Object.keys(exprObj);
 
   if (keys.length === 1 && keys[0].startsWith("$")) {
-    return evaluateOperator(keys[0], exprObj[keys[0]], doc);
+    return evaluateOperator(keys[0], exprObj[keys[0]], doc, vars);
   }
 
   // Object literal - evaluate each field
   const result: Document = {};
   for (const [key, value] of Object.entries(exprObj)) {
-    result[key] = evaluateExpression(value, doc);
+    result[key] = evaluateExpression(value, doc, vars);
   }
   return result;
 }
@@ -121,28 +147,54 @@ export function evaluateExpression(expr: unknown, doc: Document): unknown {
 /**
  * Evaluate a specific operator expression.
  */
-function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
+function evaluateOperator(op: string, args: unknown, doc: Document, vars?: VariableContext): unknown {
   switch (op) {
     case "$literal":
       return args; // Return as-is without evaluation
 
     // Arithmetic operators
     case "$add":
-      return evalAdd(args as unknown[], doc);
+      return evalAdd(args as unknown[], doc, vars);
     case "$subtract":
-      return evalSubtract(args as unknown[], doc);
+      return evalSubtract(args as unknown[], doc, vars);
     case "$multiply":
-      return evalMultiply(args as unknown[], doc);
+      return evalMultiply(args as unknown[], doc, vars);
     case "$divide":
-      return evalDivide(args as unknown[], doc);
+      return evalDivide(args as unknown[], doc, vars);
+    case "$abs":
+      return evalAbs(args, doc);
+    case "$ceil":
+      return evalCeil(args, doc);
+    case "$floor":
+      return evalFloor(args, doc);
+    case "$round":
+      return evalRound(args, doc);
+    case "$mod":
+      return evalMod(args as unknown[], doc);
 
     // String operators
     case "$concat":
-      return evalConcat(args as unknown[], doc);
+      return evalConcat(args as unknown[], doc, vars);
     case "$toUpper":
       return evalToUpper(args, doc);
     case "$toLower":
       return evalToLower(args, doc);
+    case "$substrCP":
+      return evalSubstrCP(args as unknown[], doc);
+    case "$strLenCP":
+      return evalStrLenCP(args, doc);
+    case "$split":
+      return evalSplit(args as unknown[], doc);
+    case "$trim":
+      return evalTrim(args, doc);
+    case "$ltrim":
+      return evalLTrim(args, doc);
+    case "$rtrim":
+      return evalRTrim(args, doc);
+    case "$toString":
+      return evalToString(args, doc);
+    case "$indexOfCP":
+      return evalIndexOfCP(args as unknown[], doc);
 
     // Conditional operators
     case "$cond":
@@ -153,21 +205,65 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
     // Comparison operators (for $cond conditions)
     // Uses BSON type ordering for cross-type comparisons
     case "$gt":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) > 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) > 0);
     case "$gte":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) >= 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) >= 0);
     case "$lt":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) < 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) < 0);
     case "$lte":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) <= 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) <= 0);
     case "$eq":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) === 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) === 0);
     case "$ne":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) !== 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) !== 0);
 
     // Array operators
     case "$size":
       return evalSize(args, doc);
+    case "$arrayElemAt":
+      return evalArrayElemAt(args as unknown[], doc, vars);
+    case "$slice":
+      return evalSlice(args as unknown[], doc, vars);
+    case "$concatArrays":
+      return evalConcatArrays(args as unknown[], doc, vars);
+    case "$filter":
+      return evalFilter(args, doc, vars);
+    case "$map":
+      return evalMap(args, doc, vars);
+    case "$reduce":
+      return evalReduce(args, doc, vars);
+    case "$in":
+      return evalIn(args as unknown[], doc, vars);
+
+    // Type conversion operators
+    case "$toInt":
+      return evalToInt(args, doc, vars);
+    case "$toDouble":
+      return evalToDouble(args, doc, vars);
+    case "$toBool":
+      return evalToBool(args, doc, vars);
+    case "$toDate":
+      return evalToDate(args, doc, vars);
+    case "$type":
+      return evalType(args, doc, vars);
+
+    // Date operators
+    case "$year":
+      return evalYear(args, doc, vars);
+    case "$month":
+      return evalMonth(args, doc, vars);
+    case "$dayOfMonth":
+      return evalDayOfMonth(args, doc, vars);
+    case "$hour":
+      return evalHour(args, doc, vars);
+    case "$minute":
+      return evalMinute(args, doc, vars);
+    case "$second":
+      return evalSecond(args, doc, vars);
+    case "$dayOfWeek":
+      return evalDayOfWeek(args, doc, vars);
+    case "$dateToString":
+      return evalDateToString(args, doc, vars);
 
     default:
       throw new Error(`Unrecognized expression operator: '${op}'`);
@@ -176,8 +272,8 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
 
 // ==================== Arithmetic Operators ====================
 
-function evalAdd(args: unknown[], doc: Document): number | null {
-  const values = args.map((a) => evaluateExpression(a, doc));
+function evalAdd(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const values = args.map((a) => evaluateExpression(a, doc, vars));
 
   // null/undefined propagates
   if (values.some((v) => v === null || v === undefined)) {
@@ -194,8 +290,8 @@ function evalAdd(args: unknown[], doc: Document): number | null {
   return sum;
 }
 
-function evalSubtract(args: unknown[], doc: Document): number | null {
-  const [arg1, arg2] = args.map((a) => evaluateExpression(a, doc));
+function evalSubtract(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const [arg1, arg2] = args.map((a) => evaluateExpression(a, doc, vars));
 
   if (arg1 === null || arg1 === undefined || arg2 === null || arg2 === undefined) {
     return null;
@@ -208,8 +304,8 @@ function evalSubtract(args: unknown[], doc: Document): number | null {
   return arg1 - arg2;
 }
 
-function evalMultiply(args: unknown[], doc: Document): number | null {
-  const values = args.map((a) => evaluateExpression(a, doc));
+function evalMultiply(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const values = args.map((a) => evaluateExpression(a, doc, vars));
 
   if (values.some((v) => v === null || v === undefined)) {
     return null;
@@ -225,8 +321,8 @@ function evalMultiply(args: unknown[], doc: Document): number | null {
   return product;
 }
 
-function evalDivide(args: unknown[], doc: Document): number | null {
-  const [dividend, divisor] = args.map((a) => evaluateExpression(a, doc));
+function evalDivide(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const [dividend, divisor] = args.map((a) => evaluateExpression(a, doc, vars));
 
   if (dividend === null || dividend === undefined || divisor === null || divisor === undefined) {
     return null;
@@ -244,10 +340,131 @@ function evalDivide(args: unknown[], doc: Document): number | null {
   return dividend / divisor;
 }
 
+function evalAbs(args: unknown, doc: Document): number | null {
+  const value = evaluateExpression(args, doc);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$abs only supports numeric types, not ${typeName}`);
+  }
+
+  return Math.abs(value);
+}
+
+function evalCeil(args: unknown, doc: Document): number | null {
+  const value = evaluateExpression(args, doc);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$ceil only supports numeric types, not ${typeName}`);
+  }
+
+  return Math.ceil(value);
+}
+
+function evalFloor(args: unknown, doc: Document): number | null {
+  const value = evaluateExpression(args, doc);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$floor only supports numeric types, not ${typeName}`);
+  }
+
+  return Math.floor(value);
+}
+
+function evalRound(args: unknown, doc: Document): number | null {
+  // Handle both single value and array form
+  let numberExpr: unknown;
+  let placeExpr: unknown = 0;
+
+  if (Array.isArray(args)) {
+    [numberExpr, placeExpr = 0] = args;
+  } else {
+    numberExpr = args;
+  }
+
+  const value = evaluateExpression(numberExpr, doc);
+  const place = evaluateExpression(placeExpr, doc) as number;
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$round only supports numeric types, not ${typeName}`);
+  }
+
+  // MongoDB uses banker's rounding (round half to even)
+  return bankersRound(value, place);
+}
+
+/**
+ * Banker's rounding (round half to even).
+ * When the value is exactly halfway, round to the nearest even number.
+ * This is the rounding method MongoDB uses for $round.
+ */
+function bankersRound(value: number, decimalPlaces: number): number {
+  const multiplier = Math.pow(10, decimalPlaces);
+  const shifted = value * multiplier;
+  const floor = Math.floor(shifted);
+  const decimal = shifted - floor;
+
+  // Check if exactly halfway (with floating point tolerance)
+  if (Math.abs(decimal - 0.5) < 1e-10) {
+    // Round to even
+    if (floor % 2 === 0) {
+      return floor / multiplier;
+    } else {
+      return (floor + 1) / multiplier;
+    }
+  }
+
+  // Standard rounding for non-halfway cases
+  return Math.round(shifted) / multiplier;
+}
+
+function evalMod(args: unknown[], doc: Document): number | null {
+  const [dividendExpr, divisorExpr] = args;
+  const dividend = evaluateExpression(dividendExpr, doc);
+  const divisor = evaluateExpression(divisorExpr, doc);
+
+  if (dividend === null || dividend === undefined || divisor === null || divisor === undefined) {
+    return null;
+  }
+
+  if (typeof dividend !== "number" || typeof divisor !== "number") {
+    const dividendType = getBSONTypeName(dividend);
+    const divisorType = getBSONTypeName(divisor);
+    throw new Error(`$mod only supports numeric types, not ${dividendType} and ${divisorType}`);
+  }
+
+  // MongoDB throws error for mod by zero
+  if (divisor === 0) {
+    throw new Error("can't $mod by zero");
+  }
+
+  // JavaScript % operator follows dividend sign (truncated division)
+  return dividend % divisor;
+}
+
 // ==================== String Operators ====================
 
-function evalConcat(args: unknown[], doc: Document): string | null {
-  const values = args.map((a) => evaluateExpression(a, doc));
+function evalConcat(args: unknown[], doc: Document, vars?: VariableContext): string | null {
+  const values = args.map((a) => evaluateExpression(a, doc, vars));
 
   // null propagates
   if (values.some((v) => v === null || v === undefined)) {
@@ -296,6 +513,205 @@ function evalToLower(args: unknown, doc: Document): string {
   return value.toLowerCase();
 }
 
+function evalSubstrCP(args: unknown[], doc: Document): string {
+  const [strExpr, startExpr, countExpr] = args;
+  const str = evaluateExpression(strExpr, doc);
+  const start = evaluateExpression(startExpr, doc) as number;
+  const count = evaluateExpression(countExpr, doc) as number;
+
+  // MongoDB returns empty string for null/undefined
+  if (str === null || str === undefined) {
+    return "";
+  }
+
+  if (typeof str !== "string") {
+    const typeName = getBSONTypeName(str);
+    throw new Error(`$substrCP requires a string argument, found: ${typeName}`);
+  }
+
+  // Handle out of bounds gracefully
+  return str.substring(start, start + count);
+}
+
+function evalStrLenCP(args: unknown, doc: Document): number {
+  const value = evaluateExpression(args, doc);
+
+  // $strLenCP throws error for null/missing (unlike other string operators)
+  if (value === null || value === undefined) {
+    const typeName = value === null ? "null" : "missing";
+    throw new Error(`$strLenCP requires a string argument, found: ${typeName}`);
+  }
+
+  if (typeof value !== "string") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$strLenCP requires a string argument, found: ${typeName}`);
+  }
+
+  return value.length;
+}
+
+function evalSplit(args: unknown[], doc: Document): string[] | null {
+  const [strExpr, delimExpr] = args;
+  const str = evaluateExpression(strExpr, doc);
+  const delim = evaluateExpression(delimExpr, doc);
+
+  // MongoDB returns null for null/missing input string
+  if (str === null || str === undefined) {
+    return null;
+  }
+
+  if (typeof str !== "string") {
+    const typeName = getBSONTypeName(str);
+    throw new Error(`$split requires a string as the first argument, found: ${typeName}`);
+  }
+
+  if (delim === null || delim === undefined) {
+    throw new Error("$split requires a string as the second argument, found: null");
+  }
+
+  if (typeof delim !== "string") {
+    const typeName = getBSONTypeName(delim);
+    throw new Error(`$split requires a string as the second argument, found: ${typeName}`);
+  }
+
+  return str.split(delim);
+}
+
+function evalTrim(args: unknown, doc: Document): string {
+  const spec = args as { input: unknown; chars?: unknown };
+  const input = evaluateExpression(spec.input, doc);
+  const chars = spec.chars ? evaluateExpression(spec.chars, doc) as string : undefined;
+
+  if (typeof input !== "string") {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$trim requires its input to be a string, got ${typeName}`);
+  }
+
+  if (chars) {
+    // Trim custom characters
+    const charSet = new Set(chars.split(""));
+    let start = 0;
+    let end = input.length;
+    while (start < end && charSet.has(input[start])) start++;
+    while (end > start && charSet.has(input[end - 1])) end--;
+    return input.substring(start, end);
+  }
+
+  return input.trim();
+}
+
+function evalLTrim(args: unknown, doc: Document): string {
+  const spec = args as { input: unknown; chars?: unknown };
+  const input = evaluateExpression(spec.input, doc);
+  const chars = spec.chars ? evaluateExpression(spec.chars, doc) as string : undefined;
+
+  if (typeof input !== "string") {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$ltrim requires its input to be a string, got ${typeName}`);
+  }
+
+  if (chars) {
+    const charSet = new Set(chars.split(""));
+    let start = 0;
+    while (start < input.length && charSet.has(input[start])) start++;
+    return input.substring(start);
+  }
+
+  return input.trimStart();
+}
+
+function evalRTrim(args: unknown, doc: Document): string {
+  const spec = args as { input: unknown; chars?: unknown };
+  const input = evaluateExpression(spec.input, doc);
+  const chars = spec.chars ? evaluateExpression(spec.chars, doc) as string : undefined;
+
+  if (typeof input !== "string") {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$rtrim requires its input to be a string, got ${typeName}`);
+  }
+
+  if (chars) {
+    const charSet = new Set(chars.split(""));
+    let end = input.length;
+    while (end > 0 && charSet.has(input[end - 1])) end--;
+    return input.substring(0, end);
+  }
+
+  return input.trimEnd();
+}
+
+function evalToString(args: unknown, doc: Document): string | null {
+  const value = evaluateExpression(args, doc);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // String unchanged
+  if (typeof value === "string") {
+    return value;
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  // Number
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  // Date
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  // ObjectId (has toHexString method)
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+    return (value as { toHexString: () => string }).toHexString();
+  }
+
+  // Array and object not supported
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Unsupported conversion from ${typeName} to string`);
+}
+
+function evalIndexOfCP(args: unknown[], doc: Document): number | null {
+  const [strExpr, substrExpr, startExpr, endExpr] = args;
+  const str = evaluateExpression(strExpr, doc);
+  const substr = evaluateExpression(substrExpr, doc);
+  const start = startExpr !== undefined ? evaluateExpression(startExpr, doc) as number : 0;
+  const end = endExpr !== undefined ? evaluateExpression(endExpr, doc) as number : undefined;
+
+  // Null string returns null
+  if (str === null || str === undefined) {
+    return null;
+  }
+
+  // Null substring is an error
+  if (substr === null || substr === undefined) {
+    throw new Error("$indexOfCP requires a string as the second argument, found: null");
+  }
+
+  if (typeof str !== "string") {
+    const typeName = getBSONTypeName(str);
+    throw new Error(`$indexOfCP requires a string as the first argument, found: ${typeName}`);
+  }
+
+  if (typeof substr !== "string") {
+    const typeName = getBSONTypeName(substr);
+    throw new Error(`$indexOfCP requires a string as the second argument, found: ${typeName}`);
+  }
+
+  // Search within bounds
+  const searchStr = end !== undefined ? str.substring(0, end) : str;
+  const index = searchStr.indexOf(substr, start);
+
+  return index;
+}
+
 // ==================== Conditional Operators ====================
 
 function evalCond(args: unknown, doc: Document): unknown {
@@ -339,9 +755,10 @@ function evalIfNull(args: unknown[], doc: Document): unknown {
 function evalComparison(
   args: unknown[],
   doc: Document,
+  vars: VariableContext | undefined,
   compareFn: (a: unknown, b: unknown) => boolean
 ): boolean {
-  const [left, right] = args.map((a) => evaluateExpression(a, doc));
+  const [left, right] = args.map((a) => evaluateExpression(a, doc, vars));
   return compareFn(left, right);
 }
 
@@ -356,6 +773,572 @@ function evalSize(args: unknown, doc: Document): number {
   }
 
   return value.length;
+}
+
+function evalArrayElemAt(args: unknown[], doc: Document, vars?: VariableContext): unknown {
+  const [arrExpr, idxExpr] = args;
+  const arr = evaluateExpression(arrExpr, doc, vars);
+  const idx = evaluateExpression(idxExpr, doc, vars) as number;
+
+  // Null/missing returns null
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$arrayElemAt requires an array, not ${typeName}`);
+  }
+
+  // Handle negative index
+  let actualIdx = idx;
+  if (idx < 0) {
+    actualIdx = arr.length + idx;
+  }
+
+  // Out of bounds returns undefined (field missing in MongoDB)
+  if (actualIdx < 0 || actualIdx >= arr.length) {
+    return undefined;
+  }
+
+  return arr[actualIdx];
+}
+
+function evalSlice(args: unknown[], doc: Document, vars?: VariableContext): unknown[] | null {
+  const arr = evaluateExpression(args[0], doc, vars);
+
+  // Null/missing returns null
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$slice requires an array, not ${typeName}`);
+  }
+
+  if (args.length === 2) {
+    // 2-arg form: [array, n]
+    const n = evaluateExpression(args[1], doc, vars) as number;
+    if (n >= 0) {
+      // First n elements
+      return arr.slice(0, n);
+    } else {
+      // Last -n elements
+      return arr.slice(n);
+    }
+  } else {
+    // 3-arg form: [array, position, n]
+    const position = evaluateExpression(args[1], doc, vars) as number;
+    const n = evaluateExpression(args[2], doc, vars) as number;
+
+    let startIdx = position;
+    if (position < 0) {
+      startIdx = Math.max(0, arr.length + position);
+    }
+
+    return arr.slice(startIdx, startIdx + n);
+  }
+}
+
+function evalConcatArrays(args: unknown[], doc: Document, vars?: VariableContext): unknown[] | null {
+  const arrays = args.map((a) => evaluateExpression(a, doc, vars));
+
+  // If any is null/undefined, return null
+  for (const arr of arrays) {
+    if (arr === null || arr === undefined) {
+      return null;
+    }
+    if (!Array.isArray(arr)) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`$concatArrays only supports arrays, not ${typeName}`);
+    }
+  }
+
+  // Concatenate all arrays
+  return (arrays as unknown[][]).flat();
+}
+
+function evalFilter(args: unknown, doc: Document, vars?: VariableContext): unknown[] | null {
+  const spec = args as { input: unknown; as?: string; cond: unknown };
+  const input = evaluateExpression(spec.input, doc, vars);
+  const varName = spec.as || "this";
+  const condExpr = spec.cond;
+
+  // Null/missing returns null
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`input to $filter must be an array, not ${typeName}`);
+  }
+
+  const result: unknown[] = [];
+  for (const item of input) {
+    // Create new variable context with the current item
+    const newVars = { ...vars, [varName]: item };
+    const condResult = evaluateExpression(condExpr, doc, newVars);
+    if (condResult) {
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+
+function evalMap(args: unknown, doc: Document, vars?: VariableContext): unknown[] | null {
+  const spec = args as { input: unknown; as?: string; in: unknown };
+  const input = evaluateExpression(spec.input, doc, vars);
+  const varName = spec.as || "this";
+  const inExpr = spec.in;
+
+  // Null/missing returns null
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`input to $map must be an array, not ${typeName}`);
+  }
+
+  const result: unknown[] = [];
+  for (const item of input) {
+    // Create new variable context with the current item
+    const newVars = { ...vars, [varName]: item };
+    const mappedValue = evaluateExpression(inExpr, doc, newVars);
+    result.push(mappedValue);
+  }
+
+  return result;
+}
+
+function evalReduce(args: unknown, doc: Document, vars?: VariableContext): unknown {
+  const spec = args as { input: unknown; initialValue: unknown; in: unknown };
+  const input = evaluateExpression(spec.input, doc, vars);
+  const initialValue = evaluateExpression(spec.initialValue, doc, vars);
+  const inExpr = spec.in;
+
+  // Null/missing returns null
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`input to $reduce must be an array, not ${typeName}`);
+  }
+
+  // Empty array returns initialValue
+  if (input.length === 0) {
+    return initialValue;
+  }
+
+  let value = initialValue;
+  for (const item of input) {
+    // Create new variable context with $$value and $$this
+    const newVars = { ...vars, value, this: item };
+    value = evaluateExpression(inExpr, doc, newVars);
+  }
+
+  return value;
+}
+
+function evalIn(args: unknown[], doc: Document, vars?: VariableContext): boolean {
+  const [elementExpr, arrExpr] = args;
+  const element = evaluateExpression(elementExpr, doc, vars);
+  const arr = evaluateExpression(arrExpr, doc, vars);
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$in requires an array as the second argument, found: ${typeName}`);
+  }
+
+  // Use compareValues for proper equality checking
+  for (const item of arr) {
+    if (compareValues(element, item) === 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ==================== Type Conversion Operators ====================
+
+function evalToInt(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Number - truncate toward zero
+  if (typeof value === "number") {
+    return Math.trunc(value);
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? 1 : 0;
+  }
+
+  // String - parse as integer
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    // Reject special string values that parseFloat accepts
+    if (trimmed === "Infinity" || trimmed === "-Infinity" || trimmed === "NaN") {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed) || !Number.isFinite(parsed)) {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
+    return parsed;
+  }
+
+  // Date - milliseconds since epoch as int
+  if (value instanceof Date) {
+    return Math.trunc(value.getTime());
+  }
+
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Unsupported conversion from ${typeName} to int`);
+}
+
+function evalToDouble(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Number - already double in JS
+  if (typeof value === "number") {
+    return value;
+  }
+
+  // Boolean
+  if (typeof value === "boolean") {
+    return value ? 1.0 : 0.0;
+  }
+
+  // String - parse as float
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    // MongoDB accepts Infinity strings
+    if (trimmed === "Infinity") {
+      return Infinity;
+    }
+    if (trimmed === "-Infinity") {
+      return -Infinity;
+    }
+    // Reject NaN string
+    if (trimmed === "NaN") {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
+    const parsed = parseFloat(value);
+    if (isNaN(parsed)) {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
+    return parsed;
+  }
+
+  // Date - milliseconds since epoch
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  const typeName = getBSONTypeName(value);
+  throw new Error(`Unsupported conversion from ${typeName} to double`);
+}
+
+function evalToBool(args: unknown, doc: Document, vars?: VariableContext): boolean | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Number - only 0 is false
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  // Boolean - as-is
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  // String - ALL strings are truthy (including empty string!)
+  if (typeof value === "string") {
+    return true;
+  }
+
+  // Date - always true
+  if (value instanceof Date) {
+    return true;
+  }
+
+  // Array and object - true
+  if (Array.isArray(value) || typeof value === "object") {
+    return true;
+  }
+
+  return true;
+}
+
+function evalToDate(args: unknown, doc: Document, vars?: VariableContext): Date | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  // Null/missing returns null
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  // Date - as-is
+  if (value instanceof Date) {
+    return value;
+  }
+
+  // Number - milliseconds since epoch
+  if (typeof value === "number") {
+    return new Date(value);
+  }
+
+  // String - parse ISO date
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (isNaN(parsed.getTime())) {
+      throw new Error(`Error parsing date string '${value}'`);
+    }
+    return parsed;
+  }
+
+  const typeName = getBSONTypeName(value);
+  throw new Error(`can't convert from BSON type ${typeName} to Date`);
+}
+
+function evalType(args: unknown, doc: Document, vars?: VariableContext): string {
+  // Special handling for $type - we need to detect "missing" before evaluating
+  // Check if args is a field reference to a missing field
+  if (typeof args === "string" && args.startsWith("$") && !args.startsWith("$$")) {
+    const fieldPath = args.slice(1);
+    const value = getValueByPath(doc, fieldPath);
+    if (value === undefined) {
+      return "missing";
+    }
+  }
+
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === undefined) {
+    return "missing";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  if (typeof value === "boolean") {
+    return "bool";
+  }
+
+  if (typeof value === "number") {
+    return "double"; // JavaScript numbers are doubles
+  }
+
+  if (typeof value === "string") {
+    return "string";
+  }
+
+  if (value instanceof Date) {
+    return "date";
+  }
+
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  // Check for ObjectId (has toHexString method)
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+    return "objectId";
+  }
+
+  if (typeof value === "object") {
+    return "object";
+  }
+
+  return "unknown";
+}
+
+// ==================== Date Operators ====================
+
+/**
+ * Helper to extract and validate a date value for date operators.
+ * Returns the date if valid, null if null/undefined, or throws for invalid types/dates.
+ */
+function extractDateValue(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  operatorName: string
+): Date | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`${operatorName} requires a date, found: ${typeName}`);
+  }
+
+  // Check for invalid dates (e.g., new Date("invalid"))
+  if (isNaN(value.getTime())) {
+    throw new Error(`${operatorName} requires a valid date`);
+  }
+
+  return value;
+}
+
+function evalYear(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$year");
+  if (value === null) return null;
+  return value.getUTCFullYear();
+}
+
+function evalMonth(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$month");
+  if (value === null) return null;
+  // MongoDB months are 1-12, JavaScript getUTCMonth is 0-11
+  return value.getUTCMonth() + 1;
+}
+
+function evalDayOfMonth(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$dayOfMonth");
+  if (value === null) return null;
+  return value.getUTCDate();
+}
+
+function evalHour(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$hour");
+  if (value === null) return null;
+  return value.getUTCHours();
+}
+
+function evalMinute(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$minute");
+  if (value === null) return null;
+  return value.getUTCMinutes();
+}
+
+function evalSecond(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$second");
+  if (value === null) return null;
+  return value.getUTCSeconds();
+}
+
+function evalDayOfWeek(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$dayOfWeek");
+  if (value === null) return null;
+  // JavaScript getUTCDay: 0=Sunday, 6=Saturday
+  // MongoDB $dayOfWeek: 1=Sunday, 7=Saturday
+  return value.getUTCDay() + 1;
+}
+
+function evalDateToString(args: unknown, doc: Document, vars?: VariableContext): string | null {
+  const spec = args as { date: unknown; format?: string; onNull?: unknown };
+  const dateValue = evaluateExpression(spec.date, doc, vars);
+
+  // Handle null/missing date
+  if (dateValue === null || dateValue === undefined) {
+    if (spec.onNull !== undefined) {
+      const onNullValue = evaluateExpression(spec.onNull, doc, vars);
+      // MongoDB returns onNull value as-is (not converted to string)
+      return onNullValue as string | null;
+    }
+    return null;
+  }
+
+  if (!(dateValue instanceof Date)) {
+    const typeName = getBSONTypeName(dateValue);
+    throw new Error(`can't convert from BSON type ${typeName} to Date`);
+  }
+
+  // Check for invalid dates
+  if (isNaN(dateValue.getTime())) {
+    throw new Error(`$dateToString requires a valid date`);
+  }
+
+  // Default format is ISO 8601
+  const format = spec.format || "%Y-%m-%dT%H:%M:%S.%LZ";
+
+  return formatDate(dateValue, format);
+}
+
+/**
+ * Format a date according to MongoDB's format specifiers.
+ * Supported:
+ *   %Y - Year (4 digits)
+ *   %m - Month (01-12)
+ *   %d - Day of month (01-31)
+ *   %H - Hour (00-23)
+ *   %M - Minutes (00-59)
+ *   %S - Seconds (00-59)
+ *   %L - Milliseconds (000-999)
+ *   %j - Day of year (001-366)
+ *   %w - Day of week (1=Sunday, 7=Saturday)
+ *   %u - ISO day of week (1=Monday, 7=Sunday)
+ *   %U - Week of year (00-53, Sunday start)
+ *   %V - ISO week of year (01-53)
+ */
+function formatDate(date: Date, format: string): string {
+  const pad2 = (n: number) => n.toString().padStart(2, "0");
+  const pad3 = (n: number) => n.toString().padStart(3, "0");
+  const pad4 = (n: number) => n.toString().padStart(4, "0");
+
+  // Calculate day of year
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear) / (24 * 60 * 60 * 1000)) + 1;
+
+  // Calculate week of year (Sunday start)
+  const startOfYearDate = new Date(startOfYear);
+  const startDayOfWeek = startOfYearDate.getUTCDay();
+  const daysSinceStart = dayOfYear - 1;
+  const weekOfYear = Math.floor((daysSinceStart + startDayOfWeek) / 7);
+
+  // Calculate ISO week of year (Monday start, week 1 contains Jan 4)
+  const jan4 = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const jan4DayOfWeek = jan4.getUTCDay() || 7; // Convert Sunday from 0 to 7
+  const startOfISOWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 24 * 60 * 60 * 1000);
+  const daysSinceISOWeek1 = Math.floor((date.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000));
+  let isoWeek = Math.floor(daysSinceISOWeek1 / 7) + 1;
+  if (isoWeek < 1) isoWeek = 52; // Last week of previous year
+  if (isoWeek > 52) isoWeek = 1; // First week of next year
+
+  // ISO day of week: 1=Monday, 7=Sunday
+  const isoDayOfWeek = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+
+  return format
+    .replace(/%Y/g, pad4(date.getUTCFullYear()))
+    .replace(/%m/g, pad2(date.getUTCMonth() + 1))
+    .replace(/%d/g, pad2(date.getUTCDate()))
+    .replace(/%H/g, pad2(date.getUTCHours()))
+    .replace(/%M/g, pad2(date.getUTCMinutes()))
+    .replace(/%S/g, pad2(date.getUTCSeconds()))
+    .replace(/%L/g, pad3(date.getUTCMilliseconds()))
+    .replace(/%j/g, pad3(dayOfYear))
+    .replace(/%w/g, (date.getUTCDay() + 1).toString())
+    .replace(/%u/g, isoDayOfWeek.toString())
+    .replace(/%U/g, pad2(weekOfYear))
+    .replace(/%V/g, pad2(isoWeek));
 }
 
 // ==================== Accumulator Classes ====================
