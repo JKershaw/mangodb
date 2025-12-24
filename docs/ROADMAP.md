@@ -66,9 +66,9 @@ After completing each phase:
 | 4 | Aggregation Stages (Priority) | ✅ Complete ($sortByCount, $sample, $facet, $bucket, $bucketAuto, $unionWith) |
 | 5 | Aggregation Stages (Extended) | ⬜ Not Started |
 | 6 | Expression Operators (Arithmetic) | ✅ Complete (all 17 operators) |
-| 7 | Expression Operators (Array) | ⬜ Not Started |
-| 8 | Expression Operators (String) | ⬜ Not Started |
-| 9 | Expression Operators (Date) | ⬜ Not Started |
+| 7 | Expression Operators (Array) | ✅ Complete ($first, $last, $indexOfArray, $isArray, $range, $reverseArray, $arrayToObject, $objectToArray, $zip, $sortArray) |
+| 8 | Expression Operators (String) | ✅ Complete ($regexFind, $regexFindAll, $regexMatch, $replaceOne, $replaceAll, $strcasecmp, $strLenBytes, $indexOfBytes, $substrBytes) |
+| 9 | Expression Operators (Date) | ✅ Complete ($millisecond, $dayOfYear, $week, $isoWeek, $isoWeekYear, $isoDayOfWeek, $dateAdd, $dateSubtract, $dateDiff, $dateFromParts, $dateToParts, $dateFromString) |
 | 10 | Expression Operators (Other) | ⬜ Not Started |
 | 11 | Index Types & Options | ⬜ Not Started |
 | 12 | Collection Methods | ⬜ Not Started |
@@ -559,4 +559,4 @@ Remember: Each subagent is stateless. Give complete context in the prompt.
 
 ---
 
-*Last updated: Phase 0 - Initial roadmap creation*
+*Last updated: Phases 1-4, 6-9 Complete*

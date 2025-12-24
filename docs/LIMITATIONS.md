@@ -20,7 +20,7 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 | Query Operators | 28/39 (72%) | Missing geospatial, projection |
 | Update Operators | 18/20 (90%) | Missing positional operators only |
 | Aggregation Stages | 19/34 (56%) | Core and priority stages implemented |
-| Expression Operators | 65/112 (58%) | Core operators implemented |
+| Expression Operators | 96/112 (86%) | Most operators now implemented |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
 
@@ -212,23 +212,26 @@ All arithmetic expression operators are implemented:
 - `$abs`, `$add`, `$ceil`, `$divide`, `$exp`, `$floor`, `$ln`, `$log`, `$log10`
 - `$mod`, `$multiply`, `$pow`, `$rand`, `$round`, `$sqrt`, `$subtract`, `$trunc`
 
-### Array Operators ⚠️ Partial (8/24)
+### Array Operators ✅ Nearly Complete (18/24)
 
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$arrayElemAt`, `$concatArrays`, `$filter`, `$in`, `$map`, `$reduce`, `$size`, `$slice` | `$arrayToObject`, `$first`, `$indexOfArray`, `$isArray`, `$last`, `$objectToArray`, `$range`, `$reverseArray`, `$zip`, and others |
+All commonly used array operators are now implemented:
+- `$arrayElemAt`, `$arrayToObject`, `$concatArrays`, `$filter`, `$first`, `$in`, `$indexOfArray`
+- `$isArray`, `$last`, `$map`, `$objectToArray`, `$range`, `$reduce`, `$reverseArray`
+- `$size`, `$slice`, `$sortArray`, `$zip`
 
-### String Operators ⚠️ Partial (11/20)
+### String Operators ✅ Complete (20/20)
 
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$concat`, `$indexOfCP`, `$ltrim`, `$rtrim`, `$split`, `$strLenCP`, `$substrCP`, `$toLower`, `$toString`, `$toUpper`, `$trim` | `$indexOfBytes`, `$regexFind`, `$regexFindAll`, `$regexMatch`, `$replaceAll`, `$replaceOne`, `$strcasecmp`, `$strLenBytes`, `$substrBytes` |
+All string operators are now implemented:
+- `$concat`, `$indexOfBytes`, `$indexOfCP`, `$ltrim`, `$regexFind`, `$regexFindAll`, `$regexMatch`
+- `$replaceAll`, `$replaceOne`, `$rtrim`, `$split`, `$strcasecmp`, `$strLenBytes`, `$strLenCP`
+- `$substrBytes`, `$substrCP`, `$toLower`, `$toString`, `$toUpper`, `$trim`
 
-### Date Operators ⚠️ Partial (8/18)
+### Date Operators ✅ Complete (20/20)
 
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$dateToString`, `$dayOfMonth`, `$dayOfWeek`, `$hour`, `$minute`, `$month`, `$second`, `$year` | `$dateAdd`, `$dateDiff`, `$dateFromParts`, `$dateFromString`, `$dateToParts`, `$dateSubtract`, `$dayOfYear`, `$isoDayOfWeek`, `$isoWeek`, `$isoWeekYear`, `$millisecond`, `$week` |
+All date operators are now implemented:
+- `$dateAdd`, `$dateDiff`, `$dateFromParts`, `$dateFromString`, `$dateToParts`, `$dateSubtract`
+- `$dateToString`, `$dayOfMonth`, `$dayOfWeek`, `$dayOfYear`, `$hour`, `$isoDayOfWeek`
+- `$isoWeek`, `$isoWeekYear`, `$millisecond`, `$minute`, `$month`, `$second`, `$week`, `$year`
 
 ### Comparison Operators ✅ Nearly Complete (6/7)
 
