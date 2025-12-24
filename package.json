@@ -1,27 +1,50 @@
 {
-  "name": "mangodb",
+  "name": "@jkershaw/mangodb",
   "version": "0.1.0",
   "description": "File-based MongoDB drop-in replacement for TypeScript/Node.js. SQLite is to SQL as MangoDB is to MongoDB.",
-  "main": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
     "precommit": "npm run typecheck",
     "typecheck": "tsc",
     "test": "node --experimental-strip-types --test test/**/*.test.ts",
     "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts",
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/**/*.test.ts",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
     "prepare": "husky"
   },
   "keywords": [
     "mongodb",
     "database",
+    "embedded",
     "file-based",
     "drop-in",
+    "nosql",
     "local",
     "testing"
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JKershaw/mangodb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JKershaw/mangodb/issues"
+  },
+  "homepage": "https://github.com/JKershaw/mangodb#readme",
   "dependencies": {
     "bson": "^6.10.4"
   },
