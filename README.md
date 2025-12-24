@@ -17,6 +17,12 @@ MangoDB lets you develop and test locally using only the filesystem, then deploy
 
 See [ROADMAP.md](./ROADMAP.md) for implementation phases and [PROGRESS.md](./PROGRESS.md) for current status.
 
+## Documentation
+
+- [LIMITATIONS.md](./docs/LIMITATIONS.md) - What MongoDB features are not supported
+- [COMPATIBILITY.md](./COMPATIBILITY.md) - MongoDB behavior documentation
+- [FUTURE_WORK.md](./docs/FUTURE_WORK.md) - Planned features
+
 ## Installation
 
 ```bash
