@@ -25,6 +25,13 @@ export const operators = {
   $round: arithmetic.evalRound,
   $mod: arithmetic.evalMod,
   $rand: arithmetic.evalRand,
+  $exp: arithmetic.evalExp,
+  $ln: arithmetic.evalLn,
+  $log: arithmetic.evalLog,
+  $log10: arithmetic.evalLog10,
+  $pow: arithmetic.evalPow,
+  $sqrt: arithmetic.evalSqrt,
+  $trunc: arithmetic.evalTrunc,
 
   // String
   $concat: string.evalConcat,

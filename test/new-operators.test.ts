@@ -360,6 +360,147 @@ describe(`New Operators (${getTestModeName()})`, () => {
     });
   });
 
+  describe("Arithmetic expression operators", () => {
+    it("$exp should calculate e^x", async () => {
+      const collection = client.db(dbName).collection("arith_exp");
+      await collection.insertMany([{ value: 0 }, { value: 1 }, { value: 2 }]);
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $exp: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 3);
+      assert.ok(Math.abs((docs[0].result as number) - 1) < 0.0001); // e^0 = 1
+      assert.ok(Math.abs((docs[1].result as number) - Math.E) < 0.0001); // e^1 = e
+      assert.ok(Math.abs((docs[2].result as number) - Math.E * Math.E) < 0.0001); // e^2
+    });
+
+    it("$ln should calculate natural logarithm", async () => {
+      const collection = client.db(dbName).collection("arith_ln");
+      await collection.insertMany([{ value: 1 }, { value: Math.E }, { value: 10 }]);
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $ln: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 3);
+      assert.ok(Math.abs((docs[0].result as number) - 0) < 0.0001); // ln(1) = 0
+      assert.ok(Math.abs((docs[1].result as number) - 1) < 0.0001); // ln(e) = 1
+    });
+
+    it("$log should calculate logarithm with specified base", async () => {
+      const collection = client.db(dbName).collection("arith_log");
+      await collection.insertMany([{ value: 8 }, { value: 100 }]);
+
+      const docs = await collection
+        .aggregate([
+          { $project: { log2: { $log: ["$value", 2] }, log10: { $log: ["$value", 10] } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+      assert.ok(Math.abs((docs[0].log2 as number) - 3) < 0.0001); // log2(8) = 3
+      assert.ok(Math.abs((docs[1].log10 as number) - 2) < 0.0001); // log10(100) = 2
+    });
+
+    it("$log10 should calculate base-10 logarithm", async () => {
+      const collection = client.db(dbName).collection("arith_log10");
+      await collection.insertMany([{ value: 1 }, { value: 10 }, { value: 100 }]);
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $log10: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 3);
+      assert.ok(Math.abs((docs[0].result as number) - 0) < 0.0001);
+      assert.ok(Math.abs((docs[1].result as number) - 1) < 0.0001);
+      assert.ok(Math.abs((docs[2].result as number) - 2) < 0.0001);
+    });
+
+    it("$pow should raise to power", async () => {
+      const collection = client.db(dbName).collection("arith_pow");
+      await collection.insertMany([{ base: 2, exp: 3 }, { base: 10, exp: 2 }]);
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $pow: ["$base", "$exp"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+      assert.strictEqual(docs[0].result, 8); // 2^3 = 8
+      assert.strictEqual(docs[1].result, 100); // 10^2 = 100
+    });
+
+    it("$sqrt should calculate square root", async () => {
+      const collection = client.db(dbName).collection("arith_sqrt");
+      await collection.insertMany([{ value: 0 }, { value: 4 }, { value: 9 }, { value: 2 }]);
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $sqrt: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 4);
+      assert.strictEqual(docs[0].result, 0);
+      assert.strictEqual(docs[1].result, 2);
+      assert.strictEqual(docs[2].result, 3);
+      assert.ok(Math.abs((docs[3].result as number) - Math.SQRT2) < 0.0001);
+    });
+
+    it("$trunc should truncate to integer", async () => {
+      const collection = client.db(dbName).collection("arith_trunc");
+      await collection.insertMany([
+        { value: 3.7 },
+        { value: -2.3 },
+        { value: 5.9 },
+      ]);
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $trunc: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 3);
+      assert.strictEqual(docs[0].result, 3);
+      assert.strictEqual(docs[1].result, -2);
+      assert.strictEqual(docs[2].result, 5);
+    });
+
+    it("$trunc should support decimal places", async () => {
+      const collection = client.db(dbName).collection("arith_trunc_places");
+      await collection.insertMany([{ value: 3.14159 }]);
+
+      const docs = await collection
+        .aggregate([
+          { $project: { trunc2: { $trunc: ["$value", 2] }, trunc0: { $trunc: "$value" } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0].trunc2, 3.14);
+      assert.strictEqual(docs[0].trunc0, 3);
+    });
+
+    it("should return null for null inputs", async () => {
+      const collection = client.db(dbName).collection("arith_null");
+      await collection.insertMany([{ value: null }]);
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              exp: { $exp: "$value" },
+              sqrt: { $sqrt: "$value" },
+              pow: { $pow: ["$value", 2] },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0].exp, null);
+      assert.strictEqual(docs[0].sqrt, null);
+      assert.strictEqual(docs[0].pow, null);
+    });
+  });
+
   describe("$rand expression operator", () => {
     it("should return a number between 0 and 1 in aggregation", async () => {
       const collection = client.db(dbName).collection("rand_agg");
