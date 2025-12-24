@@ -62,10 +62,12 @@ export const operators = {
   $lte: comparison.evalLte,
   $eq: comparison.evalEq,
   $ne: comparison.evalNe,
+  $cmp: comparison.evalCmp,
 
   // Conditional
   $cond: conditional.evalCond,
   $ifNull: conditional.evalIfNull,
+  $switch: conditional.evalSwitch,
 
   // Array
   $size: array.evalSize,
@@ -93,6 +95,11 @@ export const operators = {
   $toBool: typeConversion.evalToBool,
   $toDate: typeConversion.evalToDate,
   $type: typeConversion.evalType,
+  $isNumber: typeConversion.evalIsNumber,
+  $toLong: typeConversion.evalToLong,
+  $toDecimal: typeConversion.evalToDecimal,
+  $toObjectId: typeConversion.evalToObjectId,
+  $convert: typeConversion.evalConvert,
 
   // Date
   $year: date.evalYear,

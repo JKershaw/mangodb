@@ -64,3 +64,20 @@ export function evalNe(
   const [left, right] = args.map((a) => evaluate(a, doc, vars));
   return compareValues(left, right) !== 0;
 }
+
+/**
+ * $cmp - Compares two values and returns -1, 0, or 1.
+ * Returns -1 if first < second, 0 if equal, 1 if first > second.
+ */
+export function evalCmp(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): number {
+  const [left, right] = args.map((a) => evaluate(a, doc, vars));
+  const cmp = compareValues(left, right);
+  if (cmp < 0) return -1;
+  if (cmp > 0) return 1;
+  return 0;
+}

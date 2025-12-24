@@ -1860,4 +1860,445 @@ describe(`New Operators (${getTestModeName()})`, () => {
       assert.ok(randomInt < 100, "should be < 100");
     });
   });
+
+  // Phase 10: Other Expression Operators
+  describe("$cmp operator", () => {
+    it("should return -1 when first value is less than second", async () => {
+      const collection = client.db(dbName).collection("cmp_less");
+      await collection.insertOne({ a: 5, b: 10 });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $cmp: ["$a", "$b"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, -1);
+    });
+
+    it("should return 0 when values are equal", async () => {
+      const collection = client.db(dbName).collection("cmp_equal");
+      await collection.insertOne({ a: 5, b: 5 });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $cmp: ["$a", "$b"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, 0);
+    });
+
+    it("should return 1 when first value is greater than second", async () => {
+      const collection = client.db(dbName).collection("cmp_greater");
+      await collection.insertOne({ a: 10, b: 5 });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $cmp: ["$a", "$b"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, 1);
+    });
+
+    it("should compare strings", async () => {
+      const collection = client.db(dbName).collection("cmp_strings");
+      await collection.insertOne({ a: "apple", b: "banana" });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $cmp: ["$a", "$b"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, -1);
+    });
+  });
+
+  describe("$switch operator", () => {
+    it("should return value from first matching branch", async () => {
+      const collection = client.db(dbName).collection("switch_basic");
+      await collection.insertOne({ score: 85 });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              grade: {
+                $switch: {
+                  branches: [
+                    { case: { $gte: ["$score", 90] }, then: "A" },
+                    { case: { $gte: ["$score", 80] }, then: "B" },
+                    { case: { $gte: ["$score", 70] }, then: "C" },
+                  ],
+                  default: "F",
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].grade, "B");
+    });
+
+    it("should return default when no branch matches", async () => {
+      const collection = client.db(dbName).collection("switch_default");
+      await collection.insertOne({ score: 50 });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              grade: {
+                $switch: {
+                  branches: [
+                    { case: { $gte: ["$score", 90] }, then: "A" },
+                    { case: { $gte: ["$score", 80] }, then: "B" },
+                  ],
+                  default: "F",
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].grade, "F");
+    });
+
+    it("should throw when no branch matches and no default", async () => {
+      const collection = client.db(dbName).collection("switch_no_default");
+      await collection.insertOne({ score: 50 });
+
+      await assert.rejects(
+        async () => {
+          await collection
+            .aggregate([
+              {
+                $project: {
+                  grade: {
+                    $switch: {
+                      branches: [
+                        { case: { $gte: ["$score", 90] }, then: "A" },
+                      ],
+                    },
+                  },
+                },
+              },
+            ])
+            .toArray();
+        },
+        /\$switch/
+      );
+    });
+  });
+
+  describe("$isNumber operator", () => {
+    it("should return true for numbers", async () => {
+      const collection = client.db(dbName).collection("isNumber_true");
+      await collection.insertOne({ value: 42 });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $isNumber: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, true);
+    });
+
+    it("should return true for floating point numbers", async () => {
+      const collection = client.db(dbName).collection("isNumber_float");
+      await collection.insertOne({ value: 3.14 });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $isNumber: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, true);
+    });
+
+    it("should return false for strings", async () => {
+      const collection = client.db(dbName).collection("isNumber_string");
+      await collection.insertOne({ value: "42" });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $isNumber: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, false);
+    });
+
+    it("should return false for null", async () => {
+      const collection = client.db(dbName).collection("isNumber_null");
+      await collection.insertOne({ value: null });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $isNumber: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, false);
+    });
+  });
+
+  describe("$toLong operator", () => {
+    it("should convert number to long (truncated)", async () => {
+      const collection = client.db(dbName).collection("toLong_number");
+      await collection.insertOne({ value: 3.7 });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $toLong: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, 3);
+    });
+
+    it("should convert string to long", async () => {
+      const collection = client.db(dbName).collection("toLong_string");
+      await collection.insertOne({ value: "123" });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $toLong: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, 123);
+    });
+
+    it("should return null for null input", async () => {
+      const collection = client.db(dbName).collection("toLong_null");
+      await collection.insertOne({ value: null });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $toLong: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, null);
+    });
+  });
+
+  describe("$toDecimal operator", () => {
+    it("should convert string to decimal", async () => {
+      const collection = client.db(dbName).collection("toDecimal_string");
+      await collection.insertOne({ value: "3.14159" });
+
+      const docs = await collection
+        .aggregate([{ $project: { result: { $toDecimal: "$value" } } }])
+        .toArray();
+
+      assert.strictEqual(typeof docs[0].result, "number");
+      assert.ok(Math.abs((docs[0].result as number) - 3.14159) < 0.0001);
+    });
+  });
+
+  describe("$convert operator", () => {
+    it("should convert string to int", async () => {
+      const collection = client.db(dbName).collection("convert_string_int");
+      await collection.insertOne({ value: "42" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              result: { $convert: { input: "$value", to: "int" } },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, 42);
+    });
+
+    it("should use onNull when input is null", async () => {
+      const collection = client.db(dbName).collection("convert_onNull");
+      await collection.insertOne({ value: null });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              result: {
+                $convert: { input: "$value", to: "int", onNull: -1 },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, -1);
+    });
+
+    it("should use onError when conversion fails", async () => {
+      const collection = client.db(dbName).collection("convert_onError");
+      await collection.insertOne({ value: "not a number" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              result: {
+                $convert: { input: "$value", to: "int", onError: 0 },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, 0);
+    });
+
+    it("should convert to bool", async () => {
+      const collection = client.db(dbName).collection("convert_bool");
+      await collection.insertOne({ value: 1 });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              result: { $convert: { input: "$value", to: "bool" } },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].result, true);
+    });
+  });
+
+  describe("$count accumulator", () => {
+    it("should count documents in a group", async () => {
+      const collection = client.db(dbName).collection("count_accum");
+      await collection.insertMany([
+        { category: "A" },
+        { category: "A" },
+        { category: "B" },
+        { category: "A" },
+        { category: "B" },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$category", count: { $count: {} } } },
+          { $sort: { _id: 1 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs.length, 2);
+      assert.strictEqual(docs[0]._id, "A");
+      assert.strictEqual(docs[0].count, 3);
+      assert.strictEqual(docs[1]._id, "B");
+      assert.strictEqual(docs[1].count, 2);
+    });
+  });
+
+  describe("$mergeObjects accumulator", () => {
+    it("should merge objects in a group", async () => {
+      const collection = client.db(dbName).collection("mergeObjects_accum");
+      await collection.insertMany([
+        { id: 1, data: { a: 1 } },
+        { id: 1, data: { b: 2 } },
+        { id: 1, data: { c: 3 } },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$id", merged: { $mergeObjects: "$data" } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.deepStrictEqual(docs[0].merged, { a: 1, b: 2, c: 3 });
+    });
+
+    it("should override earlier values with later ones", async () => {
+      const collection = client.db(dbName).collection("mergeObjects_override");
+      await collection.insertMany([
+        { id: 1, data: { a: 1 } },
+        { id: 1, data: { a: 2 } },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$id", merged: { $mergeObjects: "$data" } } },
+        ])
+        .toArray();
+
+      const merged = docs[0].merged as { a: number };
+      assert.strictEqual(merged.a, 2);
+    });
+  });
+
+  describe("$stdDevPop accumulator", () => {
+    it("should calculate population standard deviation", async () => {
+      const collection = client.db(dbName).collection("stdDevPop_basic");
+      await collection.insertMany([
+        { group: "A", value: 2 },
+        { group: "A", value: 4 },
+        { group: "A", value: 4 },
+        { group: "A", value: 4 },
+        { group: "A", value: 5 },
+        { group: "A", value: 5 },
+        { group: "A", value: 7 },
+        { group: "A", value: 9 },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$group", stdDev: { $stdDevPop: "$value" } } },
+        ])
+        .toArray();
+
+      // Mean = 5, variance = 4, stdDev = 2
+      assert.strictEqual(docs.length, 1);
+      assert.ok(Math.abs((docs[0].stdDev as number) - 2) < 0.001);
+    });
+
+    it("should return null for empty group", async () => {
+      const collection = client.db(dbName).collection("stdDevPop_empty");
+      await collection.insertMany([
+        { group: "A", value: "not a number" },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$group", stdDev: { $stdDevPop: "$value" } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].stdDev, null);
+    });
+  });
+
+  describe("$stdDevSamp accumulator", () => {
+    it("should calculate sample standard deviation", async () => {
+      const collection = client.db(dbName).collection("stdDevSamp_basic");
+      await collection.insertMany([
+        { group: "A", value: 2 },
+        { group: "A", value: 4 },
+        { group: "A", value: 4 },
+        { group: "A", value: 4 },
+        { group: "A", value: 5 },
+        { group: "A", value: 5 },
+        { group: "A", value: 7 },
+        { group: "A", value: 9 },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$group", stdDev: { $stdDevSamp: "$value" } } },
+        ])
+        .toArray();
+
+      // Sample std dev is sqrt(32/7) ≈ 2.138
+      assert.strictEqual(docs.length, 1);
+      const expected = Math.sqrt(32 / 7);
+      assert.ok(Math.abs((docs[0].stdDev as number) - expected) < 0.001);
+    });
+
+    it("should return null for single value", async () => {
+      const collection = client.db(dbName).collection("stdDevSamp_single");
+      await collection.insertMany([
+        { group: "A", value: 5 },
+      ]);
+
+      const docs = await collection
+        .aggregate([
+          { $group: { _id: "$group", stdDev: { $stdDevSamp: "$value" } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].stdDev, null);
+    });
+  });
 });
