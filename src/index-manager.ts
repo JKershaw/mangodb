@@ -5,7 +5,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Document, IndexKeySpec, IndexInfo, CreateIndexOptions } from "./types.ts";
 import { getValueByPath } from "./document-utils.ts";
-import { MongoDuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError, InvalidIndexOptionsError } from "./errors.ts";
+import { DuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError, InvalidIndexOptionsError } from "./errors.ts";
 import { matchesFilter } from "./query-matcher.ts";
 
 /**
@@ -325,7 +325,7 @@ export class IndexManager {
    * @param docs - Documents to be inserted or updated
    * @param existingDocs - All existing documents in the collection
    * @param excludeIds - Document IDs to exclude from constraint checking (for updates)
-   * @throws MongoDuplicateKeyError if a unique constraint would be violated
+   * @throws DuplicateKeyError if a unique constraint would be violated
    */
   async checkUniqueConstraints<T extends Document>(
     docs: T[],
@@ -390,7 +390,7 @@ export class IndexManager {
         const valueMap = existingValues.get(idx.name)!;
 
         if (valueMap.has(keyStr)) {
-          throw new MongoDuplicateKeyError(
+          throw new DuplicateKeyError(
             this.dbName,
             this.collectionName,
             idx.name,

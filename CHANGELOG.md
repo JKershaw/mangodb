@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Initial release of MangoDB
-- `MangoDBClient` for file-based MongoDB-compatible storage
-- `MangoDBDb` for database operations
-- `MangoDBCollection` with CRUD operations:
+- `MangoClient` for file-based MongoDB-compatible storage
+- `MangoDb` for database operations
+- `MangoCollection` with CRUD operations:
   - `insertOne`, `insertMany`
   - `findOne`, `find` with cursor support
   - `updateOne`, `updateMany`

@@ -1,4 +1,4 @@
-import { MangoDBCollection } from "./collection.ts";
+import { MangoCollection } from "./collection.ts";
 import { rm, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { matchesFilter } from "./query-matcher.ts";
@@ -11,26 +11,26 @@ import type {
 } from "./types.ts";
 
 /**
- * MangoDBDb represents a database in MangoDB.
+ * MangoDb represents a database in MangoDB.
  * It mirrors the Db API from the official MongoDB driver,
  * providing methods to work with collections and manage the database.
  *
  * @example
  * ```typescript
- * const client = new MangoDBClient('./data');
+ * const client = new MangoClient('./data');
  * await client.connect();
  * const db = client.db('myDatabase');
  * const collection = db.collection('users');
  * ```
  */
-export class MangoDBDb {
+export class MangoDb {
   private readonly dataDir: string;
   private readonly name: string;
-  private collections = new Map<string, MangoDBCollection<Document>>();
+  private collections = new Map<string, MangoCollection<Document>>();
 
   /**
-   * Create a new MangoDBDb instance.
-   * Note: Typically you don't create this directly; use MangoDBClient.db() instead.
+   * Create a new MangoDb instance.
+   * Note: Typically you don't create this directly; use MangoClient.db() instead.
    *
    * @param dataDir - Base directory for storing database files
    * @param name - Database name
@@ -52,7 +52,7 @@ export class MangoDBDb {
    * The generic type parameter T allows for typed document operations.
    *
    * @param name - Collection name
-   * @returns A MangoDBCollection instance typed to T
+   * @returns A MangoCollection instance typed to T
    *
    * @example
    * ```typescript
@@ -68,14 +68,14 @@ export class MangoDBDb {
    * const typedUsers = db.collection<User>('users');
    * ```
    */
-  collection<T extends Document = Document>(name: string): MangoDBCollection<T> {
+  collection<T extends Document = Document>(name: string): MangoCollection<T> {
     if (!this.collections.has(name)) {
       this.collections.set(
         name,
-        new MangoDBCollection<Document>(this.dataDir, this.name, name)
+        new MangoCollection<Document>(this.dataDir, this.name, name)
       );
     }
-    return this.collections.get(name)! as MangoDBCollection<T>;
+    return this.collections.get(name)! as MangoCollection<T>;
   }
 
   /**

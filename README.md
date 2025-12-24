@@ -28,9 +28,9 @@ npm install @jkershaw/mangodb
 ### With MangoDB (local development/testing)
 
 ```typescript
-import { MangoDBClient } from '@jkershaw/mangodb';
+import { MangoClient } from '@jkershaw/mangodb';
 
-const client = new MangoDBClient('./data');
+const client = new MangoClient('./data');
 await client.connect();
 
 const db = client.db('myapp');
@@ -63,11 +63,11 @@ await client.close();
 
 ```typescript
 import { MongoClient } from 'mongodb';
-import { MangoDBClient } from '@jkershaw/mangodb';
+import { MangoClient } from '@jkershaw/mangodb';
 
 const client = process.env.MONGODB_URI
   ? new MongoClient(process.env.MONGODB_URI)
-  : new MangoDBClient('./data');
+  : new MangoClient('./data');
 
 await client.connect();
 // ... rest of your code works identically

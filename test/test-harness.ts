@@ -9,7 +9,7 @@
  */
 
 import { MongoClient } from "mongodb";
-import { MangoDBClient } from "../src/index.ts";
+import { MangoClient } from "../src/index.ts";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 
@@ -272,7 +272,7 @@ export async function createTestClient(): Promise<{
     };
   } else {
     const dataDir = `/tmp/mangodb_test_${randomUUID()}`;
-    const client = new MangoDBClient(dataDir);
+    const client = new MangoClient(dataDir);
 
     const cleanup = async () => {
       await client.close();

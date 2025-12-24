@@ -1,31 +1,31 @@
-import { MangoDBDb } from "./db.ts";
+import { MangoDb } from "./db.ts";
 import { mkdir } from "node:fs/promises";
 
 /**
- * MangoDBClient is the entry point for using MangoDB.
+ * MangoClient is the entry point for using MangoDB.
  * It mirrors the MongoClient API from the official MongoDB driver,
  * providing a MongoDB-compatible client interface backed by file storage.
  *
  * @example
  * ```typescript
- * const client = new MangoDBClient('./data');
+ * const client = new MangoClient('./data');
  * await client.connect();
  * const db = client.db('myDatabase');
  * await client.close();
  * ```
  */
-export class MangoDBClient {
+export class MangoClient {
   private readonly dataDir: string;
   private connected = false;
-  private databases = new Map<string, MangoDBDb>();
+  private databases = new Map<string, MangoDb>();
 
   /**
-   * Create a new MangoDBClient.
+   * Create a new MangoClient.
    * @param dataDir - Directory where data will be stored
    *
    * @example
    * ```typescript
-   * const client = new MangoDBClient('./data');
+   * const client = new MangoClient('./data');
    * ```
    */
   constructor(dataDir: string) {
@@ -40,7 +40,7 @@ export class MangoDBClient {
    *
    * @example
    * ```typescript
-   * const client = new MangoDBClient('./data');
+   * const client = new MangoClient('./data');
    * await client.connect();
    * ```
    */
@@ -69,7 +69,7 @@ export class MangoDBClient {
    * Database instances are cached and reused for the same name.
    *
    * @param name - Database name
-   * @returns A MangoDBDb instance
+   * @returns A MangoDb instance
    *
    * @example
    * ```typescript
@@ -77,9 +77,9 @@ export class MangoDBClient {
    * const collection = db.collection('users');
    * ```
    */
-  db(name: string): MangoDBDb {
+  db(name: string): MangoDb {
     if (!this.databases.has(name)) {
-      this.databases.set(name, new MangoDBDb(this.dataDir, name));
+      this.databases.set(name, new MangoDb(this.dataDir, name));
     }
     return this.databases.get(name)!;
   }
