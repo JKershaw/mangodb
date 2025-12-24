@@ -1982,7 +1982,9 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
               },
             ])
             .toArray(),
-          (err: Error) => err.message.includes("Failed to parse date")
+          // MongoDB error: "Error parsing date string 'not-a-date'"
+          // MangoDB error: "Failed to parse date string"
+          (err: Error) => err.message.toLowerCase().includes("date")
         );
       });
 
@@ -2001,7 +2003,9 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
               },
             ])
             .toArray(),
-          (err: Error) => err.message.includes("requires a date")
+          // MongoDB error: "can't convert from BSON type string to Date"
+          // MangoDB error: "$dateToString requires a date, found: string"
+          (err: Error) => err.message.toLowerCase().includes("string") && err.message.toLowerCase().includes("date")
         );
       });
 
