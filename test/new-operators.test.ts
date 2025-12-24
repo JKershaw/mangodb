@@ -717,6 +717,244 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
   });
 });
 
+describe(`String Expression Operators (${getTestModeName()})`, () => {
+  let client: TestClient;
+  let cleanup: () => Promise<void>;
+  let dbName: string;
+
+  before(async () => {
+    const result = await createTestClient();
+    client = result.client;
+    cleanup = result.cleanup;
+    dbName = result.dbName;
+    await client.connect();
+  });
+
+  after(async () => {
+    await cleanup();
+  });
+
+  describe("$regexFind", () => {
+    it("should find first regex match", async () => {
+      const collection = client.db(dbName).collection("regex_find");
+      await collection.insertOne({ text: "hello world hello" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              result: {
+                $regexFind: { input: "$text", regex: "hello" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const result = docs[0].result as { match: string; idx: number } | null;
+      assert.strictEqual(result?.match, "hello");
+      assert.strictEqual(result?.idx, 0);
+    });
+
+    it("should support captures", async () => {
+      const collection = client.db(dbName).collection("regex_capture");
+      await collection.insertOne({ text: "abc123def" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              result: {
+                $regexFind: { input: "$text", regex: "([a-z]+)(\\d+)" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const result = docs[0].result as { captures: string[] } | null;
+      const captures = result?.captures;
+      assert.ok(Array.isArray(captures));
+      assert.strictEqual(captures?.[0], "abc");
+      assert.strictEqual(captures?.[1], "123");
+    });
+  });
+
+  describe("$regexFindAll", () => {
+    it("should find all regex matches", async () => {
+      const collection = client.db(dbName).collection("regex_all");
+      await collection.insertOne({ text: "a1 b2 c3" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              results: {
+                $regexFindAll: { input: "$text", regex: "[a-z]\\d" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const results = docs[0].results as Array<{ match: string }>;
+      assert.strictEqual(results.length, 3);
+      assert.strictEqual(results[0].match, "a1");
+      assert.strictEqual(results[1].match, "b2");
+      assert.strictEqual(results[2].match, "c3");
+    });
+  });
+
+  describe("$regexMatch", () => {
+    it("should return true when regex matches", async () => {
+      const collection = client.db(dbName).collection("regex_match_true");
+      await collection.insertOne({ text: "hello123" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              matches: {
+                $regexMatch: { input: "$text", regex: "\\d+" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].matches, true);
+    });
+
+    it("should return false when regex does not match", async () => {
+      const collection = client.db(dbName).collection("regex_match_false");
+      await collection.insertOne({ text: "hello" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              matches: {
+                $regexMatch: { input: "$text", regex: "\\d+" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].matches, false);
+    });
+  });
+
+  describe("$replaceOne and $replaceAll", () => {
+    it("should replace first occurrence", async () => {
+      const collection = client.db(dbName).collection("replace_one");
+      await collection.insertOne({ text: "foo bar foo" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              replaced: {
+                $replaceOne: {
+                  input: "$text",
+                  find: "foo",
+                  replacement: "baz",
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].replaced, "baz bar foo");
+    });
+
+    it("should replace all occurrences", async () => {
+      const collection = client.db(dbName).collection("replace_all");
+      await collection.insertOne({ text: "foo bar foo" });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              replaced: {
+                $replaceAll: {
+                  input: "$text",
+                  find: "foo",
+                  replacement: "baz",
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].replaced, "baz bar baz");
+    });
+  });
+
+  describe("$strcasecmp", () => {
+    it("should return 0 for equal strings ignoring case", async () => {
+      const collection = client.db(dbName).collection("strcasecmp_eq");
+      await collection.insertOne({});
+
+      const docs = await collection
+        .aggregate([
+          { $project: { cmp: { $strcasecmp: ["Hello", "hello"] } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].cmp, 0);
+    });
+
+    it("should return -1 when first string is less", async () => {
+      const collection = client.db(dbName).collection("strcasecmp_lt");
+      await collection.insertOne({});
+
+      const docs = await collection
+        .aggregate([{ $project: { cmp: { $strcasecmp: ["ABC", "xyz"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].cmp, -1);
+    });
+
+    it("should return 1 when first string is greater", async () => {
+      const collection = client.db(dbName).collection("strcasecmp_gt");
+      await collection.insertOne({});
+
+      const docs = await collection
+        .aggregate([{ $project: { cmp: { $strcasecmp: ["xyz", "ABC"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].cmp, 1);
+    });
+  });
+
+  describe("$strLenBytes", () => {
+    it("should return byte length for ASCII", async () => {
+      const collection = client.db(dbName).collection("strlen_ascii");
+      await collection.insertOne({ text: "hello" });
+
+      const docs = await collection
+        .aggregate([{ $project: { len: { $strLenBytes: "$text" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].len, 5);
+    });
+
+    it("should return byte length for UTF-8", async () => {
+      const collection = client.db(dbName).collection("strlen_utf8");
+      await collection.insertOne({ text: "こんにちは" }); // 5 chars, 15 bytes in UTF-8
+
+      const docs = await collection
+        .aggregate([{ $project: { len: { $strLenBytes: "$text" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].len, 15);
+    });
+  });
+});
+
 describe(`Array Expression Operators (${getTestModeName()})`, () => {
   let client: TestClient;
   let cleanup: () => Promise<void>;

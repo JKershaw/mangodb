@@ -45,6 +45,15 @@ export const operators = {
   $rtrim: string.evalRTrim,
   $toString: string.evalToString,
   $indexOfCP: string.evalIndexOfCP,
+  $regexFind: string.evalRegexFind,
+  $regexFindAll: string.evalRegexFindAll,
+  $regexMatch: string.evalRegexMatch,
+  $replaceOne: string.evalReplaceOne,
+  $replaceAll: string.evalReplaceAll,
+  $strcasecmp: string.evalStrcasecmp,
+  $strLenBytes: string.evalStrLenBytes,
+  $indexOfBytes: string.evalIndexOfBytes,
+  $substrBytes: string.evalSubstrBytes,
 
   // Comparison
   $gt: comparison.evalGt,
