@@ -17,10 +17,10 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| Query Operators | 23/39 (59%) | Missing geospatial, bitwise |
+| Query Operators | 28/39 (72%) | Missing geospatial, projection |
 | Update Operators | 13/20 (65%) | Missing positional operators |
 | Aggregation Stages | 13/34 (38%) | Core stages implemented |
-| Expression Operators | 57/112 (51%) | Missing advanced math, regex |
+| Expression Operators | 58/112 (52%) | Missing advanced math, regex |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
 
@@ -70,13 +70,12 @@ None of these operators are supported:
 
 **Reason**: Would require GIS library integration and geospatial index support.
 
-### Bitwise Operators ❌ Not Implemented
+### Bitwise Operators ✅ Complete
 
-None of these operators are supported:
-- `$bitsAllClear`
-- `$bitsAllSet`
-- `$bitsAnyClear`
-- `$bitsAnySet`
+All bitwise query operators are fully implemented:
+- `$bitsAllClear`, `$bitsAllSet`, `$bitsAnyClear`, `$bitsAnySet`
+
+Supports position arrays and numeric bitmasks. Handles negative numbers with two's complement.
 
 ### Projection Operators ❌ Not Implemented
 
@@ -92,8 +91,8 @@ These projection-specific operators are not supported:
 
 | Operator | Status | Notes |
 |----------|--------|-------|
-| `$comment` | ❌ | Query comments not implemented |
-| `$rand` | ❌ | Random value generation |
+| `$comment` | ✅ | Query comments (no-op, for logging/profiling) |
+| `$rand` | ✅ | Available as aggregation expression in `$expr` |
 
 ---
 
@@ -207,11 +206,11 @@ Only the basic form is supported:
 
 ## Aggregation Expression Operators
 
-### Arithmetic Operators ⚠️ Partial (9/16)
+### Arithmetic Operators ⚠️ Partial (10/16)
 
 | Implemented | Not Implemented |
 |-------------|-----------------|
-| `$abs`, `$add`, `$ceil`, `$divide`, `$floor`, `$mod`, `$multiply`, `$round`, `$subtract` | `$exp`, `$ln`, `$log`, `$log10`, `$pow`, `$sqrt`, `$trunc` |
+| `$abs`, `$add`, `$ceil`, `$divide`, `$floor`, `$mod`, `$multiply`, `$rand`, `$round`, `$subtract` | `$exp`, `$ln`, `$log`, `$log10`, `$pow`, `$sqrt`, `$trunc` |
 
 ### Array Operators ⚠️ Partial (8/24)
 
