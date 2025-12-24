@@ -452,9 +452,9 @@ function evalMod(args: unknown[], doc: Document): number | null {
     throw new Error(`$mod only supports numeric types, not ${dividendType} and ${divisorType}`);
   }
 
-  // MongoDB returns null for mod by zero
+  // MongoDB throws error for mod by zero
   if (divisor === 0) {
-    return null;
+    throw new Error("can't $mod by zero");
   }
 
   // JavaScript % operator follows dividend sign (truncated division)

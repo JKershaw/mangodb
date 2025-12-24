@@ -390,15 +390,16 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
         assert.strictEqual(results[0].result, 1);
       });
 
-      it("should return null when divisor is 0", async () => {
+      it("should throw error when divisor is 0", async () => {
         const collection = client.db(dbName).collection("mod_zero");
         await collection.insertOne({ a: 10, b: 0 });
 
-        const results = await collection
-          .aggregate([{ $project: { result: { $mod: ["$a", "$b"] }, _id: 0 } }])
-          .toArray();
-
-        assert.strictEqual(results[0].result, null);
+        await assert.rejects(
+          collection
+            .aggregate([{ $project: { result: { $mod: ["$a", "$b"] }, _id: 0 } }])
+            .toArray(),
+          (err: Error) => err.message.includes("$mod by zero")
+        );
       });
 
       it("should return null for null dividend", async () => {
