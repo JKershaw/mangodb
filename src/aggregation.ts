@@ -135,6 +135,16 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
       return evalMultiply(args as unknown[], doc);
     case "$divide":
       return evalDivide(args as unknown[], doc);
+    case "$abs":
+      return evalAbs(args, doc);
+    case "$ceil":
+      return evalCeil(args, doc);
+    case "$floor":
+      return evalFloor(args, doc);
+    case "$round":
+      return evalRound(args, doc);
+    case "$mod":
+      return evalMod(args as unknown[], doc);
 
     // String operators
     case "$concat":
@@ -242,6 +252,107 @@ function evalDivide(args: unknown[], doc: Document): number | null {
   }
 
   return dividend / divisor;
+}
+
+function evalAbs(args: unknown, doc: Document): number | null {
+  const value = evaluateExpression(args, doc);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$abs only supports numeric types, not ${typeName}`);
+  }
+
+  return Math.abs(value);
+}
+
+function evalCeil(args: unknown, doc: Document): number | null {
+  const value = evaluateExpression(args, doc);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$ceil only supports numeric types, not ${typeName}`);
+  }
+
+  return Math.ceil(value);
+}
+
+function evalFloor(args: unknown, doc: Document): number | null {
+  const value = evaluateExpression(args, doc);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$floor only supports numeric types, not ${typeName}`);
+  }
+
+  return Math.floor(value);
+}
+
+function evalRound(args: unknown, doc: Document): number | null {
+  // Handle both single value and array form
+  let numberExpr: unknown;
+  let placeExpr: unknown = 0;
+
+  if (Array.isArray(args)) {
+    [numberExpr, placeExpr = 0] = args;
+  } else {
+    numberExpr = args;
+  }
+
+  const value = evaluateExpression(numberExpr, doc);
+  const place = evaluateExpression(placeExpr, doc) as number;
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "number") {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$round only supports numeric types, not ${typeName}`);
+  }
+
+  if (place === 0) {
+    return Math.round(value);
+  }
+
+  // Round to specified decimal places
+  const multiplier = Math.pow(10, place);
+  return Math.round(value * multiplier) / multiplier;
+}
+
+function evalMod(args: unknown[], doc: Document): number | null {
+  const [dividendExpr, divisorExpr] = args;
+  const dividend = evaluateExpression(dividendExpr, doc);
+  const divisor = evaluateExpression(divisorExpr, doc);
+
+  if (dividend === null || dividend === undefined || divisor === null || divisor === undefined) {
+    return null;
+  }
+
+  if (typeof dividend !== "number" || typeof divisor !== "number") {
+    const dividendType = getBSONTypeName(dividend);
+    const divisorType = getBSONTypeName(divisor);
+    throw new Error(`$mod only supports numeric types, not ${dividendType} and ${divisorType}`);
+  }
+
+  // MongoDB returns null for mod by zero
+  if (divisor === 0) {
+    return null;
+  }
+
+  // JavaScript % operator follows dividend sign (truncated division)
+  return dividend % divisor;
 }
 
 // ==================== String Operators ====================
