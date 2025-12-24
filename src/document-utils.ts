@@ -1,7 +1,7 @@
 /**
  * Document utilities for serialization, path access, comparison, and cloning.
  */
-import { ObjectId } from "mongodb";
+import { ObjectId } from "bson";
 import type { Document } from "./types.ts";
 
 /**

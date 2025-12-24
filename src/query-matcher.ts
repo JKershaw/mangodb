@@ -1,7 +1,7 @@
 /**
  * Query matching logic for MongoDB-compatible filters.
  */
-import { ObjectId } from "mongodb";
+import { ObjectId } from "bson";
 import type { Document, Filter, QueryOperators } from "./types.ts";
 import {
   getValuesByPath,

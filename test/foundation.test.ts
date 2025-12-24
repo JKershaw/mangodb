@@ -13,7 +13,7 @@ import {
   type TestClient,
   type TestCollection,
 } from "./test-harness.ts";
-import { ObjectId } from "mongodb";
+import { ObjectId } from "bson";
 
 describe(`Foundation Tests (${getTestModeName()})`, () => {
   let client: TestClient;

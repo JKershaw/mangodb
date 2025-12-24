@@ -1,7 +1,7 @@
 /**
  * Common types and interfaces for MangoDB.
  */
-import type { ObjectId } from "mongodb";
+import type { ObjectId } from "bson";
 
 /**
  * Base document type used throughout MangoDB.
