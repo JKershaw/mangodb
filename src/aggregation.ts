@@ -796,9 +796,9 @@ function evalArrayElemAt(args: unknown[], doc: Document, vars?: VariableContext)
     actualIdx = arr.length + idx;
   }
 
-  // Out of bounds returns null (not undefined)
+  // Out of bounds returns undefined (field missing in MongoDB)
   if (actualIdx < 0 || actualIdx >= arr.length) {
-    return null;
+    return undefined;
   }
 
   return arr[actualIdx];

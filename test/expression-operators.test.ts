@@ -849,7 +849,7 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
         assert.strictEqual(results[0].result, "d");
       });
 
-      it("should return null for out of bounds", async () => {
+      it("should return undefined (missing) for out of bounds", async () => {
         const collection = client.db(dbName).collection("arrayelemat_oob");
         await collection.insertOne({ arr: ["a", "b"] });
 
@@ -857,7 +857,8 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
           .aggregate([{ $project: { result: { $arrayElemAt: ["$arr", 10] }, _id: 0 } }])
           .toArray();
 
-        assert.strictEqual(results[0].result, null);
+        // MongoDB omits the field for out-of-bounds access
+        assert.strictEqual(results[0].result, undefined);
       });
 
       it("should return null for null array", async () => {
