@@ -67,6 +67,16 @@ export const operators = {
   $map: array.evalMap,
   $reduce: array.evalReduce,
   $in: array.evalIn,
+  $first: array.evalFirst,
+  $last: array.evalLast,
+  $indexOfArray: array.evalIndexOfArray,
+  $isArray: array.evalIsArray,
+  $range: array.evalRange,
+  $reverseArray: array.evalReverseArray,
+  $arrayToObject: array.evalArrayToObject,
+  $objectToArray: array.evalObjectToArray,
+  $zip: array.evalZip,
+  $sortArray: array.evalSortArray,
 
   // Type conversion
   $toInt: typeConversion.evalToInt,

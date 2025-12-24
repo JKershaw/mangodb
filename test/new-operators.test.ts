@@ -717,6 +717,337 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
   });
 });
 
+describe(`Array Expression Operators (${getTestModeName()})`, () => {
+  let client: TestClient;
+  let cleanup: () => Promise<void>;
+  let dbName: string;
+
+  before(async () => {
+    const result = await createTestClient();
+    client = result.client;
+    cleanup = result.cleanup;
+    dbName = result.dbName;
+    await client.connect();
+  });
+
+  after(async () => {
+    await cleanup();
+  });
+
+  describe("$first and $last", () => {
+    it("should return first element", async () => {
+      const collection = client.db(dbName).collection("first_basic");
+      await collection.insertOne({ items: [1, 2, 3, 4] });
+
+      const docs = await collection
+        .aggregate([{ $project: { first: { $first: "$items" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].first, 1);
+    });
+
+    it("should return last element", async () => {
+      const collection = client.db(dbName).collection("last_basic");
+      await collection.insertOne({ items: ["a", "b", "c"] });
+
+      const docs = await collection
+        .aggregate([{ $project: { last: { $last: "$items" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].last, "c");
+    });
+
+    it("should return null for null array", async () => {
+      const collection = client.db(dbName).collection("first_null");
+      await collection.insertOne({ items: null });
+
+      const docs = await collection
+        .aggregate([{ $project: { first: { $first: "$items" } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].first, null);
+    });
+  });
+
+  describe("$indexOfArray", () => {
+    it("should find index of element", async () => {
+      const collection = client.db(dbName).collection("indexof_basic");
+      await collection.insertOne({ items: ["a", "b", "c", "d"] });
+
+      const docs = await collection
+        .aggregate([
+          { $project: { idx: { $indexOfArray: ["$items", "c"] } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].idx, 2);
+    });
+
+    it("should return -1 when not found", async () => {
+      const collection = client.db(dbName).collection("indexof_notfound");
+      await collection.insertOne({ items: [1, 2, 3] });
+
+      const docs = await collection
+        .aggregate([
+          { $project: { idx: { $indexOfArray: ["$items", 5] } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].idx, -1);
+    });
+
+    it("should support start and end indices", async () => {
+      const collection = client.db(dbName).collection("indexof_range");
+      await collection.insertOne({ items: ["a", "b", "c", "b", "d"] });
+
+      const docs = await collection
+        .aggregate([
+          { $project: { idx: { $indexOfArray: ["$items", "b", 2] } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(docs[0].idx, 3);
+    });
+  });
+
+  describe("$isArray", () => {
+    it("should return true for arrays", async () => {
+      const collection = client.db(dbName).collection("isarray_true");
+      await collection.insertOne({ items: [1, 2, 3] });
+
+      const docs = await collection
+        .aggregate([{ $project: { isArr: { $isArray: ["$items"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].isArr, true);
+    });
+
+    it("should return false for non-arrays", async () => {
+      const collection = client.db(dbName).collection("isarray_false");
+      await collection.insertOne({ value: "string" });
+
+      const docs = await collection
+        .aggregate([{ $project: { isArr: { $isArray: ["$value"] } } }])
+        .toArray();
+
+      assert.strictEqual(docs[0].isArr, false);
+    });
+  });
+
+  describe("$range", () => {
+    it("should generate integer range", async () => {
+      const collection = client.db(dbName).collection("range_basic");
+      await collection.insertOne({});
+
+      const docs = await collection
+        .aggregate([{ $project: { nums: { $range: [0, 5] } } }])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].nums, [0, 1, 2, 3, 4]);
+    });
+
+    it("should support step parameter", async () => {
+      const collection = client.db(dbName).collection("range_step");
+      await collection.insertOne({});
+
+      const docs = await collection
+        .aggregate([{ $project: { nums: { $range: [0, 10, 2] } } }])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].nums, [0, 2, 4, 6, 8]);
+    });
+
+    it("should support negative step", async () => {
+      const collection = client.db(dbName).collection("range_neg");
+      await collection.insertOne({});
+
+      const docs = await collection
+        .aggregate([{ $project: { nums: { $range: [5, 0, -1] } } }])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].nums, [5, 4, 3, 2, 1]);
+    });
+  });
+
+  describe("$reverseArray", () => {
+    it("should reverse an array", async () => {
+      const collection = client.db(dbName).collection("reverse_basic");
+      await collection.insertOne({ items: [1, 2, 3, 4] });
+
+      const docs = await collection
+        .aggregate([{ $project: { reversed: { $reverseArray: "$items" } } }])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].reversed, [4, 3, 2, 1]);
+    });
+  });
+
+  describe("$arrayToObject and $objectToArray", () => {
+    it("should convert array to object using [k, v] format", async () => {
+      const collection = client.db(dbName).collection("a2o_kv");
+      await collection.insertOne({
+        pairs: [
+          ["name", "John"],
+          ["age", 30],
+        ],
+      });
+
+      const docs = await collection
+        .aggregate([{ $project: { obj: { $arrayToObject: "$pairs" } } }])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].obj, { name: "John", age: 30 });
+    });
+
+    it("should convert array to object using {k, v} format", async () => {
+      const collection = client.db(dbName).collection("a2o_obj");
+      await collection.insertOne({
+        pairs: [
+          { k: "x", v: 10 },
+          { k: "y", v: 20 },
+        ],
+      });
+
+      const docs = await collection
+        .aggregate([{ $project: { obj: { $arrayToObject: "$pairs" } } }])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].obj, { x: 10, y: 20 });
+    });
+
+    it("should convert object to array", async () => {
+      const collection = client.db(dbName).collection("o2a_basic");
+      await collection.insertOne({ data: { a: 1, b: 2 } });
+
+      const docs = await collection
+        .aggregate([{ $project: { arr: { $objectToArray: "$data" } } }])
+        .toArray();
+
+      const arr = docs[0].arr as Array<{ k: string; v: unknown }>;
+      assert.ok(arr.some((e) => e.k === "a" && e.v === 1));
+      assert.ok(arr.some((e) => e.k === "b" && e.v === 2));
+    });
+  });
+
+  describe("$zip", () => {
+    it("should zip arrays together", async () => {
+      const collection = client.db(dbName).collection("zip_basic");
+      await collection.insertOne({
+        a: [1, 2, 3],
+        b: ["a", "b", "c"],
+      });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              zipped: { $zip: { inputs: ["$a", "$b"] } },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].zipped, [
+        [1, "a"],
+        [2, "b"],
+        [3, "c"],
+      ]);
+    });
+
+    it("should use shortest array by default", async () => {
+      const collection = client.db(dbName).collection("zip_short");
+      await collection.insertOne({
+        a: [1, 2, 3, 4],
+        b: ["x", "y"],
+      });
+
+      const docs = await collection
+        .aggregate([
+          { $project: { zipped: { $zip: { inputs: ["$a", "$b"] } } } },
+        ])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].zipped, [
+        [1, "x"],
+        [2, "y"],
+      ]);
+    });
+
+    it("should pad with defaults when using longest length", async () => {
+      const collection = client.db(dbName).collection("zip_long");
+      await collection.insertOne({
+        a: [1, 2],
+        b: ["x", "y", "z"],
+      });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              zipped: {
+                $zip: {
+                  inputs: ["$a", "$b"],
+                  useLongestLength: true,
+                  defaults: [0, "default"],
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].zipped, [
+        [1, "x"],
+        [2, "y"],
+        [0, "z"],
+      ]);
+    });
+  });
+
+  describe("$sortArray", () => {
+    it("should sort primitives ascending", async () => {
+      const collection = client.db(dbName).collection("sortarr_asc");
+      await collection.insertOne({ nums: [3, 1, 4, 1, 5] });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              sorted: { $sortArray: { input: "$nums", sortBy: 1 } },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.deepStrictEqual(docs[0].sorted, [1, 1, 3, 4, 5]);
+    });
+
+    it("should sort objects by field", async () => {
+      const collection = client.db(dbName).collection("sortarr_field");
+      await collection.insertOne({
+        items: [{ name: "C" }, { name: "A" }, { name: "B" }],
+      });
+
+      const docs = await collection
+        .aggregate([
+          {
+            $project: {
+              sorted: {
+                $sortArray: { input: "$items", sortBy: { name: 1 } },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const names = (docs[0].sorted as Array<{ name: string }>).map(
+        (i) => i.name
+      );
+      assert.deepStrictEqual(names, ["A", "B", "C"]);
+    });
+  });
+});
+
 describe(`New Operators (${getTestModeName()})`, () => {
   let client: TestClient;
   let cleanup: () => Promise<void>;
