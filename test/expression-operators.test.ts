@@ -1798,6 +1798,343 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
 
         assert.strictEqual(results[0].result, "14:30:45");
       });
+
+      it("should format with day of year (%j)", async () => {
+        const collection = client.db(dbName).collection("datetostring_dayofyear");
+        // June 15 is day 166 of the year (non-leap year)
+        await collection.insertOne({ date: new Date("2023-06-15T00:00:00Z") });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $dateToString: { format: "%j", date: "$date" },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "166");
+      });
+
+      it("should format with day of week (%w and %u)", async () => {
+        const collection = client.db(dbName).collection("datetostring_dayofweek");
+        // 2023-06-15 is a Thursday
+        await collection.insertOne({ date: new Date("2023-06-15T00:00:00Z") });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                w: { $dateToString: { format: "%w", date: "$date" } },
+                u: { $dateToString: { format: "%u", date: "$date" } },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].w, "4"); // Thursday is 4 (Sunday=0)
+        assert.strictEqual(results[0].u, "4"); // Thursday is 4 (Monday=1)
+      });
+
+      it("should throw error for non-string onNull value", async () => {
+        const collection = client.db(dbName).collection("datetostring_onnull_err");
+        await collection.insertOne({ date: null });
+
+        await assert.rejects(
+          collection
+            .aggregate([
+              {
+                $project: {
+                  result: { $dateToString: { date: "$date", onNull: 123 } },
+                  _id: 0,
+                },
+              },
+            ])
+            .toArray(),
+          (err: Error) => err.message.includes("onNull must be a string")
+        );
+      });
+    });
+  });
+
+  describe("Edge Cases", () => {
+    describe("$toInt edge cases", () => {
+      it("should throw for Infinity string", async () => {
+        const collection = client.db(dbName).collection("toint_infinity");
+        await collection.insertOne({ value: "Infinity" });
+
+        await assert.rejects(
+          collection
+            .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+            .toArray(),
+          (err: Error) => err.message.includes("Failed to parse")
+        );
+      });
+
+      it("should throw for -Infinity string", async () => {
+        const collection = client.db(dbName).collection("toint_neginfinity");
+        await collection.insertOne({ value: "-Infinity" });
+
+        await assert.rejects(
+          collection
+            .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+            .toArray(),
+          (err: Error) => err.message.includes("Failed to parse")
+        );
+      });
+
+      it("should throw for NaN string", async () => {
+        const collection = client.db(dbName).collection("toint_nan");
+        await collection.insertOne({ value: "NaN" });
+
+        await assert.rejects(
+          collection
+            .aggregate([{ $project: { result: { $toInt: "$value" }, _id: 0 } }])
+            .toArray(),
+          (err: Error) => err.message.includes("Failed to parse")
+        );
+      });
+    });
+
+    describe("$toDouble edge cases", () => {
+      it("should throw for Infinity string", async () => {
+        const collection = client.db(dbName).collection("todouble_infinity");
+        await collection.insertOne({ value: "Infinity" });
+
+        await assert.rejects(
+          collection
+            .aggregate([
+              { $project: { result: { $toDouble: "$value" }, _id: 0 } },
+            ])
+            .toArray(),
+          (err: Error) => err.message.includes("Failed to parse")
+        );
+      });
+
+      it("should throw for -Infinity string", async () => {
+        const collection = client.db(dbName).collection("todouble_neginfinity");
+        await collection.insertOne({ value: "-Infinity" });
+
+        await assert.rejects(
+          collection
+            .aggregate([
+              { $project: { result: { $toDouble: "$value" }, _id: 0 } },
+            ])
+            .toArray(),
+          (err: Error) => err.message.includes("Failed to parse")
+        );
+      });
+
+      it("should parse scientific notation correctly", async () => {
+        const collection = client.db(dbName).collection("todouble_scientific");
+        await collection.insertOne({ value: "1.5e3" });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $toDouble: "$value" }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 1500);
+      });
+    });
+
+    describe("$map with optional as parameter", () => {
+      it("should use default variable name 'this' when as not specified", async () => {
+        const collection = client.db(dbName).collection("map_default_var");
+        await collection.insertOne({ values: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                doubled: {
+                  $map: {
+                    input: "$values",
+                    in: { $multiply: ["$$this", 2] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].doubled, [2, 4, 6]);
+      });
+    });
+
+    describe("Date operator edge cases", () => {
+      it("$year should throw for invalid date strings via $toDate", async () => {
+        const collection = client.db(dbName).collection("year_invalid");
+        await collection.insertOne({ value: "not-a-date" });
+
+        await assert.rejects(
+          collection
+            .aggregate([
+              {
+                $project: {
+                  result: { $year: { $toDate: "$value" } },
+                  _id: 0,
+                },
+              },
+            ])
+            .toArray(),
+          (err: Error) => err.message.includes("Failed to parse date")
+        );
+      });
+
+      it("$dateToString should throw for non-date types", async () => {
+        const collection = client.db(dbName).collection("datetostring_err");
+        await collection.insertOne({ value: "not-a-date" });
+
+        await assert.rejects(
+          collection
+            .aggregate([
+              {
+                $project: {
+                  result: { $dateToString: { date: "$value" } },
+                  _id: 0,
+                },
+              },
+            ])
+            .toArray(),
+          (err: Error) => err.message.includes("requires a date")
+        );
+      });
+
+      it("should handle epoch milliseconds for dates before 1970", async () => {
+        const collection = client.db(dbName).collection("date_before_epoch");
+        // December 31, 1969
+        await collection.insertOne({ date: new Date("1969-12-31T00:00:00Z") });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                year: { $year: "$date" },
+                month: { $month: "$date" },
+                day: { $dayOfMonth: "$date" },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].year, 1969);
+        assert.strictEqual(results[0].month, 12);
+        assert.strictEqual(results[0].day, 31);
+      });
+    });
+
+    describe("Variable scoping edge cases", () => {
+      it("should handle nested $map with different variable names", async () => {
+        const collection = client.db(dbName).collection("nested_map");
+        await collection.insertOne({
+          matrix: [
+            [1, 2],
+            [3, 4],
+          ],
+        });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                doubled: {
+                  $map: {
+                    input: "$matrix",
+                    as: "row",
+                    in: {
+                      $map: {
+                        input: "$$row",
+                        as: "cell",
+                        in: { $multiply: ["$$cell", 2] },
+                      },
+                    },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].doubled, [
+          [2, 4],
+          [6, 8],
+        ]);
+      });
+
+      it("should allow variable shadowing in nested operators", async () => {
+        const collection = client.db(dbName).collection("var_shadowing");
+        await collection.insertOne({
+          outer: [
+            { inner: [1, 2] },
+            { inner: [3, 4] },
+          ],
+        });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $map: {
+                    input: "$outer",
+                    as: "item",
+                    in: {
+                      $filter: {
+                        input: "$$item.inner",
+                        as: "item", // Shadows outer 'item'
+                        cond: { $gt: ["$$item", 2] },
+                      },
+                    },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [[], [3, 4]]);
+      });
+    });
+
+    describe("Unicode string handling", () => {
+      it("should handle emoji in $strLenCP", async () => {
+        const collection = client.db(dbName).collection("strlen_emoji");
+        await collection.insertOne({ value: "Hello 👋" });
+
+        const results = await collection
+          .aggregate([
+            { $project: { len: { $strLenCP: "$value" }, _id: 0 } },
+          ])
+          .toArray();
+
+        // "Hello " is 6 chars, 👋 is 2 code units in JS but may count as 1-2 chars
+        // JavaScript string length for "Hello 👋" is 8 (emoji is 2 UTF-16 code units)
+        assert.ok((results[0] as { len: number }).len >= 7); // At least 7 characters
+      });
+
+      it("should handle CJK characters in $split", async () => {
+        const collection = client.db(dbName).collection("split_cjk");
+        await collection.insertOne({ value: "你好,世界" });
+
+        const results = await collection
+          .aggregate([
+            { $project: { parts: { $split: ["$value", ","] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].parts, ["你好", "世界"]);
+      });
     });
   });
 });

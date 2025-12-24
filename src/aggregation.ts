@@ -868,7 +868,7 @@ function evalFilter(args: unknown, doc: Document, vars?: VariableContext): unkno
 }
 
 function evalMap(args: unknown, doc: Document, vars?: VariableContext): unknown[] | null {
-  const spec = args as { input: unknown; as: string; in: unknown };
+  const spec = args as { input: unknown; as?: string; in: unknown };
   const input = evaluateExpression(spec.input, doc, vars);
   const varName = spec.as || "this";
   const inExpr = spec.in;
@@ -967,8 +967,13 @@ function evalToInt(args: unknown, doc: Document, vars?: VariableContext): number
 
   // String - parse as integer
   if (typeof value === "string") {
+    const trimmed = value.trim();
+    // Reject special string values that parseFloat accepts
+    if (trimmed === "Infinity" || trimmed === "-Infinity" || trimmed === "NaN") {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
     const parsed = parseInt(value, 10);
-    if (isNaN(parsed)) {
+    if (isNaN(parsed) || !Number.isFinite(parsed)) {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     return parsed;
@@ -1003,8 +1008,13 @@ function evalToDouble(args: unknown, doc: Document, vars?: VariableContext): num
 
   // String - parse as float
   if (typeof value === "string") {
+    const trimmed = value.trim();
+    // Reject special string values that parseFloat accepts
+    if (trimmed === "Infinity" || trimmed === "-Infinity" || trimmed === "NaN") {
+      throw new Error(`Failed to parse number '${value}' in $convert`);
+    }
     const parsed = parseFloat(value);
-    if (isNaN(parsed)) {
+    if (isNaN(parsed) || !Number.isFinite(parsed)) {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     return parsed;
@@ -1141,7 +1151,16 @@ function evalType(args: unknown, doc: Document, vars?: VariableContext): string 
 
 // ==================== Date Operators ====================
 
-function evalYear(args: unknown, doc: Document, vars?: VariableContext): number | null {
+/**
+ * Helper to extract and validate a date value for date operators.
+ * Returns the date if valid, null if null/undefined, or throws for invalid types/dates.
+ */
+function extractDateValue(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  operatorName: string
+): Date | null {
   const value = evaluateExpression(args, doc, vars);
 
   if (value === null || value === undefined) {
@@ -1150,100 +1169,57 @@ function evalYear(args: unknown, doc: Document, vars?: VariableContext): number 
 
   if (!(value instanceof Date)) {
     const typeName = getBSONTypeName(value);
-    throw new Error(`$year requires a date, found: ${typeName}`);
+    throw new Error(`${operatorName} requires a date, found: ${typeName}`);
   }
 
+  // Check for invalid dates (e.g., new Date("invalid"))
+  if (isNaN(value.getTime())) {
+    throw new Error(`${operatorName} requires a valid date`);
+  }
+
+  return value;
+}
+
+function evalYear(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = extractDateValue(args, doc, vars, "$year");
+  if (value === null) return null;
   return value.getUTCFullYear();
 }
 
 function evalMonth(args: unknown, doc: Document, vars?: VariableContext): number | null {
-  const value = evaluateExpression(args, doc, vars);
-
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (!(value instanceof Date)) {
-    const typeName = getBSONTypeName(value);
-    throw new Error(`$month requires a date, found: ${typeName}`);
-  }
-
+  const value = extractDateValue(args, doc, vars, "$month");
+  if (value === null) return null;
   // MongoDB months are 1-12, JavaScript getUTCMonth is 0-11
   return value.getUTCMonth() + 1;
 }
 
 function evalDayOfMonth(args: unknown, doc: Document, vars?: VariableContext): number | null {
-  const value = evaluateExpression(args, doc, vars);
-
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (!(value instanceof Date)) {
-    const typeName = getBSONTypeName(value);
-    throw new Error(`$dayOfMonth requires a date, found: ${typeName}`);
-  }
-
+  const value = extractDateValue(args, doc, vars, "$dayOfMonth");
+  if (value === null) return null;
   return value.getUTCDate();
 }
 
 function evalHour(args: unknown, doc: Document, vars?: VariableContext): number | null {
-  const value = evaluateExpression(args, doc, vars);
-
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (!(value instanceof Date)) {
-    const typeName = getBSONTypeName(value);
-    throw new Error(`$hour requires a date, found: ${typeName}`);
-  }
-
+  const value = extractDateValue(args, doc, vars, "$hour");
+  if (value === null) return null;
   return value.getUTCHours();
 }
 
 function evalMinute(args: unknown, doc: Document, vars?: VariableContext): number | null {
-  const value = evaluateExpression(args, doc, vars);
-
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (!(value instanceof Date)) {
-    const typeName = getBSONTypeName(value);
-    throw new Error(`$minute requires a date, found: ${typeName}`);
-  }
-
+  const value = extractDateValue(args, doc, vars, "$minute");
+  if (value === null) return null;
   return value.getUTCMinutes();
 }
 
 function evalSecond(args: unknown, doc: Document, vars?: VariableContext): number | null {
-  const value = evaluateExpression(args, doc, vars);
-
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (!(value instanceof Date)) {
-    const typeName = getBSONTypeName(value);
-    throw new Error(`$second requires a date, found: ${typeName}`);
-  }
-
+  const value = extractDateValue(args, doc, vars, "$second");
+  if (value === null) return null;
   return value.getUTCSeconds();
 }
 
 function evalDayOfWeek(args: unknown, doc: Document, vars?: VariableContext): number | null {
-  const value = evaluateExpression(args, doc, vars);
-
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (!(value instanceof Date)) {
-    const typeName = getBSONTypeName(value);
-    throw new Error(`$dayOfWeek requires a date, found: ${typeName}`);
-  }
-
+  const value = extractDateValue(args, doc, vars, "$dayOfWeek");
+  if (value === null) return null;
   // JavaScript getUTCDay: 0=Sunday, 6=Saturday
   // MongoDB $dayOfWeek: 1=Sunday, 7=Saturday
   return value.getUTCDay() + 1;
@@ -1256,7 +1232,13 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
   // Handle null/missing date
   if (dateValue === null || dateValue === undefined) {
     if (spec.onNull !== undefined) {
-      return evaluateExpression(spec.onNull, doc, vars) as string;
+      const onNullValue = evaluateExpression(spec.onNull, doc, vars);
+      // onNull should evaluate to string or null
+      if (onNullValue !== null && typeof onNullValue !== "string") {
+        const typeName = getBSONTypeName(onNullValue);
+        throw new Error(`$dateToString onNull must be a string, found: ${typeName}`);
+      }
+      return onNullValue as string | null;
     }
     return null;
   }
@@ -1264,6 +1246,11 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
   if (!(dateValue instanceof Date)) {
     const typeName = getBSONTypeName(dateValue);
     throw new Error(`$dateToString requires a date, found: ${typeName}`);
+  }
+
+  // Check for invalid dates
+  if (isNaN(dateValue.getTime())) {
+    throw new Error(`$dateToString requires a valid date`);
   }
 
   // Default format is ISO 8601
@@ -1274,12 +1261,46 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
 
 /**
  * Format a date according to MongoDB's format specifiers.
- * Supported: %Y, %m, %d, %H, %M, %S, %L (milliseconds)
+ * Supported:
+ *   %Y - Year (4 digits)
+ *   %m - Month (01-12)
+ *   %d - Day of month (01-31)
+ *   %H - Hour (00-23)
+ *   %M - Minutes (00-59)
+ *   %S - Seconds (00-59)
+ *   %L - Milliseconds (000-999)
+ *   %j - Day of year (001-366)
+ *   %w - Day of week (0=Sunday, 6=Saturday)
+ *   %u - ISO day of week (1=Monday, 7=Sunday)
+ *   %U - Week of year (00-53, Sunday start)
+ *   %V - ISO week of year (01-53)
  */
 function formatDate(date: Date, format: string): string {
   const pad2 = (n: number) => n.toString().padStart(2, "0");
   const pad3 = (n: number) => n.toString().padStart(3, "0");
   const pad4 = (n: number) => n.toString().padStart(4, "0");
+
+  // Calculate day of year
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear) / (24 * 60 * 60 * 1000)) + 1;
+
+  // Calculate week of year (Sunday start)
+  const startOfYearDate = new Date(startOfYear);
+  const startDayOfWeek = startOfYearDate.getUTCDay();
+  const daysSinceStart = dayOfYear - 1;
+  const weekOfYear = Math.floor((daysSinceStart + startDayOfWeek) / 7);
+
+  // Calculate ISO week of year (Monday start, week 1 contains Jan 4)
+  const jan4 = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const jan4DayOfWeek = jan4.getUTCDay() || 7; // Convert Sunday from 0 to 7
+  const startOfISOWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 24 * 60 * 60 * 1000);
+  const daysSinceISOWeek1 = Math.floor((date.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000));
+  let isoWeek = Math.floor(daysSinceISOWeek1 / 7) + 1;
+  if (isoWeek < 1) isoWeek = 52; // Last week of previous year
+  if (isoWeek > 52) isoWeek = 1; // First week of next year
+
+  // ISO day of week: 1=Monday, 7=Sunday
+  const isoDayOfWeek = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
 
   return format
     .replace(/%Y/g, pad4(date.getUTCFullYear()))
@@ -1288,7 +1309,12 @@ function formatDate(date: Date, format: string): string {
     .replace(/%H/g, pad2(date.getUTCHours()))
     .replace(/%M/g, pad2(date.getUTCMinutes()))
     .replace(/%S/g, pad2(date.getUTCSeconds()))
-    .replace(/%L/g, pad3(date.getUTCMilliseconds()));
+    .replace(/%L/g, pad3(date.getUTCMilliseconds()))
+    .replace(/%j/g, pad3(dayOfYear))
+    .replace(/%w/g, date.getUTCDay().toString())
+    .replace(/%u/g, isoDayOfWeek.toString())
+    .replace(/%U/g, pad2(weekOfYear))
+    .replace(/%V/g, pad2(isoWeek));
 }
 
 // ==================== Accumulator Classes ====================
