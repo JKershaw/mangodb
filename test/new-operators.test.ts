@@ -13,6 +13,122 @@ import {
   type TestClient,
 } from "./test-harness.ts";
 
+describe(`New Update Operators (${getTestModeName()})`, () => {
+  let client: TestClient;
+  let cleanup: () => Promise<void>;
+  let dbName: string;
+
+  before(async () => {
+    const result = await createTestClient();
+    client = result.client;
+    cleanup = result.cleanup;
+    dbName = result.dbName;
+    await client.connect();
+  });
+
+  after(async () => {
+    await cleanup();
+  });
+
+  describe("$pullAll operator", () => {
+    it("should remove all matching values from array", async () => {
+      const collection = client.db(dbName).collection("pullall_basic");
+      await collection.insertOne({ scores: [0, 2, 5, 5, 1, 0] });
+
+      await collection.updateOne({}, { $pullAll: { scores: [0, 5] } });
+
+      const doc = await collection.findOne({});
+      assert.deepStrictEqual(doc?.scores, [2, 1]);
+    });
+
+    it("should handle empty array to remove", async () => {
+      const collection = client.db(dbName).collection("pullall_empty");
+      await collection.insertOne({ items: [1, 2, 3] });
+
+      await collection.updateOne({}, { $pullAll: { items: [] } });
+
+      const doc = await collection.findOne({});
+      assert.deepStrictEqual(doc?.items, [1, 2, 3]);
+    });
+
+    it("should handle no matching values", async () => {
+      const collection = client.db(dbName).collection("pullall_nomatch");
+      await collection.insertOne({ items: [1, 2, 3] });
+
+      await collection.updateOne({}, { $pullAll: { items: [4, 5, 6] } });
+
+      const doc = await collection.findOne({});
+      assert.deepStrictEqual(doc?.items, [1, 2, 3]);
+    });
+
+    it("should remove all occurrences of matching values", async () => {
+      const collection = client.db(dbName).collection("pullall_multiple");
+      await collection.insertOne({ tags: ["a", "b", "a", "c", "a"] });
+
+      await collection.updateOne({}, { $pullAll: { tags: ["a"] } });
+
+      const doc = await collection.findOne({});
+      assert.deepStrictEqual(doc?.tags, ["b", "c"]);
+    });
+  });
+
+  describe("$bit operator", () => {
+    it("should apply bitwise AND", async () => {
+      const collection = client.db(dbName).collection("bit_and");
+      // 13 = 1101, AND with 10 = 1010, result = 1000 = 8
+      await collection.insertOne({ flags: 13 });
+
+      await collection.updateOne({}, { $bit: { flags: { and: 10 } } });
+
+      const doc = await collection.findOne({});
+      assert.strictEqual(doc?.flags, 8);
+    });
+
+    it("should apply bitwise OR", async () => {
+      const collection = client.db(dbName).collection("bit_or");
+      // 5 = 0101, OR with 2 = 0010, result = 0111 = 7
+      await collection.insertOne({ flags: 5 });
+
+      await collection.updateOne({}, { $bit: { flags: { or: 2 } } });
+
+      const doc = await collection.findOne({});
+      assert.strictEqual(doc?.flags, 7);
+    });
+
+    it("should apply bitwise XOR", async () => {
+      const collection = client.db(dbName).collection("bit_xor");
+      // 5 = 0101, XOR with 3 = 0011, result = 0110 = 6
+      await collection.insertOne({ flags: 5 });
+
+      await collection.updateOne({}, { $bit: { flags: { xor: 3 } } });
+
+      const doc = await collection.findOne({});
+      assert.strictEqual(doc?.flags, 6);
+    });
+
+    it("should apply multiple bitwise operations", async () => {
+      const collection = client.db(dbName).collection("bit_multiple");
+      await collection.insertOne({ flags: 15 }); // 1111
+
+      // AND with 12 (1100) = 1100 (12), then OR with 3 (0011) = 1111 (15)
+      await collection.updateOne({}, { $bit: { flags: { and: 12, or: 3 } } });
+
+      const doc = await collection.findOne({});
+      assert.strictEqual(doc?.flags, 15);
+    });
+
+    it("should initialize missing field to 0", async () => {
+      const collection = client.db(dbName).collection("bit_missing");
+      await collection.insertOne({ other: "value" });
+
+      await collection.updateOne({}, { $bit: { flags: { or: 5 } } });
+
+      const doc = await collection.findOne({});
+      assert.strictEqual(doc?.flags, 5);
+    });
+  });
+});
+
 describe(`New Operators (${getTestModeName()})`, () => {
   let client: TestClient;
   let cleanup: () => Promise<void>;

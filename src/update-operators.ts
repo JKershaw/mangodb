@@ -226,6 +226,32 @@ export function applyUpdateOperators<T extends Document>(
     }
   }
 
+  // Apply $pullAll - remove all matching values from array
+  if (update.$pullAll) {
+    for (const [path, valuesToRemove] of Object.entries(update.$pullAll)) {
+      if (!Array.isArray(valuesToRemove)) {
+        throw new Error(`$pullAll requires an array argument`);
+      }
+
+      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
+
+      if (currentValue === undefined) {
+        continue;
+      }
+
+      if (!Array.isArray(currentValue)) {
+        throw new Error(`Cannot apply $pullAll to a non-array value`);
+      }
+
+      const filteredArray = currentValue.filter(
+        (elem) => !valuesToRemove.some((v) => valuesEqual(elem, v))
+      );
+
+      currentValue.length = 0;
+      currentValue.push(...filteredArray);
+    }
+  }
+
   // Apply $min - only update if new value is less than current
   if (update.$min) {
     for (const [path, minValue] of Object.entries(update.$min)) {
@@ -317,6 +343,53 @@ export function applyUpdateOperators<T extends Document>(
           `$currentDate: expected boolean or { $type: 'date' | 'timestamp' }`
         );
       }
+    }
+  }
+
+  // Apply $bit - bitwise operations (and, or, xor)
+  if (update.$bit) {
+    for (const [path, operations] of Object.entries(update.$bit)) {
+      if (typeof operations !== "object" || operations === null) {
+        throw new Error(`$bit requires an object with and/or/xor operations`);
+      }
+
+      let currentValue = getValueAtPath(result as Record<string, unknown>, path);
+
+      // If field doesn't exist, initialize to 0
+      if (currentValue === undefined) {
+        currentValue = 0;
+      }
+
+      if (typeof currentValue !== "number" || !Number.isInteger(currentValue)) {
+        throw new Error(`Cannot apply $bit to a non-integer value`);
+      }
+
+      let intValue = currentValue;
+
+      const ops = operations as Record<string, unknown>;
+      if ("and" in ops) {
+        const andValue = ops.and;
+        if (typeof andValue !== "number" || !Number.isInteger(andValue)) {
+          throw new Error(`$bit and value must be an integer`);
+        }
+        intValue = intValue & andValue;
+      }
+      if ("or" in ops) {
+        const orValue = ops.or;
+        if (typeof orValue !== "number" || !Number.isInteger(orValue)) {
+          throw new Error(`$bit or value must be an integer`);
+        }
+        intValue = intValue | orValue;
+      }
+      if ("xor" in ops) {
+        const xorValue = ops.xor;
+        if (typeof xorValue !== "number" || !Number.isInteger(xorValue)) {
+          throw new Error(`$bit xor value must be an integer`);
+        }
+        intValue = intValue ^ xorValue;
+      }
+
+      setValueByPath(result as Record<string, unknown>, path, intValue);
     }
   }
 
