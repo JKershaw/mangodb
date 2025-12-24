@@ -9,7 +9,7 @@ import {
   compareValues,
   valuesEqual,
 } from "./document-utils.ts";
-import { evaluateExpression } from "./aggregation.ts";
+import { evaluateExpression } from "./aggregation/index.ts";
 
 // BSON type name to numeric code mapping
 const BSON_TYPE_ALIASES: Record<string, number> = {
