@@ -8,7 +8,7 @@
  * - update-operators.ts: Update operations
  * - index-manager.ts: Index management
  */
-import { ObjectId } from "mongodb";
+import { ObjectId } from "bson";
 import { MangoDBCursor, IndexCursor } from "./cursor.ts";
 import { AggregationCursor, type AggregationDbContext } from "./aggregation/index.ts";
 import { applyProjection, compareValuesForSort } from "./utils.ts";
