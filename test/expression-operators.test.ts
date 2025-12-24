@@ -1583,4 +1583,221 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Part 5: Date Operators ====================
+
+  describe("Date Operators", () => {
+    describe("$year", () => {
+      it("should extract year from date", async () => {
+        const collection = client.db(dbName).collection("year_basic");
+        await collection.insertOne({ date: new Date("2023-06-15T10:30:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $year: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 2023);
+      });
+
+      it("should return null for null date", async () => {
+        const collection = client.db(dbName).collection("year_null");
+        await collection.insertOne({ date: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $year: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$month", () => {
+      it("should extract month (1-12) from date", async () => {
+        const collection = client.db(dbName).collection("month_basic");
+        await collection.insertOne({ date: new Date("2023-06-15T10:30:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $month: "$date" }, _id: 0 } }])
+          .toArray();
+
+        // June = 6
+        assert.strictEqual(results[0].result, 6);
+      });
+
+      it("should return null for null date", async () => {
+        const collection = client.db(dbName).collection("month_null");
+        await collection.insertOne({ date: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $month: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$dayOfMonth", () => {
+      it("should extract day of month from date", async () => {
+        const collection = client.db(dbName).collection("dayofmonth_basic");
+        await collection.insertOne({ date: new Date("2023-06-15T10:30:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $dayOfMonth: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 15);
+      });
+    });
+
+    describe("$hour", () => {
+      it("should extract hour (0-23) from date", async () => {
+        const collection = client.db(dbName).collection("hour_basic");
+        await collection.insertOne({ date: new Date("2023-06-15T14:30:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $hour: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 14);
+      });
+    });
+
+    describe("$minute", () => {
+      it("should extract minute (0-59) from date", async () => {
+        const collection = client.db(dbName).collection("minute_basic");
+        await collection.insertOne({ date: new Date("2023-06-15T14:45:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $minute: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 45);
+      });
+    });
+
+    describe("$second", () => {
+      it("should extract second (0-59) from date", async () => {
+        const collection = client.db(dbName).collection("second_basic");
+        await collection.insertOne({ date: new Date("2023-06-15T14:45:30Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $second: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 30);
+      });
+    });
+
+    describe("$dayOfWeek", () => {
+      it("should return 1 for Sunday", async () => {
+        const collection = client.db(dbName).collection("dow_sunday");
+        // June 18, 2023 was a Sunday
+        await collection.insertOne({ date: new Date("2023-06-18T10:00:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $dayOfWeek: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 1);
+      });
+
+      it("should return 7 for Saturday", async () => {
+        const collection = client.db(dbName).collection("dow_saturday");
+        // June 17, 2023 was a Saturday
+        await collection.insertOne({ date: new Date("2023-06-17T10:00:00Z") });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $dayOfWeek: "$date" }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 7);
+      });
+    });
+
+    describe("$dateToString", () => {
+      it("should format date with default ISO format", async () => {
+        const collection = client.db(dbName).collection("datetostring_default");
+        await collection.insertOne({ date: new Date("2023-06-15T14:30:45.123Z") });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $dateToString: { date: "$date" } }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "2023-06-15T14:30:45.123Z");
+      });
+
+      it("should format date with custom format", async () => {
+        const collection = client.db(dbName).collection("datetostring_custom");
+        await collection.insertOne({ date: new Date("2023-06-15T14:30:45Z") });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "2023-06-15");
+      });
+
+      it("should return onNull value for null date", async () => {
+        const collection = client.db(dbName).collection("datetostring_onnull");
+        await collection.insertOne({ date: null });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $dateToString: { date: "$date", onNull: "No date" },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "No date");
+      });
+
+      it("should return null when date is null and no onNull", async () => {
+        const collection = client.db(dbName).collection("datetostring_null");
+        await collection.insertOne({ date: null });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $dateToString: { date: "$date" } }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should format with time components", async () => {
+        const collection = client.db(dbName).collection("datetostring_time");
+        await collection.insertOne({ date: new Date("2023-06-15T14:30:45Z") });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $dateToString: { format: "%H:%M:%S", date: "$date" },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "14:30:45");
+      });
+    });
+  });
 });

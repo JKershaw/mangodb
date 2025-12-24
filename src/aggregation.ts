@@ -247,6 +247,24 @@ function evaluateOperator(op: string, args: unknown, doc: Document, vars?: Varia
     case "$type":
       return evalType(args, doc, vars);
 
+    // Date operators
+    case "$year":
+      return evalYear(args, doc, vars);
+    case "$month":
+      return evalMonth(args, doc, vars);
+    case "$dayOfMonth":
+      return evalDayOfMonth(args, doc, vars);
+    case "$hour":
+      return evalHour(args, doc, vars);
+    case "$minute":
+      return evalMinute(args, doc, vars);
+    case "$second":
+      return evalSecond(args, doc, vars);
+    case "$dayOfWeek":
+      return evalDayOfWeek(args, doc, vars);
+    case "$dateToString":
+      return evalDateToString(args, doc, vars);
+
     default:
       throw new Error(`Unrecognized expression operator: '${op}'`);
   }
@@ -1119,6 +1137,158 @@ function evalType(args: unknown, doc: Document, vars?: VariableContext): string 
   }
 
   return "unknown";
+}
+
+// ==================== Date Operators ====================
+
+function evalYear(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$year requires a date, found: ${typeName}`);
+  }
+
+  return value.getUTCFullYear();
+}
+
+function evalMonth(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$month requires a date, found: ${typeName}`);
+  }
+
+  // MongoDB months are 1-12, JavaScript getUTCMonth is 0-11
+  return value.getUTCMonth() + 1;
+}
+
+function evalDayOfMonth(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$dayOfMonth requires a date, found: ${typeName}`);
+  }
+
+  return value.getUTCDate();
+}
+
+function evalHour(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$hour requires a date, found: ${typeName}`);
+  }
+
+  return value.getUTCHours();
+}
+
+function evalMinute(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$minute requires a date, found: ${typeName}`);
+  }
+
+  return value.getUTCMinutes();
+}
+
+function evalSecond(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$second requires a date, found: ${typeName}`);
+  }
+
+  return value.getUTCSeconds();
+}
+
+function evalDayOfWeek(args: unknown, doc: Document, vars?: VariableContext): number | null {
+  const value = evaluateExpression(args, doc, vars);
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (!(value instanceof Date)) {
+    const typeName = getBSONTypeName(value);
+    throw new Error(`$dayOfWeek requires a date, found: ${typeName}`);
+  }
+
+  // JavaScript getUTCDay: 0=Sunday, 6=Saturday
+  // MongoDB $dayOfWeek: 1=Sunday, 7=Saturday
+  return value.getUTCDay() + 1;
+}
+
+function evalDateToString(args: unknown, doc: Document, vars?: VariableContext): string | null {
+  const spec = args as { date: unknown; format?: string; onNull?: unknown };
+  const dateValue = evaluateExpression(spec.date, doc, vars);
+
+  // Handle null/missing date
+  if (dateValue === null || dateValue === undefined) {
+    if (spec.onNull !== undefined) {
+      return evaluateExpression(spec.onNull, doc, vars) as string;
+    }
+    return null;
+  }
+
+  if (!(dateValue instanceof Date)) {
+    const typeName = getBSONTypeName(dateValue);
+    throw new Error(`$dateToString requires a date, found: ${typeName}`);
+  }
+
+  // Default format is ISO 8601
+  const format = spec.format || "%Y-%m-%dT%H:%M:%S.%LZ";
+
+  return formatDate(dateValue, format);
+}
+
+/**
+ * Format a date according to MongoDB's format specifiers.
+ * Supported: %Y, %m, %d, %H, %M, %S, %L (milliseconds)
+ */
+function formatDate(date: Date, format: string): string {
+  const pad2 = (n: number) => n.toString().padStart(2, "0");
+  const pad3 = (n: number) => n.toString().padStart(3, "0");
+  const pad4 = (n: number) => n.toString().padStart(4, "0");
+
+  return format
+    .replace(/%Y/g, pad4(date.getUTCFullYear()))
+    .replace(/%m/g, pad2(date.getUTCMonth() + 1))
+    .replace(/%d/g, pad2(date.getUTCDate()))
+    .replace(/%H/g, pad2(date.getUTCHours()))
+    .replace(/%M/g, pad2(date.getUTCMinutes()))
+    .replace(/%S/g, pad2(date.getUTCSeconds()))
+    .replace(/%L/g, pad3(date.getUTCMilliseconds()));
 }
 
 // ==================== Accumulator Classes ====================
