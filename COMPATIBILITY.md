@@ -807,12 +807,13 @@ await collection.insertOne({ firstName: "John", lastName: "Doe" });  // Error!
 
 **Null handling varies by operator**:
 - `$substrCP`, `$toUpper`, `$toLower` return empty string for null
-- `$strLenCP`, `$split` throw error for null input
-- `$toString` returns null for null input
+- `$strLenCP` throws error for null input
+- `$split`, `$toString` return null for null input
 
 **$split**:
 ```typescript
 { $split: ["$string", ","] }  // "a,b,c" -> ["a", "b", "c"]
+// Returns null for null input string
 // Delimiter must be non-null string (throws otherwise)
 ```
 

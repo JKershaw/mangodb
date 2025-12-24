@@ -617,21 +617,16 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
         assert.deepStrictEqual(results[0].result, ["", "a", "", "b", ""]);
       });
 
-      it("should throw for null string", async () => {
+      it("should return null for null string", async () => {
         const collection = client.db(dbName).collection("split_null");
         await collection.insertOne({ value: null });
 
-        await assert.rejects(
-          async () => {
-            await collection
-              .aggregate([{ $project: { result: { $split: ["$value", ","] }, _id: 0 } }])
-              .toArray();
-          },
-          (err: Error) => {
-            assert.ok(err.message.includes("$split"));
-            return true;
-          }
-        );
+        const results = await collection
+          .aggregate([{ $project: { result: { $split: ["$value", ","] }, _id: 0 } }])
+          .toArray();
+
+        // MongoDB returns null for null input string
+        assert.strictEqual(results[0].result, null);
       });
     });
 

@@ -550,13 +550,14 @@ function evalStrLenCP(args: unknown, doc: Document): number {
   return value.length;
 }
 
-function evalSplit(args: unknown[], doc: Document): string[] {
+function evalSplit(args: unknown[], doc: Document): string[] | null {
   const [strExpr, delimExpr] = args;
   const str = evaluateExpression(strExpr, doc);
   const delim = evaluateExpression(delimExpr, doc);
 
+  // MongoDB returns null for null/missing input string
   if (str === null || str === undefined) {
-    throw new Error("$split requires a string as the first argument, found: null");
+    return null;
   }
 
   if (typeof str !== "string") {
