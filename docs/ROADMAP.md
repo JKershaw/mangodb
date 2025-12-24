@@ -60,12 +60,12 @@ After completing each phase:
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Query Operators Completion | 🔄 In Progress (bitwise ✅, $comment ✅, $rand ✅) |
-| 2 | Update Operators Completion | ⬜ Not Started |
-| 3 | Array Update Modifiers | ⬜ Not Started |
-| 4 | Aggregation Stages (Priority) | ⬜ Not Started |
+| 1 | Query Operators Completion | ✅ Complete (bitwise, $comment) |
+| 2 | Update Operators Completion | ✅ Complete ($pullAll, $bit) |
+| 3 | Array Update Modifiers | ✅ Complete ($position, $slice, $sort) |
+| 4 | Aggregation Stages (Priority) | ✅ Complete ($sortByCount, $sample, $facet, $bucket, $bucketAuto, $unionWith) |
 | 5 | Aggregation Stages (Extended) | ⬜ Not Started |
-| 6 | Expression Operators (Arithmetic) | 🔄 In Progress ($rand ✅) |
+| 6 | Expression Operators (Arithmetic) | ✅ Complete (all 17 operators) |
 | 7 | Expression Operators (Array) | ⬜ Not Started |
 | 8 | Expression Operators (String) | ⬜ Not Started |
 | 9 | Expression Operators (Date) | ⬜ Not Started |

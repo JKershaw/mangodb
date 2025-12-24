@@ -19,7 +19,7 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 |----------|----------|-------|
 | Query Operators | 28/39 (72%) | Missing geospatial, projection |
 | Update Operators | 18/20 (90%) | Missing positional operators only |
-| Aggregation Stages | 13/34 (38%) | Core stages implemented |
+| Aggregation Stages | 19/34 (56%) | Core and priority stages implemented |
 | Expression Operators | 65/112 (58%) | Core operators implemented |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
@@ -162,33 +162,33 @@ All field update operators are fully implemented:
 | `$set` | Alias for `$addFields` |
 | `$replaceRoot` | Replace document root |
 | `$out` | Write to collection (must be final) |
+| `$sortByCount` | Group and count by expression |
+| `$sample` | Random sampling |
+| `$facet` | Multiple sub-pipelines |
+| `$bucket` | Group into buckets |
+| `$bucketAuto` | Auto-create buckets |
+| `$unionWith` | Union collections |
 
 ### Not Implemented Stages ❌
 
 | Stage | Description | Reason |
 |-------|-------------|--------|
-| `$bucket` | Group into buckets | Not implemented |
-| `$bucketAuto` | Auto-create buckets | Not implemented |
 | `$changeStream` | Real-time changes | Requires change streams |
 | `$collStats` | Collection statistics | Use `collection.stats()` instead |
 | `$densify` | Fill gaps in data | Not implemented |
 | `$documents` | Inject literal documents | Not implemented |
-| `$facet` | Multiple sub-pipelines | Not implemented |
 | `$fill` | Fill missing values | Not implemented |
 | `$geoNear` | Geospatial query | Requires geo indexes |
 | `$graphLookup` | Recursive lookup | Not implemented |
 | `$indexStats` | Index usage stats | Not implemented |
 | `$listSessions` | Active sessions | No session support |
-| `$merge` | Merge into collection | Use `$out` instead |
+| `$merge` | Merge into collection | Not implemented |
 | `$planCacheStats` | Query plan stats | No query planner |
 | `$redact` | Field-level access control | Not implemented |
 | `$replaceWith` | Replace document (4.4+) | Use `$replaceRoot` |
-| `$sample` | Random sampling | Not implemented |
 | `$search` | Atlas full-text search | Atlas-only feature |
 | `$searchMeta` | Atlas search metadata | Atlas-only feature |
 | `$setWindowFields` | Window functions | Not implemented |
-| `$sortByCount` | Group and count | Use `$group` + `$sort` |
-| `$unionWith` | Union collections | Not implemented |
 | `$unset` | Remove fields | Use `$project` with exclusion |
 
 ### $lookup Limitations
