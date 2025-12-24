@@ -1030,12 +1030,19 @@ function evalToDouble(args: unknown, doc: Document, vars?: VariableContext): num
   // String - parse as float
   if (typeof value === "string") {
     const trimmed = value.trim();
-    // Reject special string values that parseFloat accepts
-    if (trimmed === "Infinity" || trimmed === "-Infinity" || trimmed === "NaN") {
+    // MongoDB accepts Infinity strings
+    if (trimmed === "Infinity") {
+      return Infinity;
+    }
+    if (trimmed === "-Infinity") {
+      return -Infinity;
+    }
+    // Reject NaN string
+    if (trimmed === "NaN") {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     const parsed = parseFloat(value);
-    if (isNaN(parsed) || !Number.isFinite(parsed)) {
+    if (isNaN(parsed)) {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     return parsed;
@@ -1254,11 +1261,8 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
   if (dateValue === null || dateValue === undefined) {
     if (spec.onNull !== undefined) {
       const onNullValue = evaluateExpression(spec.onNull, doc, vars);
-      // MongoDB allows any value for onNull - convert to string if not null
-      if (onNullValue === null) {
-        return null;
-      }
-      return String(onNullValue);
+      // MongoDB returns onNull value as-is (not converted to string)
+      return onNullValue as string | null;
     }
     return null;
   }

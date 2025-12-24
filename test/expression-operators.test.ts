@@ -1838,7 +1838,7 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
         assert.strictEqual(results[0].u, "4"); // Thursday is 4 (Monday=1)
       });
 
-      it("should convert non-string onNull value to string", async () => {
+      it("should return non-string onNull value as-is", async () => {
         const collection = client.db(dbName).collection("datetostring_onnull_convert");
         await collection.insertOne({ date: null });
 
@@ -1853,8 +1853,8 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
           ])
           .toArray();
 
-        // MongoDB converts non-string onNull values to strings
-        assert.strictEqual(results[0].result, "123");
+        // MongoDB returns onNull value as-is (not converted to string)
+        assert.strictEqual(results[0].result, 123);
       });
     });
   });
@@ -1899,32 +1899,30 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
     });
 
     describe("$toDouble edge cases", () => {
-      it("should throw for Infinity string", async () => {
+      it("should parse Infinity string", async () => {
         const collection = client.db(dbName).collection("todouble_infinity");
         await collection.insertOne({ value: "Infinity" });
 
-        await assert.rejects(
-          collection
-            .aggregate([
-              { $project: { result: { $toDouble: "$value" }, _id: 0 } },
-            ])
-            .toArray(),
-          (err: Error) => err.message.includes("Failed to parse")
-        );
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $toDouble: "$value" }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, Infinity);
       });
 
-      it("should throw for -Infinity string", async () => {
+      it("should parse -Infinity string", async () => {
         const collection = client.db(dbName).collection("todouble_neginfinity");
         await collection.insertOne({ value: "-Infinity" });
 
-        await assert.rejects(
-          collection
-            .aggregate([
-              { $project: { result: { $toDouble: "$value" }, _id: 0 } },
-            ])
-            .toArray(),
-          (err: Error) => err.message.includes("Failed to parse")
-        );
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $toDouble: "$value" }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, -Infinity);
       });
 
       it("should parse scientific notation correctly", async () => {
