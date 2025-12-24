@@ -17,12 +17,18 @@ MangoDB lets you develop and test locally using only the filesystem, then deploy
 
 See [ROADMAP.md](./ROADMAP.md) for implementation phases and [PROGRESS.md](./PROGRESS.md) for current status.
 
+## Installation
+
+```bash
+npm install @jkershaw/mangodb
+```
+
 ## Usage
 
 ### With MangoDB (local development/testing)
 
 ```typescript
-import { MangoDBClient } from 'mangodb';
+import { MangoDBClient } from '@jkershaw/mangodb';
 
 const client = new MangoDBClient('./data');
 await client.connect();
@@ -57,7 +63,7 @@ await client.close();
 
 ```typescript
 import { MongoClient } from 'mongodb';
-import { MangoDBClient } from 'mangodb';
+import { MangoDBClient } from '@jkershaw/mangodb';
 
 const client = process.env.MONGODB_URI
   ? new MongoClient(process.env.MONGODB_URI)
