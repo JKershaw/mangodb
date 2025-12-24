@@ -1108,13 +1108,13 @@ function evalToDate(args: unknown, doc: Document, vars?: VariableContext): Date 
   if (typeof value === "string") {
     const parsed = new Date(value);
     if (isNaN(parsed.getTime())) {
-      throw new Error(`Failed to parse date string '${value}'`);
+      throw new Error(`Error parsing date string '${value}'`);
     }
     return parsed;
   }
 
   const typeName = getBSONTypeName(value);
-  throw new Error(`Can't convert from BSON type ${typeName} to Date`);
+  throw new Error(`can't convert from BSON type ${typeName} to Date`);
 }
 
 function evalType(args: unknown, doc: Document, vars?: VariableContext): string {
@@ -1265,7 +1265,7 @@ function evalDateToString(args: unknown, doc: Document, vars?: VariableContext):
 
   if (!(dateValue instanceof Date)) {
     const typeName = getBSONTypeName(dateValue);
-    throw new Error(`$dateToString requires a date, found: ${typeName}`);
+    throw new Error(`can't convert from BSON type ${typeName} to Date`);
   }
 
   // Check for invalid dates
