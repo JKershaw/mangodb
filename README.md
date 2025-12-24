@@ -13,9 +13,9 @@ MangoDB lets you develop and test locally using only the filesystem, then deploy
 
 ## Status
 
-**Early Development** - This project is in active development. Not yet suitable for production use.
+**Active Development** - Core MongoDB API compatibility is well implemented with 993+ passing tests.
 
-See [ROADMAP.md](./ROADMAP.md) for implementation phases and [PROGRESS.md](./PROGRESS.md) for current status.
+See [ROADMAP.md](./docs/ROADMAP.md) for implementation phases and [LIMITATIONS.md](./docs/LIMITATIONS.md) for current feature coverage.
 
 ## Documentation
 
