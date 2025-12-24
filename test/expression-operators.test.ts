@@ -826,4 +826,458 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Part 3: Array Operators ====================
+
+  describe("Array Operators", () => {
+    describe("$arrayElemAt", () => {
+      it("should get element at positive index", async () => {
+        const collection = client.db(dbName).collection("arrayelemat_pos");
+        await collection.insertOne({ arr: ["a", "b", "c", "d"] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $arrayElemAt: ["$arr", 1] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "b");
+      });
+
+      it("should get element at negative index", async () => {
+        const collection = client.db(dbName).collection("arrayelemat_neg");
+        await collection.insertOne({ arr: ["a", "b", "c", "d"] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $arrayElemAt: ["$arr", -1] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "d");
+      });
+
+      it("should return null for out of bounds", async () => {
+        const collection = client.db(dbName).collection("arrayelemat_oob");
+        await collection.insertOne({ arr: ["a", "b"] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $arrayElemAt: ["$arr", 10] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should return null for null array", async () => {
+        const collection = client.db(dbName).collection("arrayelemat_null");
+        await collection.insertOne({ arr: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $arrayElemAt: ["$arr", 0] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should return null for missing field", async () => {
+        const collection = client.db(dbName).collection("arrayelemat_missing");
+        await collection.insertOne({ other: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $arrayElemAt: ["$arr", 0] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$slice (expression)", () => {
+      it("should get first n elements with positive n", async () => {
+        const collection = client.db(dbName).collection("slice_first");
+        await collection.insertOne({ arr: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $slice: ["$arr", 2] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [1, 2]);
+      });
+
+      it("should get last n elements with negative n", async () => {
+        const collection = client.db(dbName).collection("slice_last");
+        await collection.insertOne({ arr: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $slice: ["$arr", -2] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [4, 5]);
+      });
+
+      it("should slice from position with 3-arg form", async () => {
+        const collection = client.db(dbName).collection("slice_pos");
+        await collection.insertOne({ arr: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $slice: ["$arr", 1, 2] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [2, 3]);
+      });
+
+      it("should handle negative position in 3-arg form", async () => {
+        const collection = client.db(dbName).collection("slice_negpos");
+        await collection.insertOne({ arr: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $slice: ["$arr", -3, 2] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [3, 4]);
+      });
+
+      it("should return null for null array", async () => {
+        const collection = client.db(dbName).collection("slice_null");
+        await collection.insertOne({ arr: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $slice: ["$arr", 2] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$concatArrays", () => {
+      it("should concatenate multiple arrays", async () => {
+        const collection = client.db(dbName).collection("concat_basic");
+        await collection.insertOne({ a: [1, 2], b: [3, 4], c: [5] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $concatArrays: ["$a", "$b", "$c"] }, _id: 0 } }])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [1, 2, 3, 4, 5]);
+      });
+
+      it("should return null if any array is null", async () => {
+        const collection = client.db(dbName).collection("concat_null");
+        await collection.insertOne({ a: [1, 2], b: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $concatArrays: ["$a", "$b"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should throw for non-array input", async () => {
+        const collection = client.db(dbName).collection("concat_nonarr");
+        await collection.insertOne({ a: [1, 2], b: "not array" });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([{ $project: { result: { $concatArrays: ["$a", "$b"] }, _id: 0 } }])
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(err.message.includes("$concatArrays only supports arrays"));
+            return true;
+          }
+        );
+      });
+    });
+
+    describe("$filter", () => {
+      it("should filter array elements by condition", async () => {
+        const collection = client.db(dbName).collection("filter_basic");
+        await collection.insertOne({ scores: [85, 92, 45, 78, 95] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $filter: {
+                    input: "$scores",
+                    as: "score",
+                    cond: { $gte: ["$$score", 80] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [85, 92, 95]);
+      });
+
+      it("should use default 'this' variable when as not specified", async () => {
+        const collection = client.db(dbName).collection("filter_default");
+        await collection.insertOne({ nums: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $filter: {
+                    input: "$nums",
+                    cond: { $gt: ["$$this", 2] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [3, 4, 5]);
+      });
+
+      it("should return empty array when no elements match", async () => {
+        const collection = client.db(dbName).collection("filter_empty");
+        await collection.insertOne({ nums: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $filter: {
+                    input: "$nums",
+                    cond: { $gt: ["$$this", 10] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, []);
+      });
+
+      it("should return null for null input", async () => {
+        const collection = client.db(dbName).collection("filter_null");
+        await collection.insertOne({ nums: null });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $filter: {
+                    input: "$nums",
+                    cond: { $gt: ["$$this", 0] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$map", () => {
+      it("should transform each array element", async () => {
+        const collection = client.db(dbName).collection("map_basic");
+        await collection.insertOne({ nums: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $map: {
+                    input: "$nums",
+                    as: "n",
+                    in: { $multiply: ["$$n", 2] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [2, 4, 6]);
+      });
+
+      it("should handle complex transformations", async () => {
+        const collection = client.db(dbName).collection("map_complex");
+        await collection.insertOne({ items: [{ x: 1 }, { x: 2 }, { x: 3 }] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $map: {
+                    input: "$items",
+                    as: "item",
+                    in: "$$item.x",
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [1, 2, 3]);
+      });
+
+      it("should return null for null input", async () => {
+        const collection = client.db(dbName).collection("map_null");
+        await collection.insertOne({ nums: null });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $map: {
+                    input: "$nums",
+                    as: "n",
+                    in: "$$n",
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+    });
+
+    describe("$reduce", () => {
+      it("should reduce array to single value", async () => {
+        const collection = client.db(dbName).collection("reduce_sum");
+        await collection.insertOne({ nums: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $reduce: {
+                    input: "$nums",
+                    initialValue: 0,
+                    in: { $add: ["$$value", "$$this"] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 15);
+      });
+
+      it("should return initialValue for empty array", async () => {
+        const collection = client.db(dbName).collection("reduce_empty");
+        await collection.insertOne({ nums: [] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $reduce: {
+                    input: "$nums",
+                    initialValue: 100,
+                    in: { $add: ["$$value", "$$this"] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, 100);
+      });
+
+      it("should concatenate strings", async () => {
+        const collection = client.db(dbName).collection("reduce_concat");
+        await collection.insertOne({ words: ["hello", " ", "world"] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: {
+                  $reduce: {
+                    input: "$words",
+                    initialValue: "",
+                    in: { $concat: ["$$value", "$$this"] },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, "hello world");
+      });
+    });
+
+    describe("$in (expression)", () => {
+      it("should return true when element in array", async () => {
+        const collection = client.db(dbName).collection("in_found");
+        await collection.insertOne({ arr: [1, 2, 3, 4, 5] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $in: [3, "$arr"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false when element not in array", async () => {
+        const collection = client.db(dbName).collection("in_notfound");
+        await collection.insertOne({ arr: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $in: [10, "$arr"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should work with strings", async () => {
+        const collection = client.db(dbName).collection("in_strings");
+        await collection.insertOne({ tags: ["a", "b", "c"] });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $in: ["b", "$tags"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should throw for non-array second argument", async () => {
+        const collection = client.db(dbName).collection("in_nonarr");
+        await collection.insertOne({ value: "not array" });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([{ $project: { result: { $in: [1, "$value"] }, _id: 0 } }])
+              .toArray();
+          },
+          (err: Error) => {
+            assert.ok(err.message.includes("$in requires an array"));
+            return true;
+          }
+        );
+      });
+    });
+  });
 });

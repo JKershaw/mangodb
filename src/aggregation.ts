@@ -74,18 +74,44 @@ function deepEquals(a: unknown, b: unknown): boolean {
 // ==================== Expression Evaluation ====================
 
 /**
+ * Variable context for $filter, $map, $reduce expressions.
+ */
+type VariableContext = Record<string, unknown>;
+
+/**
  * Evaluate an aggregation expression against a document.
  *
  * Expressions can be:
  * - Field references: "$fieldName" or "$nested.field"
+ * - Variable references: "$$varName" or "$$varName.field"
  * - Literal values: numbers, strings, booleans, null
  * - Operator expressions: { $add: [...] }, { $concat: [...] }, etc.
  *
  * @param expr - The expression to evaluate
  * @param doc - The document context
+ * @param vars - Optional variable context for scoped variables
  * @returns The evaluated value
  */
-export function evaluateExpression(expr: unknown, doc: Document): unknown {
+export function evaluateExpression(expr: unknown, doc: Document, vars?: VariableContext): unknown {
+  // String starting with $$ is a variable reference
+  if (typeof expr === "string" && expr.startsWith("$$")) {
+    const varPath = expr.slice(2);
+    const dotIndex = varPath.indexOf(".");
+    if (dotIndex === -1) {
+      // Simple variable reference: $$varName
+      return vars?.[varPath];
+    } else {
+      // Nested variable reference: $$varName.field
+      const varName = varPath.slice(0, dotIndex);
+      const fieldPath = varPath.slice(dotIndex + 1);
+      const varValue = vars?.[varName];
+      if (varValue && typeof varValue === "object") {
+        return getValueByPath(varValue as Document, fieldPath);
+      }
+      return undefined;
+    }
+  }
+
   // String starting with $ is a field reference
   if (typeof expr === "string" && expr.startsWith("$")) {
     const fieldPath = expr.slice(1);
@@ -99,7 +125,7 @@ export function evaluateExpression(expr: unknown, doc: Document): unknown {
 
   // Arrays - evaluate each element
   if (Array.isArray(expr)) {
-    return expr.map((item) => evaluateExpression(item, doc));
+    return expr.map((item) => evaluateExpression(item, doc, vars));
   }
 
   // Object with operator key
@@ -107,13 +133,13 @@ export function evaluateExpression(expr: unknown, doc: Document): unknown {
   const keys = Object.keys(exprObj);
 
   if (keys.length === 1 && keys[0].startsWith("$")) {
-    return evaluateOperator(keys[0], exprObj[keys[0]], doc);
+    return evaluateOperator(keys[0], exprObj[keys[0]], doc, vars);
   }
 
   // Object literal - evaluate each field
   const result: Document = {};
   for (const [key, value] of Object.entries(exprObj)) {
-    result[key] = evaluateExpression(value, doc);
+    result[key] = evaluateExpression(value, doc, vars);
   }
   return result;
 }
@@ -121,20 +147,20 @@ export function evaluateExpression(expr: unknown, doc: Document): unknown {
 /**
  * Evaluate a specific operator expression.
  */
-function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
+function evaluateOperator(op: string, args: unknown, doc: Document, vars?: VariableContext): unknown {
   switch (op) {
     case "$literal":
       return args; // Return as-is without evaluation
 
     // Arithmetic operators
     case "$add":
-      return evalAdd(args as unknown[], doc);
+      return evalAdd(args as unknown[], doc, vars);
     case "$subtract":
-      return evalSubtract(args as unknown[], doc);
+      return evalSubtract(args as unknown[], doc, vars);
     case "$multiply":
-      return evalMultiply(args as unknown[], doc);
+      return evalMultiply(args as unknown[], doc, vars);
     case "$divide":
-      return evalDivide(args as unknown[], doc);
+      return evalDivide(args as unknown[], doc, vars);
     case "$abs":
       return evalAbs(args, doc);
     case "$ceil":
@@ -148,7 +174,7 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
 
     // String operators
     case "$concat":
-      return evalConcat(args as unknown[], doc);
+      return evalConcat(args as unknown[], doc, vars);
     case "$toUpper":
       return evalToUpper(args, doc);
     case "$toLower":
@@ -179,21 +205,35 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
     // Comparison operators (for $cond conditions)
     // Uses BSON type ordering for cross-type comparisons
     case "$gt":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) > 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) > 0);
     case "$gte":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) >= 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) >= 0);
     case "$lt":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) < 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) < 0);
     case "$lte":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) <= 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) <= 0);
     case "$eq":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) === 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) === 0);
     case "$ne":
-      return evalComparison(args as unknown[], doc, (a, b) => compareValues(a, b) !== 0);
+      return evalComparison(args as unknown[], doc, vars, (a, b) => compareValues(a, b) !== 0);
 
     // Array operators
     case "$size":
       return evalSize(args, doc);
+    case "$arrayElemAt":
+      return evalArrayElemAt(args as unknown[], doc, vars);
+    case "$slice":
+      return evalSlice(args as unknown[], doc, vars);
+    case "$concatArrays":
+      return evalConcatArrays(args as unknown[], doc, vars);
+    case "$filter":
+      return evalFilter(args, doc, vars);
+    case "$map":
+      return evalMap(args, doc, vars);
+    case "$reduce":
+      return evalReduce(args, doc, vars);
+    case "$in":
+      return evalIn(args as unknown[], doc, vars);
 
     default:
       throw new Error(`Unrecognized expression operator: '${op}'`);
@@ -202,8 +242,8 @@ function evaluateOperator(op: string, args: unknown, doc: Document): unknown {
 
 // ==================== Arithmetic Operators ====================
 
-function evalAdd(args: unknown[], doc: Document): number | null {
-  const values = args.map((a) => evaluateExpression(a, doc));
+function evalAdd(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const values = args.map((a) => evaluateExpression(a, doc, vars));
 
   // null/undefined propagates
   if (values.some((v) => v === null || v === undefined)) {
@@ -220,8 +260,8 @@ function evalAdd(args: unknown[], doc: Document): number | null {
   return sum;
 }
 
-function evalSubtract(args: unknown[], doc: Document): number | null {
-  const [arg1, arg2] = args.map((a) => evaluateExpression(a, doc));
+function evalSubtract(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const [arg1, arg2] = args.map((a) => evaluateExpression(a, doc, vars));
 
   if (arg1 === null || arg1 === undefined || arg2 === null || arg2 === undefined) {
     return null;
@@ -234,8 +274,8 @@ function evalSubtract(args: unknown[], doc: Document): number | null {
   return arg1 - arg2;
 }
 
-function evalMultiply(args: unknown[], doc: Document): number | null {
-  const values = args.map((a) => evaluateExpression(a, doc));
+function evalMultiply(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const values = args.map((a) => evaluateExpression(a, doc, vars));
 
   if (values.some((v) => v === null || v === undefined)) {
     return null;
@@ -251,8 +291,8 @@ function evalMultiply(args: unknown[], doc: Document): number | null {
   return product;
 }
 
-function evalDivide(args: unknown[], doc: Document): number | null {
-  const [dividend, divisor] = args.map((a) => evaluateExpression(a, doc));
+function evalDivide(args: unknown[], doc: Document, vars?: VariableContext): number | null {
+  const [dividend, divisor] = args.map((a) => evaluateExpression(a, doc, vars));
 
   if (dividend === null || dividend === undefined || divisor === null || divisor === undefined) {
     return null;
@@ -373,8 +413,8 @@ function evalMod(args: unknown[], doc: Document): number | null {
 
 // ==================== String Operators ====================
 
-function evalConcat(args: unknown[], doc: Document): string | null {
-  const values = args.map((a) => evaluateExpression(a, doc));
+function evalConcat(args: unknown[], doc: Document, vars?: VariableContext): string | null {
+  const values = args.map((a) => evaluateExpression(a, doc, vars));
 
   // null propagates
   if (values.some((v) => v === null || v === undefined)) {
@@ -664,9 +704,10 @@ function evalIfNull(args: unknown[], doc: Document): unknown {
 function evalComparison(
   args: unknown[],
   doc: Document,
+  vars: VariableContext | undefined,
   compareFn: (a: unknown, b: unknown) => boolean
 ): boolean {
-  const [left, right] = args.map((a) => evaluateExpression(a, doc));
+  const [left, right] = args.map((a) => evaluateExpression(a, doc, vars));
   return compareFn(left, right);
 }
 
@@ -681,6 +722,197 @@ function evalSize(args: unknown, doc: Document): number {
   }
 
   return value.length;
+}
+
+function evalArrayElemAt(args: unknown[], doc: Document, vars?: VariableContext): unknown {
+  const [arrExpr, idxExpr] = args;
+  const arr = evaluateExpression(arrExpr, doc, vars);
+  const idx = evaluateExpression(idxExpr, doc, vars) as number;
+
+  // Null/missing returns null
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$arrayElemAt requires an array, not ${typeName}`);
+  }
+
+  // Handle negative index
+  let actualIdx = idx;
+  if (idx < 0) {
+    actualIdx = arr.length + idx;
+  }
+
+  // Out of bounds returns null (not undefined)
+  if (actualIdx < 0 || actualIdx >= arr.length) {
+    return null;
+  }
+
+  return arr[actualIdx];
+}
+
+function evalSlice(args: unknown[], doc: Document, vars?: VariableContext): unknown[] | null {
+  const arr = evaluateExpression(args[0], doc, vars);
+
+  // Null/missing returns null
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$slice requires an array, not ${typeName}`);
+  }
+
+  if (args.length === 2) {
+    // 2-arg form: [array, n]
+    const n = evaluateExpression(args[1], doc, vars) as number;
+    if (n >= 0) {
+      // First n elements
+      return arr.slice(0, n);
+    } else {
+      // Last -n elements
+      return arr.slice(n);
+    }
+  } else {
+    // 3-arg form: [array, position, n]
+    const position = evaluateExpression(args[1], doc, vars) as number;
+    const n = evaluateExpression(args[2], doc, vars) as number;
+
+    let startIdx = position;
+    if (position < 0) {
+      startIdx = Math.max(0, arr.length + position);
+    }
+
+    return arr.slice(startIdx, startIdx + n);
+  }
+}
+
+function evalConcatArrays(args: unknown[], doc: Document, vars?: VariableContext): unknown[] | null {
+  const arrays = args.map((a) => evaluateExpression(a, doc, vars));
+
+  // If any is null/undefined, return null
+  for (const arr of arrays) {
+    if (arr === null || arr === undefined) {
+      return null;
+    }
+    if (!Array.isArray(arr)) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`$concatArrays only supports arrays, not ${typeName}`);
+    }
+  }
+
+  // Concatenate all arrays
+  return (arrays as unknown[][]).flat();
+}
+
+function evalFilter(args: unknown, doc: Document, vars?: VariableContext): unknown[] | null {
+  const spec = args as { input: unknown; as?: string; cond: unknown };
+  const input = evaluateExpression(spec.input, doc, vars);
+  const varName = spec.as || "this";
+  const condExpr = spec.cond;
+
+  // Null/missing returns null
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`input to $filter must be an array, not ${typeName}`);
+  }
+
+  const result: unknown[] = [];
+  for (const item of input) {
+    // Create new variable context with the current item
+    const newVars = { ...vars, [varName]: item };
+    const condResult = evaluateExpression(condExpr, doc, newVars);
+    if (condResult) {
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+
+function evalMap(args: unknown, doc: Document, vars?: VariableContext): unknown[] | null {
+  const spec = args as { input: unknown; as: string; in: unknown };
+  const input = evaluateExpression(spec.input, doc, vars);
+  const varName = spec.as || "this";
+  const inExpr = spec.in;
+
+  // Null/missing returns null
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`input to $map must be an array, not ${typeName}`);
+  }
+
+  const result: unknown[] = [];
+  for (const item of input) {
+    // Create new variable context with the current item
+    const newVars = { ...vars, [varName]: item };
+    const mappedValue = evaluateExpression(inExpr, doc, newVars);
+    result.push(mappedValue);
+  }
+
+  return result;
+}
+
+function evalReduce(args: unknown, doc: Document, vars?: VariableContext): unknown {
+  const spec = args as { input: unknown; initialValue: unknown; in: unknown };
+  const input = evaluateExpression(spec.input, doc, vars);
+  const initialValue = evaluateExpression(spec.initialValue, doc, vars);
+  const inExpr = spec.in;
+
+  // Null/missing returns null
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`input to $reduce must be an array, not ${typeName}`);
+  }
+
+  // Empty array returns initialValue
+  if (input.length === 0) {
+    return initialValue;
+  }
+
+  let value = initialValue;
+  for (const item of input) {
+    // Create new variable context with $$value and $$this
+    const newVars = { ...vars, value, this: item };
+    value = evaluateExpression(inExpr, doc, newVars);
+  }
+
+  return value;
+}
+
+function evalIn(args: unknown[], doc: Document, vars?: VariableContext): boolean {
+  const [elementExpr, arrExpr] = args;
+  const element = evaluateExpression(elementExpr, doc, vars);
+  const arr = evaluateExpression(arrExpr, doc, vars);
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$in requires an array as the second argument, found: ${typeName}`);
+  }
+
+  // Use compareValues for proper equality checking
+  for (const item of arr) {
+    if (compareValues(element, item) === 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ==================== Accumulator Classes ====================
