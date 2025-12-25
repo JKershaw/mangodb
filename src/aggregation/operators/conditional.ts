@@ -7,7 +7,7 @@ import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
 export function evalCond(
   args: unknown,
   doc: Document,
-  _vars: VariableContext | undefined,
+  vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown {
   let condition: unknown;
@@ -25,23 +25,23 @@ export function evalCond(
     throw new Error("$cond requires an array or object argument");
   }
 
-  const evalCondition = evaluate(condition, doc);
+  const evalCondition = evaluate(condition, doc, vars);
 
   if (evalCondition) {
-    return evaluate(thenValue, doc);
+    return evaluate(thenValue, doc, vars);
   } else {
-    return evaluate(elseValue, doc);
+    return evaluate(elseValue, doc, vars);
   }
 }
 
 export function evalIfNull(
   args: unknown[],
   doc: Document,
-  _vars: VariableContext | undefined,
+  vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown {
   for (const arg of args) {
-    const value = evaluate(arg, doc);
+    const value = evaluate(arg, doc, vars);
     if (value !== null && value !== undefined) {
       return value;
     }
@@ -56,7 +56,7 @@ export function evalIfNull(
 export function evalSwitch(
   args: unknown,
   doc: Document,
-  _vars: VariableContext | undefined,
+  vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown {
   if (typeof args !== "object" || args === null) {
@@ -84,14 +84,14 @@ export function evalSwitch(
       throw new Error("$switch found a branch without a 'then' expression");
     }
 
-    const caseResult = evaluate(branchObj.case, doc);
+    const caseResult = evaluate(branchObj.case, doc, vars);
     if (caseResult) {
-      return evaluate(branchObj.then, doc);
+      return evaluate(branchObj.then, doc, vars);
     }
   }
 
   if (spec.default !== undefined) {
-    return evaluate(spec.default, doc);
+    return evaluate(spec.default, doc, vars);
   }
 
   throw new Error("$switch could not find a matching branch, and no default was specified");

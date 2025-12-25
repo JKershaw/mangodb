@@ -20,7 +20,8 @@ import type { AggregationDbContext } from "./types.ts";
 import { evaluateExpression } from "./expression.ts";
 import { createAccumulator } from "./accumulators.ts";
 import { getBSONTypeName } from "./helpers.ts";
-import { createSystemVars, mergeVars } from "./system-vars.ts";
+import { createSystemVars, mergeVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from "./system-vars.ts";
+import { traverseDocument, type TraversalAction } from "./traverse.ts";
 
 /**
  * AggregationCursor represents a cursor over aggregation pipeline results.
@@ -136,6 +137,8 @@ export class AggregationCursor<T extends Document = Document> {
         return this.execReplaceRoot({ newRoot: stageValue }, docs);
       case "$unset":
         return this.execUnset(stageValue, docs);
+      case "$redact":
+        return this.execRedact(stageValue, docs);
       case "$out":
         return this.execOut(stageValue as string, docs);
       case "$sortByCount":
@@ -220,6 +223,40 @@ export class AggregationCursor<T extends Document = Document> {
     return docs.map((doc) =>
       this.projectDocument(doc, projection, isExclusionMode)
     );
+  }
+
+  /**
+   * $redact - field-level access control with recursive traversal.
+   */
+  private execRedact(expr: unknown, docs: Document[]): Document[] {
+    const results: Document[] = [];
+
+    for (const doc of docs) {
+      const result = traverseDocument(doc, (subdoc) => {
+        // Evaluate expression at this document level
+        const systemVars = this.getSystemVars(subdoc);
+        const action = evaluateExpression(expr, subdoc, systemVars);
+
+        // Validate result
+        if (action === REDACT_DESCEND) {
+          return "descend";
+        } else if (action === REDACT_PRUNE) {
+          return "prune";
+        } else if (action === REDACT_KEEP) {
+          return "keep";
+        } else {
+          throw new Error(
+            "$redact must resolve to $$DESCEND, $$PRUNE, or $$KEEP"
+          );
+        }
+      });
+
+      if (result !== null) {
+        results.push(result);
+      }
+    }
+
+    return results;
   }
 
   /**

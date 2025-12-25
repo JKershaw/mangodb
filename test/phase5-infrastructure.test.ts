@@ -1003,4 +1003,169 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       assert.strictEqual(results[2].doubled, 30);
     });
   });
+
+  // ==================== Tier 2 Stages ====================
+
+  describe("$redact (Task 5.2)", () => {
+    it("should prune documents matching condition", async () => {
+      const collection = client.db(dbName).collection("redact_prune");
+      await collection.insertMany([
+        { level: "public", data: "visible" },
+        { level: "secret", data: "hidden" },
+      ]);
+
+      const results = await collection
+        .aggregate([
+          {
+            $redact: {
+              $cond: {
+                if: { $eq: ["$level", "secret"] },
+                then: "$$PRUNE",
+                else: "$$KEEP",
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].level, "public");
+    });
+
+    it("should keep documents matching condition", async () => {
+      const collection = client.db(dbName).collection("redact_keep");
+      await collection.insertMany([
+        { authorized: true, data: "visible" },
+        { authorized: false, data: "hidden" },
+      ]);
+
+      const results = await collection
+        .aggregate([
+          {
+            $redact: {
+              $cond: {
+                if: "$authorized",
+                then: "$$KEEP",
+                else: "$$PRUNE",
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].authorized, true);
+    });
+
+    it("should descend into nested documents", async () => {
+      const collection = client.db(dbName).collection("redact_descend");
+      await collection.insertOne({
+        level: "public",
+        nested: {
+          level: "secret",
+          value: 123,
+        },
+        other: {
+          level: "public",
+          value: 456,
+        },
+      });
+
+      const results = await collection
+        .aggregate([
+          {
+            $redact: {
+              $cond: {
+                if: { $eq: ["$level", "secret"] },
+                then: "$$PRUNE",
+                else: "$$DESCEND",
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      // nested should be pruned, other should remain
+      assert.strictEqual(results[0].nested, undefined);
+      assert.strictEqual((results[0].other as { value: number }).value, 456);
+    });
+
+    it("should handle arrays of documents", async () => {
+      const collection = client.db(dbName).collection("redact_arrays");
+      await collection.insertOne({
+        level: "public",
+        items: [
+          { level: "public", name: "item1" },
+          { level: "secret", name: "item2" },
+          { level: "public", name: "item3" },
+        ],
+      });
+
+      const results = await collection
+        .aggregate([
+          {
+            $redact: {
+              $cond: {
+                if: { $eq: ["$level", "secret"] },
+                then: "$$PRUNE",
+                else: "$$DESCEND",
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      const items = results[0].items as { name: string }[];
+      assert.strictEqual(items.length, 2);
+      assert.strictEqual(items[0].name, "item1");
+      assert.strictEqual(items[1].name, "item3");
+    });
+
+    it("should throw error for invalid result", async () => {
+      const collection = client.db(dbName).collection("redact_invalid");
+      await collection.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          collection
+            .aggregate([{ $redact: { $literal: "invalid" } }])
+            .toArray(),
+        /\$redact must resolve to \$\$DESCEND, \$\$PRUNE, or \$\$KEEP/
+      );
+    });
+
+    it("should use $$DESCEND correctly to stop at field level", async () => {
+      const collection = client.db(dbName).collection("redact_descend_stop");
+      await collection.insertOne({
+        public: true,
+        data: {
+          public: false,
+          secret: "should be pruned",
+        },
+      });
+
+      const results = await collection
+        .aggregate([
+          {
+            $redact: {
+              $cond: {
+                if: { $eq: ["$public", true] },
+                then: "$$DESCEND",
+                else: "$$PRUNE",
+              },
+            },
+          },
+          { $project: { _id: 0 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      // data.public is false, so data should be pruned
+      assert.strictEqual(results[0].data, undefined);
+    });
+  });
 });
