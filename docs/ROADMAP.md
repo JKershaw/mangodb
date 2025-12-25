@@ -64,7 +64,7 @@ After completing each phase:
 | 2 | Update Operators Completion | ✅ Complete ($pullAll, $bit) |
 | 3 | Array Update Modifiers | ✅ Complete ($position, $slice, $sort) |
 | 4 | Aggregation Stages (Priority) | ✅ Complete ($sortByCount, $sample, $facet, $bucket, $bucketAuto, $unionWith) |
-| 5 | Aggregation Stages (Extended) | ⬜ Not Started |
+| 5 | Aggregation Stages (Extended) | ✅ Complete ($graphLookup, $redact, $replaceWith, $unset, $documents, $densify, $fill, $setWindowFields) |
 | 6 | Expression Operators (Arithmetic) | ✅ Complete (all 17 operators) |
 | 7 | Expression Operators (Array) | ✅ Complete ($first, $last, $indexOfArray, $isArray, $range, $reverseArray, $arrayToObject, $objectToArray, $zip, $sortArray) |
 | 8 | Expression Operators (String) | ✅ Complete ($regexFind, $regexFindAll, $regexMatch, $replaceOne, $replaceAll, $strcasecmp, $strLenBytes, $indexOfBytes, $substrBytes) |
@@ -236,11 +236,12 @@ After completing each phase:
 **Note**: `$setWindowFields` is complex - may need dedicated sub-phase.
 
 ### Phase 5 Checklist
-- [ ] All tests written and passing
-- [ ] $graphLookup depth limits tested
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing (1131 tests)
+- [x] $graphLookup depth limits tested
+- [x] $setWindowFields with 22 window operators implemented
+- [x] Code review completed (critical bugs fixed)
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -559,4 +560,4 @@ Remember: Each subagent is stateless. Give complete context in the prompt.
 
 ---
 
-*Last updated: Phases 1-4, 6-10, 12 Complete*
+*Last updated: Phases 1-10, 12 Complete*

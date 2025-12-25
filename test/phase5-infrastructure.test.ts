@@ -2221,5 +2221,177 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
         assert.strictEqual(doc.maxName, "cherry");
       }
     });
+
+    it("should compute $derivative", async () => {
+      const coll = client.db(dbName).collection("swf_derivative");
+      await coll.insertMany([
+        { t: 0, value: 0 },
+        { t: 1, value: 10 },
+        { t: 2, value: 30 },
+        { t: 3, value: 60 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { t: 1 },
+              output: {
+                rate: { $derivative: { input: "$value" } },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].rate, null); // first doc has no derivative
+      assert.strictEqual(results[1].rate, 10); // (10-0)/(1-0) = 10
+      assert.strictEqual(results[2].rate, 20); // (30-10)/(2-1) = 20
+      assert.strictEqual(results[3].rate, 30); // (60-30)/(3-2) = 30
+    });
+
+    it("should compute $integral", async () => {
+      const coll = client.db(dbName).collection("swf_integral");
+      await coll.insertMany([
+        { t: 0, value: 0 },
+        { t: 1, value: 10 },
+        { t: 2, value: 10 },
+        { t: 3, value: 0 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { t: 1 },
+              output: {
+                area: { $integral: { input: "$value" } },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].area, 0); // no area yet
+      assert.strictEqual(results[1].area, 5); // trapezoid: (0+10)/2 * 1 = 5
+      assert.strictEqual(results[2].area, 15); // 5 + (10+10)/2 * 1 = 15
+      assert.strictEqual(results[3].area, 20); // 15 + (10+0)/2 * 1 = 20
+    });
+
+    it("should compute $expMovingAvg with N", async () => {
+      const coll = client.db(dbName).collection("swf_ema");
+      await coll.insertMany([
+        { x: 1, value: 10 },
+        { x: 2, value: 20 },
+        { x: 3, value: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                ema: { $expMovingAvg: { input: "$value", N: 2 } },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      // alpha = 2/(2+1) = 0.667
+      assert.strictEqual(results[0].ema, 10); // first value
+      // ema = 0.667 * 20 + 0.333 * 10 = 16.67
+      assert.ok(Math.abs((results[1].ema as number) - 16.67) < 0.1);
+    });
+
+    it("should compute $covariancePop", async () => {
+      const coll = client.db(dbName).collection("swf_covpop");
+      await coll.insertMany([
+        { x: 1, a: 1, b: 2 },
+        { x: 2, a: 2, b: 4 },
+        { x: 3, a: 3, b: 6 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                cov: { $covariancePop: ["$a", "$b"] },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      // Perfect positive correlation: cov should be positive
+      // a = [1,2,3], b = [2,4,6]
+      // mean_a = 2, mean_b = 4
+      // cov = ((1-2)(2-4) + (2-2)(4-4) + (3-2)(6-4)) / 3 = (2 + 0 + 2) / 3 = 1.33
+      assert.ok(Math.abs((results[0].cov as number) - 1.333) < 0.01);
+    });
+
+    it("should compute $stdDevPop", async () => {
+      const coll = client.db(dbName).collection("swf_stddevpop");
+      await coll.insertMany([
+        { x: 1, value: 2 },
+        { x: 2, value: 4 },
+        { x: 3, value: 4 },
+        { x: 4, value: 4 },
+        { x: 5, value: 5 },
+        { x: 6, value: 5 },
+        { x: 7, value: 7 },
+        { x: 8, value: 9 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                stdDev: { $stdDevPop: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 8);
+      // Population std dev of [2,4,4,4,5,5,7,9] = 2
+      assert.strictEqual(results[0].stdDev, 2);
+    });
+
+    it("should compute $stdDevSamp", async () => {
+      const coll = client.db(dbName).collection("swf_stddevsamp");
+      await coll.insertMany([
+        { x: 1, value: 1 },
+        { x: 2, value: 2 },
+        { x: 3, value: 3 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                stdDev: { $stdDevSamp: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      // Sample std dev of [1,2,3] = 1
+      assert.strictEqual(results[0].stdDev, 1);
+    });
   });
 });

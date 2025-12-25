@@ -1571,6 +1571,251 @@ export class AggregationCursor<T extends Document = Document> {
         return result;
       }
 
+      // Derivative operator - rate of change
+      case "$derivative": {
+        const derivSpec = operatorArg as {
+          input: unknown;
+          unit?: string;
+        };
+
+        // Need at least 2 points and sortBy for derivative
+        if (!sortBy || currentIndex === 0) {
+          return null;
+        }
+
+        const sortField = Object.keys(sortBy)[0];
+        const currentSortVal = getValueByPath(currentDoc, sortField);
+        const prevSortVal = getValueByPath(allDocs[currentIndex - 1], sortField);
+
+        const currentInputVal = evaluateExpression(derivSpec.input, currentDoc, vars);
+        const prevVars = this.getSystemVars(allDocs[currentIndex - 1]);
+        const prevInputVal = evaluateExpression(derivSpec.input, allDocs[currentIndex - 1], prevVars);
+
+        if (typeof currentInputVal !== "number" || typeof prevInputVal !== "number") {
+          return null;
+        }
+
+        // Calculate time/position difference
+        let timeDiff: number;
+        if (currentSortVal instanceof Date && prevSortVal instanceof Date) {
+          timeDiff = currentSortVal.getTime() - prevSortVal.getTime();
+          // Convert based on unit
+          if (derivSpec.unit === "second") timeDiff /= 1000;
+          else if (derivSpec.unit === "minute") timeDiff /= 60000;
+          else if (derivSpec.unit === "hour") timeDiff /= 3600000;
+          else if (derivSpec.unit === "day") timeDiff /= 86400000;
+          else if (derivSpec.unit === "week") timeDiff /= 604800000;
+          else timeDiff /= 1; // milliseconds default
+        } else if (typeof currentSortVal === "number" && typeof prevSortVal === "number") {
+          timeDiff = currentSortVal - prevSortVal;
+        } else {
+          return null;
+        }
+
+        if (timeDiff === 0) return null;
+        return (currentInputVal - prevInputVal) / timeDiff;
+      }
+
+      // Integral operator - area under curve (trapezoidal rule)
+      case "$integral": {
+        const integralSpec = operatorArg as {
+          input: unknown;
+          unit?: string;
+        };
+
+        if (!sortBy) return null;
+
+        const sortField = Object.keys(sortBy)[0];
+        let totalArea = 0;
+
+        for (let i = 1; i <= currentIndex; i++) {
+          const prevDoc = allDocs[i - 1];
+          const currDoc = allDocs[i];
+
+          const prevVars = this.getSystemVars(prevDoc);
+          const currVars = this.getSystemVars(currDoc);
+
+          const prevInput = evaluateExpression(integralSpec.input, prevDoc, prevVars);
+          const currInput = evaluateExpression(integralSpec.input, currDoc, currVars);
+
+          if (typeof prevInput !== "number" || typeof currInput !== "number") {
+            continue;
+          }
+
+          const prevSortVal = getValueByPath(prevDoc, sortField);
+          const currSortVal = getValueByPath(currDoc, sortField);
+
+          let timeDiff: number;
+          if (currSortVal instanceof Date && prevSortVal instanceof Date) {
+            timeDiff = currSortVal.getTime() - prevSortVal.getTime();
+            if (integralSpec.unit === "second") timeDiff /= 1000;
+            else if (integralSpec.unit === "minute") timeDiff /= 60000;
+            else if (integralSpec.unit === "hour") timeDiff /= 3600000;
+            else if (integralSpec.unit === "day") timeDiff /= 86400000;
+            else if (integralSpec.unit === "week") timeDiff /= 604800000;
+          } else if (typeof currSortVal === "number" && typeof prevSortVal === "number") {
+            timeDiff = currSortVal - prevSortVal;
+          } else {
+            continue;
+          }
+
+          // Trapezoidal rule: average of heights * width
+          totalArea += ((prevInput + currInput) / 2) * timeDiff;
+        }
+
+        return totalArea;
+      }
+
+      // Exponential moving average
+      case "$expMovingAvg": {
+        const emaSpec = operatorArg as {
+          input: unknown;
+          N?: number;
+          alpha?: number;
+        };
+
+        // Calculate alpha from N if not directly provided
+        let alpha: number;
+        if (emaSpec.alpha !== undefined) {
+          alpha = emaSpec.alpha;
+        } else if (emaSpec.N !== undefined) {
+          alpha = 2 / (emaSpec.N + 1);
+        } else {
+          throw new Error("$expMovingAvg requires either 'N' or 'alpha'");
+        }
+
+        if (alpha <= 0 || alpha > 1) {
+          throw new Error("alpha must be between 0 (exclusive) and 1 (inclusive)");
+        }
+
+        // Calculate EMA up to current position
+        let ema: number | null = null;
+        for (let i = 0; i <= currentIndex; i++) {
+          const docVars = this.getSystemVars(allDocs[i]);
+          const val = evaluateExpression(emaSpec.input, allDocs[i], docVars);
+
+          if (typeof val !== "number") continue;
+
+          if (ema === null) {
+            ema = val;
+          } else {
+            ema = alpha * val + (1 - alpha) * ema;
+          }
+        }
+
+        return ema;
+      }
+
+      // Population covariance
+      case "$covariancePop": {
+        const covSpec = operatorArg as [unknown, unknown];
+        if (!Array.isArray(covSpec) || covSpec.length !== 2) {
+          throw new Error("$covariancePop requires an array of two expressions");
+        }
+
+        const xValues: number[] = [];
+        const yValues: number[] = [];
+
+        for (const doc of windowDocs) {
+          const docVars = this.getSystemVars(doc);
+          const x = evaluateExpression(covSpec[0], doc, docVars);
+          const y = evaluateExpression(covSpec[1], doc, docVars);
+
+          if (typeof x === "number" && typeof y === "number") {
+            xValues.push(x);
+            yValues.push(y);
+          }
+        }
+
+        if (xValues.length === 0) return null;
+
+        const n = xValues.length;
+        const meanX = xValues.reduce((a, b) => a + b, 0) / n;
+        const meanY = yValues.reduce((a, b) => a + b, 0) / n;
+
+        let covariance = 0;
+        for (let i = 0; i < n; i++) {
+          covariance += (xValues[i] - meanX) * (yValues[i] - meanY);
+        }
+
+        return covariance / n;
+      }
+
+      // Sample covariance
+      case "$covarianceSamp": {
+        const covSpec = operatorArg as [unknown, unknown];
+        if (!Array.isArray(covSpec) || covSpec.length !== 2) {
+          throw new Error("$covarianceSamp requires an array of two expressions");
+        }
+
+        const xValues: number[] = [];
+        const yValues: number[] = [];
+
+        for (const doc of windowDocs) {
+          const docVars = this.getSystemVars(doc);
+          const x = evaluateExpression(covSpec[0], doc, docVars);
+          const y = evaluateExpression(covSpec[1], doc, docVars);
+
+          if (typeof x === "number" && typeof y === "number") {
+            xValues.push(x);
+            yValues.push(y);
+          }
+        }
+
+        if (xValues.length < 2) return null;
+
+        const n = xValues.length;
+        const meanX = xValues.reduce((a, b) => a + b, 0) / n;
+        const meanY = yValues.reduce((a, b) => a + b, 0) / n;
+
+        let covariance = 0;
+        for (let i = 0; i < n; i++) {
+          covariance += (xValues[i] - meanX) * (yValues[i] - meanY);
+        }
+
+        return covariance / (n - 1);
+      }
+
+      // Population standard deviation
+      case "$stdDevPop": {
+        const values: number[] = [];
+        for (const doc of windowDocs) {
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
+          if (typeof val === "number") {
+            values.push(val);
+          }
+        }
+
+        if (values.length === 0) return null;
+
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
+        const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+
+        return Math.sqrt(variance);
+      }
+
+      // Sample standard deviation
+      case "$stdDevSamp": {
+        const values: number[] = [];
+        for (const doc of windowDocs) {
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
+          if (typeof val === "number") {
+            values.push(val);
+          }
+        }
+
+        if (values.length < 2) return null;
+
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
+        const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (values.length - 1);
+
+        return Math.sqrt(variance);
+      }
+
       default:
         throw new Error(`Unknown window operator: ${operatorName}`);
     }
