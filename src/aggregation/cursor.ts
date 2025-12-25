@@ -113,6 +113,9 @@ export class AggregationCursor<T extends Document = Document> {
         return this.execAddFields(stageValue as Record<string, unknown>, docs);
       case "$replaceRoot":
         return this.execReplaceRoot(stageValue as { newRoot: unknown }, docs);
+      case "$replaceWith":
+        // $replaceWith is an alias for $replaceRoot with simpler syntax
+        return this.execReplaceRoot({ newRoot: stageValue }, docs);
       case "$out":
         return this.execOut(stageValue as string, docs);
       case "$sortByCount":

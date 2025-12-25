@@ -735,4 +735,83 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Tier 1 Stages ====================
+
+  describe("$replaceWith (Task 5.3)", () => {
+    it("should replace document with field reference", async () => {
+      const collection = client.db(dbName).collection("replaceWith_field");
+      await collection.insertOne({ original: 1, nested: { a: 10, b: 20 } });
+
+      const results = await collection
+        .aggregate([{ $replaceWith: "$nested" }])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].a, 10);
+      assert.strictEqual(results[0].b, 20);
+      assert.strictEqual(results[0].original, undefined);
+    });
+
+    it("should replace document with literal object", async () => {
+      const collection = client.db(dbName).collection("replaceWith_literal");
+      await collection.insertOne({ x: 1 });
+
+      const results = await collection
+        .aggregate([{ $replaceWith: { $literal: { fixed: "value" } } }])
+        .toArray();
+
+      assert.strictEqual(results[0].fixed, "value");
+    });
+
+    it("should work with $$ROOT", async () => {
+      const collection = client.db(dbName).collection("replaceWith_root");
+      await collection.insertOne({ a: 1, b: 2 });
+
+      const results = await collection
+        .aggregate([
+          { $addFields: { backup: "$$ROOT" } },
+          { $replaceWith: "$backup" },
+        ])
+        .toArray();
+
+      assert.strictEqual(results[0].a, 1);
+      assert.strictEqual(results[0].b, 2);
+    });
+
+    it("should throw error when result is null", async () => {
+      const collection = client.db(dbName).collection("replaceWith_null");
+      await collection.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          collection
+            .aggregate([{ $replaceWith: "$nonexistent" }])
+            .toArray(),
+        /newRoot.*must evaluate to an object/
+      );
+    });
+
+    it("should throw error when result is array", async () => {
+      const collection = client.db(dbName).collection("replaceWith_array");
+      await collection.insertOne({ items: [1, 2, 3] });
+
+      await assert.rejects(
+        () =>
+          collection.aggregate([{ $replaceWith: "$items" }]).toArray(),
+        /newRoot.*must evaluate to an object/
+      );
+    });
+
+    it("should throw error when result is scalar", async () => {
+      const collection = client.db(dbName).collection("replaceWith_scalar");
+      await collection.insertOne({ value: 123 });
+
+      await assert.rejects(
+        () =>
+          collection.aggregate([{ $replaceWith: "$value" }]).toArray(),
+        /newRoot.*must evaluate to an object/
+      );
+    });
+  });
 });
