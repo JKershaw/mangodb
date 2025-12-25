@@ -20,6 +20,7 @@ import type { AggregationDbContext } from "./types.ts";
 import { evaluateExpression } from "./expression.ts";
 import { createAccumulator } from "./accumulators.ts";
 import { getBSONTypeName } from "./helpers.ts";
+import { createSystemVars, mergeVars } from "./system-vars.ts";
 
 /**
  * AggregationCursor represents a cursor over aggregation pipeline results.
@@ -28,6 +29,7 @@ export class AggregationCursor<T extends Document = Document> {
   private readonly source: () => Promise<T[]>;
   private readonly pipeline: PipelineStage[];
   private readonly dbContext?: AggregationDbContext;
+  private pipelineNow?: Date;
 
   constructor(
     source: () => Promise<T[]>,
@@ -39,7 +41,18 @@ export class AggregationCursor<T extends Document = Document> {
     this.dbContext = dbContext;
   }
 
+  /**
+   * Get system variables for a document.
+   * Uses shared $$NOW date for consistency across pipeline.
+   */
+  private getSystemVars(doc: Document): ReturnType<typeof createSystemVars> {
+    return createSystemVars(doc, this.pipelineNow);
+  }
+
   async toArray(): Promise<Document[]> {
+    // Set shared $$NOW for this pipeline execution
+    this.pipelineNow = new Date();
+
     // Validate $out is last stage if present
     for (let i = 0; i < this.pipeline.length; i++) {
       const stage = this.pipeline[i] as unknown as Record<string, unknown>;
@@ -244,7 +257,14 @@ export class AggregationCursor<T extends Document = Document> {
             result[key] = fieldValue;
           }
         }
+      } else if (typeof value === "string" && value.startsWith("$$")) {
+        // System variable reference (e.g., $$NOW, $$ROOT)
+        const evaluated = evaluateExpression(value, doc, this.getSystemVars(doc));
+        if (evaluated !== undefined) {
+          result[key] = evaluated;
+        }
       } else if (typeof value === "string" && value.startsWith("$")) {
+        // Field reference (e.g., $fieldName)
         const refPath = value.slice(1);
         const refValue = getValueByPath(doc, refPath);
         if (refValue !== undefined) {
@@ -253,7 +273,7 @@ export class AggregationCursor<T extends Document = Document> {
       } else if (this.isLiteralExpression(value)) {
         result[key] = value.$literal;
       } else if (typeof value === "object" && value !== null) {
-        const evaluated = evaluateExpression(value, doc);
+        const evaluated = evaluateExpression(value, doc, this.getSystemVars(doc));
         result[key] = evaluated;
       }
     }
@@ -414,7 +434,7 @@ export class AggregationCursor<T extends Document = Document> {
     );
 
     for (const doc of docs) {
-      const groupId = evaluateExpression(groupSpec._id, doc);
+      const groupId = evaluateExpression(groupSpec._id, doc, this.getSystemVars(doc));
       const groupKey = JSON.stringify(groupId);
 
       if (!groups.has(groupKey)) {
@@ -492,7 +512,7 @@ export class AggregationCursor<T extends Document = Document> {
       const result = cloneDocument(doc);
 
       for (const [field, expr] of Object.entries(addFieldsSpec)) {
-        const value = evaluateExpression(expr, doc);
+        const value = evaluateExpression(expr, doc, this.getSystemVars(doc));
         if (field.includes(".")) {
           setValueByPath(result, field, value);
         } else {
@@ -509,7 +529,7 @@ export class AggregationCursor<T extends Document = Document> {
     docs: Document[]
   ): Document[] {
     return docs.map((doc) => {
-      const newRoot = evaluateExpression(spec.newRoot, doc);
+      const newRoot = evaluateExpression(spec.newRoot, doc, this.getSystemVars(doc));
 
       if (newRoot === null || newRoot === undefined) {
         const typeName = newRoot === null ? "null" : "missing";
@@ -557,7 +577,7 @@ export class AggregationCursor<T extends Document = Document> {
     const counts = new Map<string, { _id: unknown; count: number }>();
 
     for (const doc of docs) {
-      const groupValue = evaluateExpression(expression, doc);
+      const groupValue = evaluateExpression(expression, doc, this.getSystemVars(doc));
       const key = JSON.stringify(groupValue);
 
       if (!counts.has(key)) {
@@ -746,7 +766,7 @@ export class AggregationCursor<T extends Document = Document> {
 
     // Categorize each document
     for (const doc of docs) {
-      const value = evaluateExpression(spec.groupBy, doc);
+      const value = evaluateExpression(spec.groupBy, doc, this.getSystemVars(doc));
       let bucketKey: string | null = null;
 
       // Find which bucket this value belongs to
@@ -839,7 +859,7 @@ export class AggregationCursor<T extends Document = Document> {
     // Extract and sort values
     const valuesWithDocs: { value: unknown; doc: Document }[] = [];
     for (const doc of docs) {
-      const value = evaluateExpression(spec.groupBy, doc);
+      const value = evaluateExpression(spec.groupBy, doc, this.getSystemVars(doc));
       if (value !== null && value !== undefined) {
         valuesWithDocs.push({ value, doc });
       }
