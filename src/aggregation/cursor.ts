@@ -139,6 +139,20 @@ export class AggregationCursor<T extends Document = Document> {
         return this.execUnset(stageValue, docs);
       case "$redact":
         return this.execRedact(stageValue, docs);
+      case "$graphLookup":
+        return this.execGraphLookup(
+          stageValue as {
+            from: string;
+            startWith: unknown;
+            connectFromField: string;
+            connectToField: string;
+            as: string;
+            maxDepth?: number;
+            depthField?: string;
+            restrictSearchWithMatch?: Document;
+          },
+          docs
+        );
       case "$out":
         return this.execOut(stageValue as string, docs);
       case "$sortByCount":
@@ -632,6 +646,142 @@ export class AggregationCursor<T extends Document = Document> {
         [lookupSpec.as]: matches,
       };
     });
+  }
+
+  /**
+   * $graphLookup - recursive lookup for graph traversal.
+   */
+  private async execGraphLookup(
+    spec: {
+      from: string;
+      startWith: unknown;
+      connectFromField: string;
+      connectToField: string;
+      as: string;
+      maxDepth?: number;
+      depthField?: string;
+      restrictSearchWithMatch?: Document;
+    },
+    docs: Document[]
+  ): Promise<Document[]> {
+    // Validate required fields
+    if (!spec.from) {
+      throw new Error("$graphLookup requires 'from'");
+    }
+    if (spec.startWith === undefined) {
+      throw new Error("$graphLookup requires 'startWith'");
+    }
+    if (!spec.connectFromField) {
+      throw new Error("$graphLookup requires 'connectFromField'");
+    }
+    if (!spec.connectToField) {
+      throw new Error("$graphLookup requires 'connectToField'");
+    }
+    if (!spec.as) {
+      throw new Error("$graphLookup requires 'as'");
+    }
+
+    // Validate optional fields
+    if (spec.maxDepth !== undefined && spec.maxDepth < 0) {
+      throw new Error("maxDepth must be non-negative");
+    }
+    if (
+      spec.restrictSearchWithMatch !== undefined &&
+      (typeof spec.restrictSearchWithMatch !== "object" ||
+        spec.restrictSearchWithMatch === null ||
+        Array.isArray(spec.restrictSearchWithMatch))
+    ) {
+      throw new Error("restrictSearchWithMatch must be object");
+    }
+
+    if (!this.dbContext) {
+      throw new Error("$graphLookup requires database context");
+    }
+
+    // Get all documents from the target collection
+    const foreignCollection = this.dbContext.getCollection(spec.from);
+    let foreignDocs = await foreignCollection.find({}).toArray();
+
+    // Apply restrictSearchWithMatch filter if specified
+    if (spec.restrictSearchWithMatch) {
+      foreignDocs = foreignDocs.filter((doc) =>
+        matchesFilter(doc, spec.restrictSearchWithMatch as Filter<Document>)
+      );
+    }
+
+    const results: Document[] = [];
+
+    for (const doc of docs) {
+      // Evaluate startWith expression
+      const startValue = evaluateExpression(
+        spec.startWith,
+        doc,
+        this.getSystemVars(doc)
+      );
+
+      // Handle null/missing startWith - return empty array
+      if (startValue === null || startValue === undefined) {
+        results.push({ ...doc, [spec.as]: [] });
+        continue;
+      }
+
+      // Initialize search values (handle array startWith)
+      const initialValues = Array.isArray(startValue) ? startValue : [startValue];
+
+      // BFS traversal
+      const found: Array<Document & { __depth?: number }> = [];
+      let currentValues = initialValues;
+      let depth = 0;
+
+      while (currentValues.length > 0) {
+        // Check max depth
+        if (spec.maxDepth !== undefined && depth > spec.maxDepth) {
+          break;
+        }
+
+        const nextValues: unknown[] = [];
+
+        for (const searchValue of currentValues) {
+          // Find matching documents
+          const matches = foreignDocs.filter((foreignDoc) => {
+            const connectToValue = getValueByPath(
+              foreignDoc,
+              spec.connectToField
+            );
+            if (Array.isArray(connectToValue)) {
+              return connectToValue.some((v) => valuesEqual(v, searchValue));
+            }
+            return valuesEqual(connectToValue, searchValue);
+          });
+
+          for (const match of matches) {
+            // Add to found results
+            const resultDoc: Document = { ...match };
+            if (spec.depthField) {
+              resultDoc[spec.depthField] = depth;
+            }
+            found.push(resultDoc);
+
+            // Extract values for next iteration
+            const fromValue = getValueByPath(match, spec.connectFromField);
+            if (fromValue !== null && fromValue !== undefined) {
+              if (Array.isArray(fromValue)) {
+                nextValues.push(...fromValue);
+              } else {
+                nextValues.push(fromValue);
+              }
+            }
+          }
+        }
+
+        currentValues = nextValues;
+        depth++;
+      }
+
+      results.push({ ...doc, [spec.as]: found });
+    }
+
+    return results;
   }
 
   private execAddFields(

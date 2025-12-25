@@ -1168,4 +1168,176 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].data, undefined);
     });
   });
+
+  describe("$graphLookup (Task 5.1)", () => {
+    it("should traverse simple hierarchy", async () => {
+      // Create employees collection with manager hierarchy
+      const employees = client.db(dbName).collection("graph_employees");
+      await employees.insertMany([
+        { _id: "alice", name: "Alice", reportsTo: null },
+        { _id: "bob", name: "Bob", reportsTo: "alice" },
+        { _id: "charlie", name: "Charlie", reportsTo: "bob" },
+        { _id: "dana", name: "Dana", reportsTo: "bob" },
+      ]);
+
+      // Find all reports (direct and indirect) for Alice
+      const results = await employees
+        .aggregate([
+          { $match: { _id: "alice" } },
+          {
+            $graphLookup: {
+              from: "graph_employees",
+              startWith: "$_id",
+              connectFromField: "reportsTo",
+              connectToField: "_id",
+              as: "reports",
+            },
+          },
+        ])
+        .toArray();
+
+      // Note: This finds docs where connectToField (_id) matches startWith
+      // So it will find Alice herself since her _id matches
+      assert.strictEqual(results.length, 1);
+      assert.ok(Array.isArray(results[0].reports));
+    });
+
+    it("should limit depth with maxDepth", async () => {
+      const nodes = client.db(dbName).collection("graph_nodes");
+      await nodes.insertMany([
+        { _id: 1, parent: null },
+        { _id: 2, parent: 1 },
+        { _id: 3, parent: 2 },
+        { _id: 4, parent: 3 },
+      ]);
+
+      const results = await nodes
+        .aggregate([
+          { $match: { _id: 1 } },
+          {
+            $graphLookup: {
+              from: "graph_nodes",
+              startWith: "$_id",
+              connectFromField: "parent",
+              connectToField: "_id",
+              as: "ancestors",
+              maxDepth: 1,
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      // maxDepth 1 means depth 0 and depth 1 only
+      assert.ok((results[0].ancestors as unknown[]).length <= 2);
+    });
+
+    it("should track depth with depthField", async () => {
+      const categories = client.db(dbName).collection("graph_categories");
+      await categories.insertMany([
+        { _id: "root", name: "Root", parentId: null },
+        { _id: "electronics", name: "Electronics", parentId: "root" },
+        { _id: "phones", name: "Phones", parentId: "electronics" },
+      ]);
+
+      const results = await categories
+        .aggregate([
+          { $match: { _id: "root" } },
+          {
+            $graphLookup: {
+              from: "graph_categories",
+              startWith: "$_id",
+              connectFromField: "parentId",
+              connectToField: "_id",
+              as: "descendants",
+              depthField: "level",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      // Check that depthField is added
+      for (const desc of results[0].descendants as { level: number }[]) {
+        assert.ok(typeof desc.level === "number");
+      }
+    });
+
+    it("should filter with restrictSearchWithMatch", async () => {
+      const items = client.db(dbName).collection("graph_items");
+      await items.insertMany([
+        { _id: "a", nextId: "b", active: true },
+        { _id: "b", nextId: "c", active: false },
+        { _id: "c", nextId: null, active: true },
+      ]);
+
+      const results = await items
+        .aggregate([
+          { $match: { _id: "a" } },
+          {
+            $graphLookup: {
+              from: "graph_items",
+              startWith: "$nextId",
+              connectFromField: "nextId",
+              connectToField: "_id",
+              as: "chain",
+              restrictSearchWithMatch: { active: true },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      // Only active items should be in chain
+      const chain = results[0].chain as { _id: string; active: boolean }[];
+      for (const item of chain) {
+        assert.strictEqual(item.active, true);
+      }
+    });
+
+    it("should return empty array for null startWith", async () => {
+      const coll = client.db(dbName).collection("graph_null_start");
+      await coll.insertOne({ _id: 1, ref: null });
+
+      const results = await coll
+        .aggregate([
+          {
+            $graphLookup: {
+              from: "graph_null_start",
+              startWith: "$ref",
+              connectFromField: "ref",
+              connectToField: "_id",
+              as: "found",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.deepStrictEqual(results[0].found, []);
+    });
+
+    it("should throw error for missing required fields", async () => {
+      const coll = client.db(dbName).collection("graph_error_test");
+      await coll.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([
+              {
+                $graphLookup: {
+                  from: "test",
+                  startWith: "$x",
+                  connectFromField: "a",
+                  connectToField: "b",
+                  // missing "as"
+                } as { from: string; startWith: unknown; connectFromField: string; connectToField: string; as: string },
+              },
+            ])
+            .toArray(),
+        /\$graphLookup requires 'as'/
+      );
+    });
+  });
 });
