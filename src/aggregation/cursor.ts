@@ -53,15 +53,33 @@ export class AggregationCursor<T extends Document = Document> {
     // Set shared $$NOW for this pipeline execution
     this.pipelineNow = new Date();
 
-    // Validate $out is last stage if present
+    // Validate stage positions
     for (let i = 0; i < this.pipeline.length; i++) {
       const stage = this.pipeline[i] as unknown as Record<string, unknown>;
       if ("$out" in stage && i !== this.pipeline.length - 1) {
         throw new Error("$out can only be the final stage in the pipeline");
       }
+      if ("$documents" in stage && i !== 0) {
+        throw new Error("$documents must be the first stage in the pipeline");
+      }
     }
 
-    let documents: Document[] = await this.source();
+    let documents: Document[];
+
+    // Handle $documents as first stage specially
+    if (this.pipeline.length > 0) {
+      const firstStage = this.pipeline[0] as unknown as Record<string, unknown>;
+      if ("$documents" in firstStage) {
+        documents = this.execDocuments(firstStage.$documents);
+        // Process remaining stages
+        for (let i = 1; i < this.pipeline.length; i++) {
+          documents = await this.executeStage(this.pipeline[i], documents);
+        }
+        return documents;
+      }
+    }
+
+    documents = await this.source();
 
     for (const stage of this.pipeline) {
       documents = await this.executeStage(stage, documents);
@@ -202,6 +220,31 @@ export class AggregationCursor<T extends Document = Document> {
     return docs.map((doc) =>
       this.projectDocument(doc, projection, isExclusionMode)
     );
+  }
+
+  /**
+   * $documents - injects literal documents into the pipeline.
+   * Must be the first stage.
+   */
+  private execDocuments(spec: unknown): Document[] {
+    // Evaluate expression to get array of documents
+    // Use empty doc and system vars since there's no input document
+    const systemVars = createSystemVars({}, this.pipelineNow);
+    const result = evaluateExpression(spec, {}, systemVars);
+
+    if (!Array.isArray(result)) {
+      throw new Error("$documents requires array of documents");
+    }
+
+    // Validate all elements are objects
+    for (let i = 0; i < result.length; i++) {
+      const item = result[i];
+      if (item === null || typeof item !== "object" || Array.isArray(item)) {
+        throw new Error("$documents array elements must be objects");
+      }
+    }
+
+    return result as Document[];
   }
 
   /**

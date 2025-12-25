@@ -901,4 +901,106 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       );
     });
   });
+
+  describe("$documents (Task 5.5)", () => {
+    it("should inject literal documents as first stage", async () => {
+      const collection = client.db(dbName).collection("documents_literal");
+
+      const results = await collection
+        .aggregate([
+          { $documents: [{ a: 1 }, { a: 2 }, { a: 3 }] },
+          { $match: { a: { $gt: 1 } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 2);
+      assert.strictEqual(results[0].a, 2);
+      assert.strictEqual(results[1].a, 3);
+    });
+
+    it("should work with empty array", async () => {
+      const collection = client.db(dbName).collection("documents_empty");
+
+      const results = await collection
+        .aggregate([{ $documents: [] }, { $project: { _id: 0 } }])
+        .toArray();
+
+      assert.strictEqual(results.length, 0);
+    });
+
+    it("should support $$NOW in documents", async () => {
+      const collection = client.db(dbName).collection("documents_now");
+
+      const before = new Date();
+      const results = await collection
+        .aggregate([
+          {
+            $documents: [{ timestamp: "$$NOW" }],
+          },
+        ])
+        .toArray();
+      const after = new Date();
+
+      assert.ok(results[0].timestamp instanceof Date);
+      assert.ok((results[0].timestamp as Date) >= before);
+      assert.ok((results[0].timestamp as Date) <= after);
+    });
+
+    it("should throw error when not first stage", async () => {
+      const collection = client.db(dbName).collection("documents_notfirst");
+      await collection.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          collection
+            .aggregate([
+              { $match: {} },
+              { $documents: [{ a: 1 }] },
+            ])
+            .toArray(),
+        /\$documents must be the first stage/
+      );
+    });
+
+    it("should throw error for non-array", async () => {
+      const collection = client.db(dbName).collection("documents_nonarray");
+
+      await assert.rejects(
+        () =>
+          collection
+            .aggregate([{ $documents: { a: 1 } }])
+            .toArray(),
+        /\$documents requires array of documents/
+      );
+    });
+
+    it("should throw error for non-object elements", async () => {
+      const collection = client.db(dbName).collection("documents_nonobj");
+
+      await assert.rejects(
+        () =>
+          collection
+            .aggregate([{ $documents: [{ a: 1 }, "string"] }])
+            .toArray(),
+        /\$documents array elements must be objects/
+      );
+    });
+
+    it("should work with subsequent stages", async () => {
+      const collection = client.db(dbName).collection("documents_stages");
+
+      const results = await collection
+        .aggregate([
+          { $documents: [{ x: 5 }, { x: 10 }, { x: 15 }] },
+          { $addFields: { doubled: { $multiply: ["$x", 2] } } },
+          { $project: { _id: 0 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      assert.strictEqual(results[0].doubled, 10);
+      assert.strictEqual(results[1].doubled, 20);
+      assert.strictEqual(results[2].doubled, 30);
+    });
+  });
 });
