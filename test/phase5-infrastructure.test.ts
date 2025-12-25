@@ -814,4 +814,91 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       );
     });
   });
+
+  describe("$unset (Task 5.4)", () => {
+    it("should remove single field with string syntax", async () => {
+      const collection = client.db(dbName).collection("unset_single");
+      await collection.insertOne({ a: 1, b: 2, c: 3 });
+
+      const results = await collection.aggregate([{ $unset: "b" }]).toArray();
+
+      assert.strictEqual(results[0].a, 1);
+      assert.strictEqual(results[0].b, undefined);
+      assert.strictEqual(results[0].c, 3);
+    });
+
+    it("should remove multiple fields with array syntax", async () => {
+      const collection = client.db(dbName).collection("unset_array");
+      await collection.insertOne({ a: 1, b: 2, c: 3, d: 4 });
+
+      const results = await collection
+        .aggregate([{ $unset: ["b", "d"] }])
+        .toArray();
+
+      assert.strictEqual(results[0].a, 1);
+      assert.strictEqual(results[0].b, undefined);
+      assert.strictEqual(results[0].c, 3);
+      assert.strictEqual(results[0].d, undefined);
+    });
+
+    it("should remove nested field with dot notation", async () => {
+      const collection = client.db(dbName).collection("unset_nested");
+      await collection.insertOne({ top: { a: 1, b: 2 }, other: 3 });
+
+      const results = await collection
+        .aggregate([{ $unset: "top.a" }])
+        .toArray();
+
+      assert.strictEqual((results[0].top as { b: number }).b, 2);
+      assert.strictEqual(
+        (results[0].top as { a?: number }).a,
+        undefined
+      );
+      assert.strictEqual(results[0].other, 3);
+    });
+
+    it("should silently ignore non-existent fields", async () => {
+      const collection = client.db(dbName).collection("unset_nonexistent");
+      await collection.insertOne({ a: 1 });
+
+      const results = await collection
+        .aggregate([{ $unset: "nonexistent" }])
+        .toArray();
+
+      assert.strictEqual(results[0].a, 1);
+    });
+
+    it("should preserve _id when unsetting other fields", async () => {
+      const collection = client.db(dbName).collection("unset_id");
+      await collection.insertOne({ a: 1, b: 2 });
+
+      const results = await collection.aggregate([{ $unset: "a" }]).toArray();
+
+      assert.ok(results[0]._id);
+      assert.strictEqual(results[0].b, 2);
+    });
+
+    it("should throw error for non-string in array", async () => {
+      const collection = client.db(dbName).collection("unset_invalid");
+      await collection.insertOne({ a: 1 });
+
+      await assert.rejects(
+        () =>
+          collection
+            .aggregate([{ $unset: ["a", 123 as unknown as string] }])
+            .toArray(),
+        /\$unset specification must be a string or array of strings/
+      );
+    });
+
+    it("should throw error for empty string field", async () => {
+      const collection = client.db(dbName).collection("unset_empty");
+      await collection.insertOne({ a: 1 });
+
+      await assert.rejects(
+        () => collection.aggregate([{ $unset: "" }]).toArray(),
+        /FieldPath cannot be constructed with empty string/
+      );
+    });
+  });
 });

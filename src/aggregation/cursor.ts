@@ -116,6 +116,8 @@ export class AggregationCursor<T extends Document = Document> {
       case "$replaceWith":
         // $replaceWith is an alias for $replaceRoot with simpler syntax
         return this.execReplaceRoot({ newRoot: stageValue }, docs);
+      case "$unset":
+        return this.execUnset(stageValue, docs);
       case "$out":
         return this.execOut(stageValue as string, docs);
       case "$sortByCount":
@@ -200,6 +202,51 @@ export class AggregationCursor<T extends Document = Document> {
     return docs.map((doc) =>
       this.projectDocument(doc, projection, isExclusionMode)
     );
+  }
+
+  /**
+   * $unset - removes specified fields from documents.
+   * Alias for $project with field exclusion.
+   */
+  private execUnset(spec: unknown, docs: Document[]): Document[] {
+    // Normalize to array of field paths
+    let fields: string[];
+
+    if (typeof spec === "string") {
+      fields = [spec];
+    } else if (Array.isArray(spec)) {
+      fields = spec.map((f, i) => {
+        if (typeof f !== "string") {
+          throw new Error(
+            "$unset specification must be a string or array of strings"
+          );
+        }
+        if (f === "") {
+          throw new Error("FieldPath cannot be constructed with empty string");
+        }
+        return f;
+      });
+    } else {
+      throw new Error(
+        "$unset specification must be a string or array of strings"
+      );
+    }
+
+    // Validate fields
+    for (const field of fields) {
+      if (field === "") {
+        throw new Error("FieldPath cannot be constructed with empty string");
+      }
+    }
+
+    // Convert to $project exclusion format
+    const projection: Record<string, 0> = {};
+    for (const field of fields) {
+      projection[field] = 0;
+    }
+
+    // Delegate to project
+    return this.execProject(projection, docs);
   }
 
   private isLiteralExpression(value: unknown): value is ProjectExpression {
