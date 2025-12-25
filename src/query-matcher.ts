@@ -622,57 +622,95 @@ export function matchesOperators(
 
       case "$bitsAllSet": {
         const bitPositions = parseBitOperatorArgument(opValue, "$bitsAllSet");
-        if (!isValidBitwiseValue(docValue)) return false;
-        const numValue = docValue as number;
-        // All specified bit positions must be set (1)
-        for (const pos of bitPositions) {
-          if (!isBitSet(numValue, pos)) return false;
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            let allSet = true;
+            for (const pos of bitPositions) {
+              if (!isBitSet(numValue, pos)) {
+                allSet = false;
+                break;
+              }
+            }
+            if (allSet) {
+              anyMatch = true;
+              break;
+            }
+          }
         }
+        if (!anyMatch) return false;
         break;
       }
 
       case "$bitsAllClear": {
         const bitPositions = parseBitOperatorArgument(opValue, "$bitsAllClear");
-        if (!isValidBitwiseValue(docValue)) return false;
-        const numValue = docValue as number;
-        // All specified bit positions must be clear (0)
-        for (const pos of bitPositions) {
-          if (isBitSet(numValue, pos)) return false;
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            let allClear = true;
+            for (const pos of bitPositions) {
+              if (isBitSet(numValue, pos)) {
+                allClear = false;
+                break;
+              }
+            }
+            if (allClear) {
+              anyMatch = true;
+              break;
+            }
+          }
         }
+        if (!anyMatch) return false;
         break;
       }
 
       case "$bitsAnySet": {
         const bitPositions = parseBitOperatorArgument(opValue, "$bitsAnySet");
-        if (!isValidBitwiseValue(docValue)) return false;
         if (bitPositions.length === 0) return false; // No bits to check = no match
-        const numValue = docValue as number;
-        // At least one specified bit position must be set (1)
-        let anySet = false;
-        for (const pos of bitPositions) {
-          if (isBitSet(numValue, pos)) {
-            anySet = true;
-            break;
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            for (const pos of bitPositions) {
+              if (isBitSet(numValue, pos)) {
+                anyMatch = true;
+                break;
+              }
+            }
+            if (anyMatch) break;
           }
         }
-        if (!anySet) return false;
+        if (!anyMatch) return false;
         break;
       }
 
       case "$bitsAnyClear": {
         const bitPositions = parseBitOperatorArgument(opValue, "$bitsAnyClear");
-        if (!isValidBitwiseValue(docValue)) return false;
         if (bitPositions.length === 0) return false; // No bits to check = no match
-        const numValue = docValue as number;
-        // At least one specified bit position must be clear (0)
-        let anyClear = false;
-        for (const pos of bitPositions) {
-          if (!isBitSet(numValue, pos)) {
-            anyClear = true;
-            break;
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            for (const pos of bitPositions) {
+              if (!isBitSet(numValue, pos)) {
+                anyMatch = true;
+                break;
+              }
+            }
+            if (anyMatch) break;
           }
         }
-        if (!anyClear) return false;
+        if (!anyMatch) return false;
         break;
       }
 

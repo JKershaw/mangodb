@@ -1415,7 +1415,6 @@ describe(`New Operators (${getTestModeName()})`, () => {
           { value: "54" },    // string
           { value: true },    // boolean
           { value: null },    // null
-          { value: [54] },    // array
         ]);
 
         const docs = await collection
@@ -1423,6 +1422,21 @@ describe(`New Operators (${getTestModeName()})`, () => {
           .toArray();
 
         assert.strictEqual(docs.length, 0);
+      });
+
+      it("should match array elements", async () => {
+        const collection = client.db(dbName).collection("bits_allset_array");
+        await collection.insertMany([
+          { value: [54] },    // array with numeric element - 54 = 110110, bit 1 is set
+          { value: [1, 2] },  // array with elements - 2 = 10, bit 1 is set
+        ]);
+
+        const docs = await collection
+          .find({ value: { $bitsAllSet: [1] } })
+          .toArray();
+
+        // Both arrays have elements with bit 1 set
+        assert.strictEqual(docs.length, 2);
       });
     });
 
