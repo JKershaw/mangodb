@@ -581,13 +581,13 @@ export class AggregationCursor<T extends Document = Document> {
       throw new Error("$sample requires a 'size' field");
     }
     if (typeof spec.size !== "number" || !Number.isInteger(spec.size)) {
-      throw new Error("$sample size must be a positive integer");
+      throw new Error("size argument to $sample must be a positive integer");
     }
-    if (spec.size < 0) {
-      throw new Error("$sample size must be a positive integer");
+    if (spec.size <= 0) {
+      throw new Error("size argument to $sample must be a positive integer");
     }
 
-    if (spec.size === 0 || docs.length === 0) {
+    if (docs.length === 0) {
       return [];
     }
 

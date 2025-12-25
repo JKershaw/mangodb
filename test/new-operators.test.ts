@@ -473,15 +473,16 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 3);
     });
 
-    it("should return empty array for size 0", async () => {
+    it("should throw error for size 0", async () => {
       const collection = client.db(dbName).collection("sample_zero");
       await collection.insertMany([{ a: 1 }, { a: 2 }]);
 
-      const docs = await collection
-        .aggregate([{ $sample: { size: 0 } }])
-        .toArray();
-
-      assert.strictEqual(docs.length, 0);
+      await assert.rejects(
+        async () => {
+          await collection.aggregate([{ $sample: { size: 0 } }]).toArray();
+        },
+        /size argument to \$sample must be a positive integer/
+      );
     });
   });
 
