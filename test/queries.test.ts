@@ -245,6 +245,37 @@ describe(`Basic Query Tests (${getTestModeName()})`, () => {
 
       assert.strictEqual(docs.length, 1);
     });
+
+    it("should not match across different types", async () => {
+      const collection = client.db(dbName).collection("op_gt_cross_type");
+      await collection.insertMany([
+        { _id: 1, value: 100 },
+        { _id: 2, value: "200" },
+        { _id: 3, value: true },
+        { _id: 4, value: 50 },
+      ]);
+
+      // $gt: 40 should only match numbers, not strings or booleans
+      const docs = await collection.find({ value: { $gt: 40 } }).toArray();
+
+      assert.strictEqual(docs.length, 2);
+      const ids = docs.map((d) => d._id).sort();
+      assert.deepStrictEqual(ids, [1, 4]);
+    });
+
+    it("should not compare string to number with $gt", async () => {
+      const collection = client.db(dbName).collection("op_gt_str_num");
+      await collection.insertMany([
+        { _id: 1, value: 100 },
+        { _id: 2, value: "50" },
+      ]);
+
+      // $gt: "40" should only match strings, not numbers
+      const docs = await collection.find({ value: { $gt: "40" } }).toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0]._id, 2);
+    });
   });
 
   describe("$gte operator", () => {
