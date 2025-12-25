@@ -22,8 +22,9 @@ import { createAccumulator } from "./accumulators.ts";
 import { getBSONTypeName } from "./helpers.ts";
 import { createSystemVars, mergeVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from "./system-vars.ts";
 import { traverseDocument, type TraversalAction } from "./traverse.ts";
-import { partitionDocuments } from "./partition.ts";
+import { partitionDocuments, sortPartition } from "./partition.ts";
 import { addDateStep, type TimeUnit, isValidTimeUnit } from "./date-utils.ts";
+import { applyLocf, applyLinearFill } from "./gap-fill.ts";
 
 /**
  * AggregationCursor represents a cursor over aggregation pipeline results.
@@ -165,6 +166,16 @@ export class AggregationCursor<T extends Document = Document> {
               bounds?: [unknown, unknown] | "full" | "partition";
             };
             partitionByFields?: string[];
+          },
+          docs
+        );
+      case "$fill":
+        return this.execFill(
+          stageValue as {
+            sortBy?: SortSpec;
+            partitionBy?: unknown;
+            partitionByFields?: string[];
+            output: Record<string, { value?: unknown; method?: string }>;
           },
           docs
         );
@@ -939,6 +950,116 @@ export class AggregationCursor<T extends Document = Document> {
           );
         } else {
           current = (current as number) + spec.range.step;
+        }
+      }
+
+      results.push(...outputDocs);
+    }
+
+    return results;
+  }
+
+  /**
+   * $fill - fills null/missing values with various strategies.
+   */
+  private execFill(
+    spec: {
+      sortBy?: SortSpec;
+      partitionBy?: unknown;
+      partitionByFields?: string[];
+      output: Record<string, { value?: unknown; method?: string }>;
+    },
+    docs: Document[]
+  ): Document[] {
+    if (!spec.output || typeof spec.output !== "object") {
+      throw new Error("$fill requires 'output' field");
+    }
+
+    // Check if sortBy is required (for locf/linear methods)
+    const needsSort = Object.values(spec.output).some(
+      (out) => out.method === "locf" || out.method === "linear"
+    );
+    if (needsSort && !spec.sortBy) {
+      throw new Error("sortBy required for locf/linear methods");
+    }
+
+    // Validate partitionBy if provided
+    if (spec.partitionBy !== undefined) {
+      if (
+        typeof spec.partitionBy !== "object" ||
+        spec.partitionBy === null ||
+        Array.isArray(spec.partitionBy)
+      ) {
+        throw new Error("partitionBy must be an object, not a string or array");
+      }
+    }
+
+    // Partition documents
+    const partitions = partitionDocuments(
+      docs,
+      {
+        partitionBy: spec.partitionBy,
+        partitionByFields: spec.partitionByFields,
+      },
+      evaluateExpression
+    );
+
+    const results: Document[] = [];
+
+    for (const [, partitionDocs] of partitions) {
+      // Sort partition if sortBy is specified
+      const sortedDocs = spec.sortBy
+        ? sortPartition(partitionDocs, spec.sortBy)
+        : [...partitionDocs];
+
+      // Clone documents for modification
+      const outputDocs = sortedDocs.map((doc) => cloneDocument(doc));
+
+      // Apply fill operations for each output field
+      for (const [fieldPath, fillSpec] of Object.entries(spec.output)) {
+        if (fillSpec.value !== undefined && fillSpec.method !== undefined) {
+          throw new Error(
+            "Cannot specify both 'value' and 'method' in $fill output"
+          );
+        }
+
+        if (fillSpec.value !== undefined) {
+          // Static value fill
+          for (const doc of outputDocs) {
+            const currentVal = getValueByPath(doc, fieldPath);
+            if (currentVal === null || currentVal === undefined) {
+              const vars = this.getSystemVars(doc);
+              const fillValue = evaluateExpression(fillSpec.value, doc, vars);
+              setValueByPath(doc, fieldPath, fillValue);
+            }
+          }
+        } else if (fillSpec.method === "locf") {
+          // Last Observation Carried Forward
+          const values = outputDocs.map((doc) => getValueByPath(doc, fieldPath));
+          const filled = applyLocf(values);
+          for (let i = 0; i < outputDocs.length; i++) {
+            if (filled[i] !== null) {
+              setValueByPath(outputDocs[i], fieldPath, filled[i]);
+            }
+          }
+        } else if (fillSpec.method === "linear") {
+          // Linear interpolation - only works for numeric fields
+          const values = outputDocs.map((doc) => {
+            const val = getValueByPath(doc, fieldPath);
+            if (val === null || val === undefined) return null;
+            if (typeof val !== "number") {
+              throw new Error("linear fill requires numeric field");
+            }
+            return val;
+          });
+          const filled = applyLinearFill(values);
+          for (let i = 0; i < outputDocs.length; i++) {
+            if (filled[i] !== null) {
+              setValueByPath(outputDocs[i], fieldPath, filled[i]);
+            }
+          }
+        } else if (fillSpec.method !== undefined) {
+          throw new Error(`Unknown fill method: ${fillSpec.method}`);
         }
       }
 

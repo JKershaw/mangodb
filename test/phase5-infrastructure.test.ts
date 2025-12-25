@@ -1533,4 +1533,248 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 0);
     });
   });
+
+  describe("$fill stage", () => {
+    it("should fill nulls with static value", async () => {
+      const coll = client.db(dbName).collection("fill_value");
+      await coll.insertMany([
+        { x: 1, y: 10 },
+        { x: 2, y: null },
+        { x: 3, y: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          { $fill: { output: { y: { value: 0 } } } },
+          { $sort: { x: 1 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      assert.strictEqual(results[0].y, 10);
+      assert.strictEqual(results[1].y, 0);
+      assert.strictEqual(results[2].y, 30);
+    });
+
+    it("should fill nulls with expression value", async () => {
+      const coll = client.db(dbName).collection("fill_expr");
+      await coll.insertMany([
+        { x: 1, y: null },
+        { x: 2, y: 20 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          { $fill: { output: { y: { value: { $multiply: ["$x", 10] } } } } },
+          { $sort: { x: 1 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 2);
+      assert.strictEqual(results[0].y, 10); // 1 * 10
+      assert.strictEqual(results[1].y, 20); // unchanged
+    });
+
+    it("should fill with locf method", async () => {
+      const coll = client.db(dbName).collection("fill_locf");
+      await coll.insertMany([
+        { x: 1, y: 100 },
+        { x: 2, y: null },
+        { x: 3, y: null },
+        { x: 4, y: 400 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          { $fill: { sortBy: { x: 1 }, output: { y: { method: "locf" } } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].y, 100);
+      assert.strictEqual(results[1].y, 100); // carried from x=1
+      assert.strictEqual(results[2].y, 100); // carried from x=1
+      assert.strictEqual(results[3].y, 400);
+    });
+
+    it("should leave null at start for locf", async () => {
+      const coll = client.db(dbName).collection("fill_locf_start");
+      await coll.insertMany([
+        { x: 1, y: null },
+        { x: 2, y: 20 },
+        { x: 3, y: null },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          { $fill: { sortBy: { x: 1 }, output: { y: { method: "locf" } } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      assert.strictEqual(results[0].y, null); // no prior value
+      assert.strictEqual(results[1].y, 20);
+      assert.strictEqual(results[2].y, 20); // carried from x=2
+    });
+
+    it("should fill with linear interpolation", async () => {
+      const coll = client.db(dbName).collection("fill_linear");
+      await coll.insertMany([
+        { x: 1, y: 0 },
+        { x: 2, y: null },
+        { x: 3, y: null },
+        { x: 4, y: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          { $fill: { sortBy: { x: 1 }, output: { y: { method: "linear" } } } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].y, 0);
+      assert.strictEqual(results[1].y, 10); // interpolated
+      assert.strictEqual(results[2].y, 20); // interpolated
+      assert.strictEqual(results[3].y, 30);
+    });
+
+    it("should fill with partitions", async () => {
+      const coll = client.db(dbName).collection("fill_partition");
+      await coll.insertMany([
+        { category: "A", x: 1, y: 100 },
+        { category: "A", x: 2, y: null },
+        { category: "B", x: 1, y: 200 },
+        { category: "B", x: 2, y: null },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $fill: {
+              sortBy: { x: 1 },
+              partitionByFields: ["category"],
+              output: { y: { method: "locf" } },
+            },
+          },
+          { $sort: { category: 1, x: 1 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      // Category A
+      assert.strictEqual(results[0].y, 100);
+      assert.strictEqual(results[1].y, 100); // carried from A, x=1
+      // Category B
+      assert.strictEqual(results[2].y, 200);
+      assert.strictEqual(results[3].y, 200); // carried from B, x=1
+    });
+
+    it("should fill multiple fields", async () => {
+      const coll = client.db(dbName).collection("fill_multi");
+      await coll.insertMany([
+        { x: 1, a: 10, b: 100 },
+        { x: 2, a: null, b: null },
+        { x: 3, a: 30, b: 300 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $fill: {
+              sortBy: { x: 1 },
+              output: {
+                a: { method: "locf" },
+                b: { value: 0 },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      assert.strictEqual(results[0].a, 10);
+      assert.strictEqual(results[0].b, 100);
+      assert.strictEqual(results[1].a, 10); // locf
+      assert.strictEqual(results[1].b, 0); // value
+      assert.strictEqual(results[2].a, 30);
+      assert.strictEqual(results[2].b, 300);
+    });
+
+    it("should throw error when sortBy missing for locf", async () => {
+      const coll = client.db(dbName).collection("fill_error_sort");
+      await coll.insertOne({ x: 1, y: null });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([{ $fill: { output: { y: { method: "locf" } } } }])
+            .toArray(),
+        /sortBy required for locf\/linear/
+      );
+    });
+
+    it("should throw error when sortBy missing for linear", async () => {
+      const coll = client.db(dbName).collection("fill_error_sort2");
+      await coll.insertOne({ x: 1, y: null });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([{ $fill: { output: { y: { method: "linear" } } } }])
+            .toArray(),
+        /sortBy required for locf\/linear/
+      );
+    });
+
+    it("should throw error for both value and method", async () => {
+      const coll = client.db(dbName).collection("fill_error_both");
+      await coll.insertOne({ x: 1, y: null });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([
+              {
+                $fill: {
+                  output: { y: { value: 0, method: "locf" } },
+                  sortBy: { x: 1 },
+                },
+              },
+            ])
+            .toArray(),
+        /Cannot specify both 'value' and 'method'/
+      );
+    });
+
+    it("should throw error for string partitionBy", async () => {
+      const coll = client.db(dbName).collection("fill_error_partition");
+      await coll.insertOne({ x: 1, y: null });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([
+              {
+                $fill: {
+                  partitionBy: "category" as unknown as object,
+                  output: { y: { value: 0 } },
+                },
+              },
+            ])
+            .toArray(),
+        /partitionBy must be an object/
+      );
+    });
+
+    it("should handle empty collection", async () => {
+      const coll = client.db(dbName).collection("fill_empty");
+
+      const results = await coll
+        .aggregate([{ $fill: { output: { y: { value: 0 } } } }])
+        .toArray();
+
+      assert.strictEqual(results.length, 0);
+    });
+  });
 });
