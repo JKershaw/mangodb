@@ -1278,57 +1278,31 @@ export class AggregationCursor<T extends Document = Document> {
 
       case "$rank": {
         // Rank with gaps for ties (1, 2, 2, 4)
+        // Find the first document with the same sort values - that's the rank
         if (!sortBy) return currentIndex + 1;
 
         const sortFields = Object.keys(sortBy);
-        let rank = 1;
+
+        // Find the first document with the same sort values as current
+        let firstSameIdx = currentIndex;
         for (let i = 0; i < currentIndex; i++) {
-          // Check if previous doc has different sort values
-          let isDifferent = false;
+          let isSame = true;
           for (const field of sortFields) {
             const prevVal = getValueByPath(allDocs[i], field);
             const currVal = getValueByPath(allDocs[currentIndex], field);
             if (!valuesEqual(prevVal, currVal)) {
-              isDifferent = true;
+              isSame = false;
               break;
             }
           }
-          if (isDifferent || i === 0) {
-            // Count position for rank calculation
+          if (isSame) {
+            firstSameIdx = i;
+            break;
           }
         }
-        // Rank = number of docs before this one with different values + 1
-        for (let i = 0; i < currentIndex; i++) {
-          let isDifferent = false;
-          for (const field of sortFields) {
-            const prevVal = getValueByPath(allDocs[i], field);
-            const currVal = getValueByPath(allDocs[currentIndex], field);
-            if (!valuesEqual(prevVal, currVal)) {
-              isDifferent = true;
-              break;
-            }
-          }
-          if (isDifferent) {
-            rank = i + 2; // Position + 1 for 1-based ranking
-          }
-        }
-        // If all previous docs have same values, rank is 1
-        let allSame = true;
-        for (let i = 0; i < currentIndex; i++) {
-          for (const field of sortFields) {
-            const prevVal = getValueByPath(allDocs[i], field);
-            const currVal = getValueByPath(allDocs[currentIndex], field);
-            if (!valuesEqual(prevVal, currVal)) {
-              allSame = false;
-              break;
-            }
-          }
-          if (!allSame) break;
-        }
-        if (allSame && currentIndex > 0) {
-          return 1;
-        }
-        return currentIndex + 1; // Position-based rank
+
+        // Rank is the position (1-indexed) of the first doc with same values
+        return firstSameIdx + 1;
       }
 
       case "$denseRank": {
