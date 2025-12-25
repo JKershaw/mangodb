@@ -454,16 +454,16 @@ db.aggregate([
 - Very large gaps: generates many documents (performance concern)
 
 **Sub-tasks**:
-- [ ] 5.6.1 Add validation for field name, step, bounds
-- [ ] 5.6.2 Implement partition grouping logic
-- [ ] 5.6.3 Implement numeric gap detection and filling
-- [ ] 5.6.4 Implement date gap detection with time units
-- [ ] 5.6.5 Handle bounds (explicit vs inferred from data)
-- [ ] 5.6.6 Write tests: numeric field without partitions
-- [ ] 5.6.7 Write tests: date field with time units
-- [ ] 5.6.8 Write tests: partitioned densification
-- [ ] 5.6.9 Write tests: explicit bounds
-- [ ] 5.6.10 Write error tests: validation failures
+- [x] 5.6.1 Add validation for field name, step, bounds
+- [x] 5.6.2 Implement partition grouping logic
+- [x] 5.6.3 Implement numeric gap detection and filling
+- [x] 5.6.4 Implement date gap detection with time units
+- [x] 5.6.5 Handle bounds (explicit vs inferred from data)
+- [x] 5.6.6 Write tests: numeric field without partitions
+- [x] 5.6.7 Write tests: date field with time units
+- [x] 5.6.8 Write tests: partitioned densification
+- [x] 5.6.9 Write tests: explicit bounds
+- [x] 5.6.10 Write error tests: validation failures
 
 **Estimated effort**: Medium-High (6-8 hours)
 
@@ -519,16 +519,16 @@ db.aggregate([
 - Both value and method: error
 
 **Sub-tasks**:
-- [ ] 5.7.1 Add validation for sortBy, partitionBy, output
-- [ ] 5.7.2 Implement partition grouping (both forms)
-- [ ] 5.7.3 Implement `value` fill method
-- [ ] 5.7.4 Implement `locf` fill method with forward scan
-- [ ] 5.7.5 Implement `linear` interpolation with duplicate check
-- [ ] 5.7.6 Write tests: value fill with expressions
-- [ ] 5.7.7 Write tests: locf with various null patterns
-- [ ] 5.7.8 Write tests: linear interpolation
-- [ ] 5.7.9 Write tests: partitioned filling
-- [ ] 5.7.10 Write error tests: missing sortBy, duplicates
+- [x] 5.7.1 Add validation for sortBy, partitionBy, output
+- [x] 5.7.2 Implement partition grouping (both forms)
+- [x] 5.7.3 Implement `value` fill method
+- [x] 5.7.4 Implement `locf` fill method with forward scan
+- [x] 5.7.5 Implement `linear` interpolation with duplicate check
+- [x] 5.7.6 Write tests: value fill with expressions
+- [x] 5.7.7 Write tests: locf with various null patterns
+- [x] 5.7.8 Write tests: linear interpolation
+- [x] 5.7.9 Write tests: partitioned filling
+- [x] 5.7.10 Write error tests: missing sortBy, duplicates
 
 **Estimated effort**: Medium-High (6-8 hours)
 
@@ -631,12 +631,12 @@ db.aggregate([
 ##### Sub-phase 5.8.A: Core Infrastructure
 
 **Sub-tasks**:
-- [ ] 5.8.A.1 Add `$setWindowFields` stage handler structure
-- [ ] 5.8.A.2 Implement `partitionBy` grouping
-- [ ] 5.8.A.3 Implement `sortBy` ordering within partitions
-- [ ] 5.8.A.4 Implement window bounds parsing (`documents`, `range`)
-- [ ] 5.8.A.5 Implement special bounds: `"unbounded"`, `"current"`, integers
-- [ ] 5.8.A.6 Write infrastructure tests
+- [x] 5.8.A.1 Add `$setWindowFields` stage handler structure
+- [x] 5.8.A.2 Implement `partitionBy` grouping
+- [x] 5.8.A.3 Implement `sortBy` ordering within partitions
+- [x] 5.8.A.4 Implement window bounds parsing (`documents`, `range`)
+- [x] 5.8.A.5 Implement special bounds: `"unbounded"`, `"current"`, integers
+- [x] 5.8.A.6 Write infrastructure tests
 
 **Estimated effort**: 4-6 hours
 
@@ -653,11 +653,11 @@ Operators with implicit windows (no window specification allowed).
 | `$documentNumber` | Sequential position (1, 2, 3, 4) |
 
 **Sub-tasks**:
-- [ ] 5.8.B.1 Implement `$rank` with gap handling
-- [ ] 5.8.B.2 Implement `$denseRank` without gaps
-- [ ] 5.8.B.3 Implement `$documentNumber` sequential
+- [x] 5.8.B.1 Implement `$rank` with gap handling
+- [x] 5.8.B.2 Implement `$denseRank` without gaps
+- [x] 5.8.B.3 Implement `$documentNumber` sequential
 - [ ] 5.8.B.4 Validate no window spec for rank operators
-- [ ] 5.8.B.5 Write tests for all rank operators
+- [x] 5.8.B.5 Write tests for all rank operators
 - [ ] 5.8.B.6 Write tests for tie handling
 
 **Estimated effort**: 3-4 hours
@@ -676,13 +676,13 @@ Reuse existing accumulator logic with window bounds.
 | `$first`, `$last` | null |
 
 **Sub-tasks**:
-- [ ] 5.8.C.1 Implement window document selection for `documents` bounds
-- [ ] 5.8.C.2 Implement window document selection for `range` bounds
+- [x] 5.8.C.1 Implement window document selection for `documents` bounds
+- [x] 5.8.C.2 Implement window document selection for `range` bounds
 - [ ] 5.8.C.3 Implement time range with `unit` parameter
-- [ ] 5.8.C.4 Wire up existing accumulators: `$sum`, `$avg`, `$min`, `$max`, `$count`
-- [ ] 5.8.C.5 Wire up array accumulators: `$push`, `$addToSet`
-- [ ] 5.8.C.6 Implement `$first`, `$last` for windows
-- [ ] 5.8.C.7 Write tests for each accumulator with various windows
+- [x] 5.8.C.4 Wire up existing accumulators: `$sum`, `$avg`, `$min`, `$max`, `$count`
+- [x] 5.8.C.5 Wire up array accumulators: `$push`, `$addToSet`
+- [x] 5.8.C.6 Implement `$first`, `$last` for windows
+- [x] 5.8.C.7 Write tests for each accumulator with various windows
 - [ ] 5.8.C.8 Write tests for empty window results
 
 **Estimated effort**: 6-8 hours
@@ -701,9 +701,9 @@ Reuse existing accumulator logic with window bounds.
 ```
 
 **Sub-tasks**:
-- [ ] 5.8.D.1 Implement `$shift` with positive/negative offset
-- [ ] 5.8.D.2 Implement default value for out-of-bounds
-- [ ] 5.8.D.3 Write tests for various offsets
+- [x] 5.8.D.1 Implement `$shift` with positive/negative offset
+- [x] 5.8.D.2 Implement default value for out-of-bounds
+- [x] 5.8.D.3 Write tests for various offsets
 - [ ] 5.8.D.4 Write tests for partition boundaries
 
 **Estimated effort**: 2-3 hours
@@ -737,9 +737,9 @@ Reuse existing accumulator logic with window bounds.
 | `$locf` | Last observation carried forward |
 
 **Sub-tasks**:
-- [ ] 5.8.F.1 Implement `$linearFill` expression operator
-- [ ] 5.8.F.2 Implement `$locf` expression operator
-- [ ] 5.8.F.3 Write tests for gap patterns
+- [x] 5.8.F.1 Implement `$linearFill` expression operator
+- [x] 5.8.F.2 Implement `$locf` expression operator
+- [x] 5.8.F.3 Write tests for gap patterns
 - [ ] 5.8.F.4 Write tests for all-null partitions
 
 **Estimated effort**: 3-4 hours
