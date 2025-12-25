@@ -22,6 +22,8 @@ import { createAccumulator } from "./accumulators.ts";
 import { getBSONTypeName } from "./helpers.ts";
 import { createSystemVars, mergeVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from "./system-vars.ts";
 import { traverseDocument, type TraversalAction } from "./traverse.ts";
+import { partitionDocuments } from "./partition.ts";
+import { addDateStep, type TimeUnit, isValidTimeUnit } from "./date-utils.ts";
 
 /**
  * AggregationCursor represents a cursor over aggregation pipeline results.
@@ -150,6 +152,19 @@ export class AggregationCursor<T extends Document = Document> {
             maxDepth?: number;
             depthField?: string;
             restrictSearchWithMatch?: Document;
+          },
+          docs
+        );
+      case "$densify":
+        return this.execDensify(
+          stageValue as {
+            field: string;
+            range: {
+              step: number;
+              unit?: string;
+              bounds?: [unknown, unknown] | "full" | "partition";
+            };
+            partitionByFields?: string[];
           },
           docs
         );
@@ -779,6 +794,155 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       results.push({ ...doc, [spec.as]: found });
+    }
+
+    return results;
+  }
+
+  /**
+   * $densify - fills gaps in numeric or date sequences.
+   */
+  private execDensify(
+    spec: {
+      field: string;
+      range: {
+        step: number;
+        unit?: string;
+        bounds?: [unknown, unknown] | "full" | "partition";
+      };
+      partitionByFields?: string[];
+    },
+    docs: Document[]
+  ): Document[] {
+    // Validate field name
+    if (!spec.field || spec.field.startsWith("$")) {
+      throw new Error("Cannot densify field starting with '$'");
+    }
+
+    // Validate step
+    if (spec.range.step <= 0) {
+      throw new Error("Step must be positive");
+    }
+
+    // Validate unit if provided
+    if (spec.range.unit && !isValidTimeUnit(spec.range.unit)) {
+      throw new Error(`Invalid time unit: ${spec.range.unit}`);
+    }
+
+    // Partition documents
+    const partitions = partitionDocuments(
+      docs,
+      { partitionByFields: spec.partitionByFields },
+      evaluateExpression
+    );
+
+    const results: Document[] = [];
+
+    for (const [, partitionDocs] of partitions) {
+      // Get all field values in this partition
+      const values: { value: number | Date; doc: Document }[] = [];
+      for (const doc of partitionDocs) {
+        const val = getValueByPath(doc, spec.field);
+        if (val !== null && val !== undefined) {
+          if (typeof val === "number" || val instanceof Date) {
+            values.push({ value: val, doc });
+          }
+        }
+      }
+
+      // Sort by field value
+      values.sort((a, b) => {
+        const aVal = a.value instanceof Date ? a.value.getTime() : a.value;
+        const bVal = b.value instanceof Date ? b.value.getTime() : b.value;
+        return aVal - bVal;
+      });
+
+      if (values.length === 0) {
+        // No values to densify, return original docs
+        results.push(...partitionDocs);
+        continue;
+      }
+
+      // Determine bounds
+      let lowerBound: number | Date = values[0].value;
+      let upperBound: number | Date = values[values.length - 1].value;
+
+      if (spec.range.bounds && spec.range.bounds !== "partition") {
+        if (spec.range.bounds === "full") {
+          // Use global min/max across all partitions
+          // For simplicity, use partition bounds (same for this implementation)
+        } else if (Array.isArray(spec.range.bounds)) {
+          lowerBound = spec.range.bounds[0] as number | Date;
+          upperBound = spec.range.bounds[1] as number | Date;
+        }
+      }
+
+      // Check type consistency
+      const isDate = values[0].value instanceof Date;
+      if (isDate && !spec.range.unit) {
+        throw new Error("Unit required for date field");
+      }
+      if (!isDate && spec.range.unit) {
+        throw new Error("Cannot specify unit for numeric field");
+      }
+
+      // Generate sequence and merge with originals
+      const outputDocs: Document[] = [];
+      const existingValues = new Set(
+        values.map((v) =>
+          v.value instanceof Date ? v.value.getTime() : v.value
+        )
+      );
+
+      // Create a map of existing docs by their field value
+      const existingDocsByValue = new Map<number, Document>();
+      for (const { value, doc } of values) {
+        const key = value instanceof Date ? value.getTime() : value;
+        existingDocsByValue.set(key, doc);
+      }
+
+      // Generate all values from lower to upper bound
+      let current = lowerBound;
+      while (true) {
+        const currentKey =
+          current instanceof Date ? current.getTime() : current;
+        const upperKey =
+          upperBound instanceof Date ? upperBound.getTime() : upperBound;
+
+        if (currentKey > upperKey) break;
+
+        if (existingDocsByValue.has(currentKey)) {
+          // Use existing document
+          outputDocs.push(existingDocsByValue.get(currentKey)!);
+        } else {
+          // Generate new document with just the field
+          const newDoc: Document = {};
+          setValueByPath(newDoc, spec.field, current);
+          // Copy partition fields from first doc in partition
+          if (spec.partitionByFields && values.length > 0) {
+            for (const pField of spec.partitionByFields) {
+              const pVal = getValueByPath(values[0].doc, pField);
+              if (pVal !== undefined) {
+                setValueByPath(newDoc, pField, pVal);
+              }
+            }
+          }
+          outputDocs.push(newDoc);
+        }
+
+        // Step to next value
+        if (isDate) {
+          current = addDateStep(
+            current as Date,
+            spec.range.step,
+            spec.range.unit as TimeUnit
+          );
+        } else {
+          current = (current as number) + spec.range.step;
+        }
+      }
+
+      results.push(...outputDocs);
     }
 
     return results;

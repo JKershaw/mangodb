@@ -1340,4 +1340,197 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       );
     });
   });
+
+  describe("$densify stage", () => {
+    it("should fill gaps in numeric sequence", async () => {
+      const coll = client.db(dbName).collection("densify_numeric");
+      await coll.insertMany([
+        { x: 1, label: "a" },
+        { x: 3, label: "b" },
+        { x: 5, label: "c" },
+      ]);
+
+      const results = await coll
+        .aggregate([{ $densify: { field: "x", range: { step: 1 } } }])
+        .toArray();
+
+      // Should have docs for x=1,2,3,4,5
+      assert.strictEqual(results.length, 5);
+      const xValues = results.map((d) => d.x as number).sort((a, b) => a - b);
+      assert.deepStrictEqual(xValues, [1, 2, 3, 4, 5]);
+    });
+
+    it("should preserve original documents in numeric densify", async () => {
+      const coll = client.db(dbName).collection("densify_preserve");
+      await coll.insertMany([
+        { x: 0, data: "first" },
+        { x: 2, data: "second" },
+      ]);
+
+      const results = await coll
+        .aggregate([{ $densify: { field: "x", range: { step: 1 } } }])
+        .toArray();
+
+      // Should have x=0,1,2
+      assert.strictEqual(results.length, 3);
+      // Original docs should have their data fields
+      const first = results.find((d) => d.x === 0);
+      const second = results.find((d) => d.x === 2);
+      assert.strictEqual(first?.data, "first");
+      assert.strictEqual(second?.data, "second");
+      // Generated doc should only have the densify field
+      const generated = results.find((d) => d.x === 1);
+      assert.strictEqual(generated?.data, undefined);
+    });
+
+    it("should fill gaps in date sequence", async () => {
+      const coll = client.db(dbName).collection("densify_date");
+      await coll.insertMany([
+        { timestamp: new Date("2024-01-01"), value: 10 },
+        { timestamp: new Date("2024-01-03"), value: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $densify: {
+              field: "timestamp",
+              range: { step: 1, unit: "day" },
+            },
+          },
+        ])
+        .toArray();
+
+      // Should have Jan 1, 2, 3
+      assert.strictEqual(results.length, 3);
+      const dates = results
+        .map((d) => (d.timestamp as Date).toISOString().slice(0, 10))
+        .sort();
+      assert.deepStrictEqual(dates, ["2024-01-01", "2024-01-02", "2024-01-03"]);
+    });
+
+    it("should densify with partitions", async () => {
+      const coll = client.db(dbName).collection("densify_partition");
+      await coll.insertMany([
+        { category: "A", x: 1 },
+        { category: "A", x: 3 },
+        { category: "B", x: 10 },
+        { category: "B", x: 12 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $densify: {
+              field: "x",
+              range: { step: 1 },
+              partitionByFields: ["category"],
+            },
+          },
+        ])
+        .toArray();
+
+      // Category A: x=1,2,3 (3 docs)
+      // Category B: x=10,11,12 (3 docs)
+      assert.strictEqual(results.length, 6);
+
+      const catA = results.filter((d) => d.category === "A");
+      const catB = results.filter((d) => d.category === "B");
+      assert.strictEqual(catA.length, 3);
+      assert.strictEqual(catB.length, 3);
+
+      const catAValues = catA.map((d) => d.x as number).sort((a, b) => a - b);
+      const catBValues = catB.map((d) => d.x as number).sort((a, b) => a - b);
+      assert.deepStrictEqual(catAValues, [1, 2, 3]);
+      assert.deepStrictEqual(catBValues, [10, 11, 12]);
+    });
+
+    it("should densify with explicit bounds", async () => {
+      const coll = client.db(dbName).collection("densify_bounds");
+      await coll.insertMany([{ x: 5 }]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $densify: {
+              field: "x",
+              range: { step: 1, bounds: [3, 7] },
+            },
+          },
+        ])
+        .toArray();
+
+      // Should have x=3,4,5,6,7
+      assert.strictEqual(results.length, 5);
+      const xValues = results.map((d) => d.x as number).sort((a, b) => a - b);
+      assert.deepStrictEqual(xValues, [3, 4, 5, 6, 7]);
+    });
+
+    it("should throw error for field starting with $", async () => {
+      const coll = client.db(dbName).collection("densify_error_field");
+      await coll.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([
+              { $densify: { field: "$invalid", range: { step: 1 } } },
+            ])
+            .toArray(),
+        /Cannot densify field starting with '\$'/
+      );
+    });
+
+    it("should throw error for non-positive step", async () => {
+      const coll = client.db(dbName).collection("densify_error_step");
+      await coll.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([{ $densify: { field: "x", range: { step: 0 } } }])
+            .toArray(),
+        /Step must be positive/
+      );
+    });
+
+    it("should throw error for unit with numeric field", async () => {
+      const coll = client.db(dbName).collection("densify_error_unit");
+      await coll.insertOne({ x: 1 });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([
+              { $densify: { field: "x", range: { step: 1, unit: "day" } } },
+            ])
+            .toArray(),
+        /Cannot specify unit for numeric field/
+      );
+    });
+
+    it("should throw error for date field without unit", async () => {
+      const coll = client.db(dbName).collection("densify_error_no_unit");
+      await coll.insertOne({ ts: new Date() });
+
+      await assert.rejects(
+        () =>
+          coll
+            .aggregate([{ $densify: { field: "ts", range: { step: 1 } } }])
+            .toArray(),
+        /Unit required for date field/
+      );
+    });
+
+    it("should handle empty collection", async () => {
+      const coll = client.db(dbName).collection("densify_empty");
+      // Empty collection
+
+      const results = await coll
+        .aggregate([{ $densify: { field: "x", range: { step: 1 } } }])
+        .toArray();
+
+      assert.strictEqual(results.length, 0);
+    });
+  });
 });
