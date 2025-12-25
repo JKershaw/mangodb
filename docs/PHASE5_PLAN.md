@@ -20,6 +20,230 @@ This document provides a detailed implementation plan for Phase 5, following Man
 
 ## Task Breakdown by Complexity
 
+### Tier 0: Preparatory Infrastructure (Do First!)
+
+These utilities reduce duplication and make Tier 2-3 tasks significantly easier.
+
+---
+
+#### Task 5.0.1: System Variables Support
+**Description**: Add built-in system variables to expression evaluation.
+
+**Current State**: `evaluateExpression()` handles `$$varName` lookup in `vars` context, but doesn't provide built-in system variables.
+
+**Variables Needed**:
+| Variable | Used By | Value |
+|----------|---------|-------|
+| `$$NOW` | `$documents` | Current datetime |
+| `$$ROOT` | General | Original root document |
+| `$$DESCEND` | `$redact` | String literal `"descend"` |
+| `$$PRUNE` | `$redact` | String literal `"prune"` |
+| `$$KEEP` | `$redact` | String literal `"keep"` |
+| `$$REMOVE` | `$project` | Special marker for field removal |
+
+**Implementation**:
+1. Create `createSystemVars(doc: Document): VariableContext` function
+2. Call it at stage entry points, merge with user vars
+3. Special-case `$$NOW` to generate fresh Date each evaluation
+
+**Sub-tasks**:
+- [ ] 5.0.1.1 Create `src/aggregation/system-vars.ts` with `createSystemVars()`
+- [ ] 5.0.1.2 Add `$$NOW` returning `new Date()`
+- [ ] 5.0.1.3 Add `$$ROOT` returning the original document
+- [ ] 5.0.1.4 Add `$$DESCEND`, `$$PRUNE`, `$$KEEP` as string constants
+- [ ] 5.0.1.5 Update `evaluateExpression()` to merge system vars
+- [ ] 5.0.1.6 Write tests for each system variable
+
+**Estimated effort**: Small (1-2 hours)
+
+---
+
+#### Task 5.0.2: Partition Grouping Utility
+**Description**: Shared utility for grouping documents by field(s).
+
+**Used By**: `$densify`, `$fill`, `$setWindowFields`, `$bucket`, `$bucketAuto`
+
+**Current State**: `$bucket` and `$bucketAuto` each implement their own grouping logic.
+
+**API Design**:
+```typescript
+interface PartitionOptions {
+  partitionBy?: unknown;           // Expression form: { field: "$field" }
+  partitionByFields?: string[];    // Array form: ["field1", "field2"]
+}
+
+function partitionDocuments(
+  docs: Document[],
+  options: PartitionOptions,
+  evaluate: EvaluateExpressionFn
+): Map<string, Document[]>
+```
+
+**Implementation**:
+1. Handle both `partitionBy` (expression) and `partitionByFields` (array)
+2. Generate stable partition keys via JSON.stringify
+3. Return Map with partition key → documents array
+
+**Sub-tasks**:
+- [ ] 5.0.2.1 Create `src/aggregation/partition.ts` with `partitionDocuments()`
+- [ ] 5.0.2.2 Handle `partitionByFields` array form
+- [ ] 5.0.2.3 Handle `partitionBy` expression form
+- [ ] 5.0.2.4 Handle no partitioning (all docs in single group)
+- [ ] 5.0.2.5 Validate `partitionBy` is object, not string
+- [ ] 5.0.2.6 Write tests for all partitioning modes
+
+**Estimated effort**: Small (1-2 hours)
+
+---
+
+#### Task 5.0.3: Sort Within Partitions Utility
+**Description**: Sort documents within each partition.
+
+**Used By**: `$fill`, `$setWindowFields`
+
+**API Design**:
+```typescript
+function sortPartition(
+  docs: Document[],
+  sortBy: SortSpec
+): Document[]
+```
+
+**Implementation**:
+1. Reuse existing `compareValuesForSort()` from utils
+2. Support multi-field sort specs
+3. Return sorted copy (don't mutate)
+
+**Sub-tasks**:
+- [ ] 5.0.3.1 Add `sortPartition()` to `src/aggregation/partition.ts`
+- [ ] 5.0.3.2 Handle ascending/descending for each field
+- [ ] 5.0.3.3 Write tests for single and multi-field sorts
+
+**Estimated effort**: Small (30 mins - 1 hour)
+
+---
+
+#### Task 5.0.4: Recursive Document Traversal Utility
+**Description**: Walk through nested documents/arrays applying a callback.
+
+**Used By**: `$redact`
+
+**API Design**:
+```typescript
+type TraversalAction = "descend" | "prune" | "keep";
+
+function traverseDocument(
+  doc: Document,
+  callback: (subdoc: Document) => TraversalAction
+): Document | null
+```
+
+**Implementation**:
+1. Call callback on current document
+2. If "prune": return null (exclude)
+3. If "keep": return doc as-is (no recursion)
+4. If "descend": recurse into embedded docs and arrays
+
+**Sub-tasks**:
+- [ ] 5.0.4.1 Create `src/aggregation/traverse.ts` with `traverseDocument()`
+- [ ] 5.0.4.2 Handle embedded documents (object fields)
+- [ ] 5.0.4.3 Handle arrays of documents
+- [ ] 5.0.4.4 Handle arrays of scalars (keep if parent descends)
+- [ ] 5.0.4.5 Write tests: nested docs, arrays, mixed content
+
+**Estimated effort**: Small-Medium (2-3 hours)
+
+---
+
+#### Task 5.0.5: Gap Filling Utilities (LOCF & Linear)
+**Description**: Shared gap-filling logic for `$fill` and `$setWindowFields`.
+
+**Used By**: `$fill` stage, `$locf` operator, `$linearFill` operator
+
+**API Design**:
+```typescript
+// Last Observation Carried Forward
+function applyLocf(
+  values: (number | null)[],
+): (number | null)[]
+
+// Linear Interpolation
+function applyLinearFill(
+  values: (number | null)[],
+  sortValues?: number[]  // for range-based interpolation
+): (number | null)[]
+```
+
+**Implementation**:
+1. `applyLocf`: Scan forward, replace nulls with last non-null
+2. `applyLinearFill`: Find surrounding non-nulls, interpolate proportionally
+3. Handle edge cases: all null, null at start, single value
+
+**Sub-tasks**:
+- [ ] 5.0.5.1 Create `src/aggregation/gap-fill.ts`
+- [ ] 5.0.5.2 Implement `applyLocf()` with forward scan
+- [ ] 5.0.5.3 Implement `applyLinearFill()` with interpolation
+- [ ] 5.0.5.4 Handle edge case: nulls at start remain null
+- [ ] 5.0.5.5 Handle edge case: all-null input
+- [ ] 5.0.5.6 Write tests for various gap patterns
+
+**Estimated effort**: Small-Medium (2-3 hours)
+
+---
+
+#### Task 5.0.6: Date Stepping Utility
+**Description**: Step through dates by time unit (for `$densify`).
+
+**Used By**: `$densify` with date fields
+
+**Current State**: `evalDateAdd()` exists but takes expression args. Need pure utility.
+
+**API Design**:
+```typescript
+function addDateStep(
+  date: Date,
+  step: number,
+  unit: string  // "hour", "day", "week", "month", "year"
+): Date
+```
+
+**Implementation**:
+1. Extract logic from `evalDateAdd()` into pure function
+2. Handle all time units: millisecond, second, minute, hour, day, week, month, year
+3. Handle calendar-aware stepping for month/year
+
+**Sub-tasks**:
+- [ ] 5.0.6.1 Create `src/aggregation/date-utils.ts` with `addDateStep()`
+- [ ] 5.0.6.2 Extract logic from existing `evalDateAdd()`
+- [ ] 5.0.6.3 Refactor `evalDateAdd()` to use the new utility
+- [ ] 5.0.6.4 Write tests for all time units
+- [ ] 5.0.6.5 Write tests for calendar edge cases (month boundaries, leap years)
+
+**Estimated effort**: Small (1-2 hours)
+
+---
+
+### Tier 0 Summary
+
+| Task | Description | Enables | Effort |
+|------|-------------|---------|--------|
+| 5.0.1 | System Variables | `$documents`, `$redact` | 1-2h |
+| 5.0.2 | Partition Grouping | `$densify`, `$fill`, `$setWindowFields` | 1-2h |
+| 5.0.3 | Sort Within Partitions | `$fill`, `$setWindowFields` | 0.5-1h |
+| 5.0.4 | Recursive Traversal | `$redact` | 2-3h |
+| 5.0.5 | Gap Filling (LOCF/Linear) | `$fill`, `$setWindowFields` | 2-3h |
+| 5.0.6 | Date Stepping | `$densify` | 1-2h |
+
+**Total Tier 0 Effort**: 8-13 hours
+
+**After Tier 0, the Tier 2-3 stages become much simpler**:
+- `$redact` = system vars + traversal utility + expression eval
+- `$densify` = partition utility + date stepping + gap detection
+- `$fill` = partition utility + sort utility + gap filling utilities
+- `$setWindowFields` = partition utility + sort utility + window bounds + gap filling
+
+---
+
 ### Tier 1: Simple Aliases (Low Complexity)
 
 #### Task 5.3: `$replaceWith`
@@ -591,29 +815,79 @@ for (const { name, input, expected } of testCases) {
 Based on dependencies and complexity:
 
 ```
-Phase 5.3 ($replaceWith) ─┐
-Phase 5.4 ($unset) ───────┼─> Tier 1 Complete
-Phase 5.5 ($documents) ───┘
-         │
-         v
-Phase 5.2 ($redact) ──────┐
-Phase 5.6 ($densify) ─────┼─> Tier 2 Complete
-Phase 5.7 ($fill) ────────┘
-         │
-         v
-Phase 5.1 ($graphLookup) ─┐
-Phase 5.8.A-G ────────────┼─> Tier 3 Complete
-($setWindowFields)        ┘
-         │
-         v
-     Phase 5 Complete
+┌─────────────────────────────────────────────────────┐
+│                    TIER 0                           │
+│            (Preparatory Utilities)                  │
+├─────────────────────────────────────────────────────┤
+│ 5.0.1 System Variables ──┬── 5.0.4 Traversal       │
+│ 5.0.2 Partition Grouping │                          │
+│ 5.0.3 Sort Partitions ───┼── 5.0.5 Gap Filling     │
+│ 5.0.6 Date Stepping ─────┘                          │
+└─────────────────────────────────────────────────────┘
+                    │
+                    v
+┌─────────────────────────────────────────────────────┐
+│                    TIER 1                           │
+│              (Simple Aliases)                       │
+├─────────────────────────────────────────────────────┤
+│ 5.3 $replaceWith ─┬─ 5.4 $unset ─┬─ 5.5 $documents │
+│     (parallel)    │   (parallel)  │    (parallel)   │
+└─────────────────────────────────────────────────────┘
+                    │
+                    v
+┌─────────────────────────────────────────────────────┐
+│                    TIER 2                           │
+│            (Moderate Complexity)                    │
+├─────────────────────────────────────────────────────┤
+│ 5.2 $redact ─────> 5.6 $densify ─────> 5.7 $fill   │
+│  (uses 5.0.1,       (uses 5.0.2,        (uses 5.0.2│
+│   5.0.4)             5.0.6)              5.0.3,    │
+│                                          5.0.5)    │
+└─────────────────────────────────────────────────────┘
+                    │
+                    v
+┌─────────────────────────────────────────────────────┐
+│                    TIER 3                           │
+│              (High Complexity)                      │
+├─────────────────────────────────────────────────────┤
+│ 5.1 $graphLookup ──────> 5.8 $setWindowFields      │
+│   (independent)          (uses 5.0.2, 5.0.3, 5.0.5)│
+│                                                     │
+│   5.8.A Core ──> 5.8.B Rank ──> 5.8.C Accumulators │
+│        │                                            │
+│        └──> 5.8.D Shift ──> 5.8.E Derivatives      │
+│                    │                                │
+│                    └──> 5.8.F Gap Fill ──> 5.8.G   │
+└─────────────────────────────────────────────────────┘
+                    │
+                    v
+              Phase 5 Complete
 ```
 
-**Recommended order**:
-1. Start with Tier 1 (simple aliases) for quick wins
-2. Move to Tier 2 (moderate complexity)
-3. Complete `$graphLookup`
-4. Tackle `$setWindowFields` sub-phases incrementally
+**Recommended execution order**:
+
+1. **Tier 0 first** - Build utilities (can parallelize independent ones)
+   - 5.0.1 + 5.0.4 in parallel (both independent)
+   - 5.0.2 + 5.0.3 together (sort depends on partition)
+   - 5.0.5 + 5.0.6 in parallel (both independent)
+
+2. **Tier 1 parallel** - All three aliases can be done simultaneously
+
+3. **Tier 2 sequential** - Each builds on prior work
+   - `$redact` first (uses traversal utility)
+   - `$densify` second (uses partition + date stepping)
+   - `$fill` third (uses partition + sort + gap filling)
+
+4. **Tier 3 parallel start**
+   - `$graphLookup` is independent, can start anytime after Tier 0
+   - `$setWindowFields` sub-phases are sequential
+
+**Estimated total effort**:
+- Tier 0: 8-13 hours
+- Tier 1: 4-7 hours
+- Tier 2: 16-22 hours
+- Tier 3: 30-45 hours
+- **Total: 58-87 hours** (reduced from original due to code reuse)
 
 ---
 
