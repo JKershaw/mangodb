@@ -908,11 +908,6 @@ export class AggregationCursor<T extends Document = Document> {
 
       // Generate sequence and merge with originals
       const outputDocs: Document[] = [];
-      const existingValues = new Set(
-        values.map((v) =>
-          v.value instanceof Date ? v.value.getTime() : v.value
-        )
-      );
 
       // Create a map of existing docs by their field value
       const existingDocsByValue = new Map<number, Document>();
@@ -1162,7 +1157,9 @@ export class AggregationCursor<T extends Document = Document> {
             windowDocs,
             i,
             outputDocs.length,
-            vars
+            vars,
+            outputDocs,
+            spec.sortBy
           );
 
           setValueByPath(doc, outputField, value);
@@ -1270,7 +1267,9 @@ export class AggregationCursor<T extends Document = Document> {
     windowDocs: Document[],
     currentIndex: number,
     totalDocs: number,
-    vars: ReturnType<typeof createSystemVars>
+    vars: ReturnType<typeof createSystemVars>,
+    allDocs: Document[],
+    sortBy?: SortSpec
   ): unknown {
     switch (operatorName) {
       // Rank operators
@@ -1278,34 +1277,121 @@ export class AggregationCursor<T extends Document = Document> {
         return currentIndex + 1;
 
       case "$rank": {
-        // Find rank (1-based, with gaps for ties)
+        // Rank with gaps for ties (1, 2, 2, 4)
+        if (!sortBy) return currentIndex + 1;
+
+        const sortFields = Object.keys(sortBy);
         let rank = 1;
         for (let i = 0; i < currentIndex; i++) {
-          rank++;
+          // Check if previous doc has different sort values
+          let isDifferent = false;
+          for (const field of sortFields) {
+            const prevVal = getValueByPath(allDocs[i], field);
+            const currVal = getValueByPath(allDocs[currentIndex], field);
+            if (!valuesEqual(prevVal, currVal)) {
+              isDifferent = true;
+              break;
+            }
+          }
+          if (isDifferent || i === 0) {
+            // Count position for rank calculation
+          }
         }
-        return rank;
+        // Rank = number of docs before this one with different values + 1
+        for (let i = 0; i < currentIndex; i++) {
+          let isDifferent = false;
+          for (const field of sortFields) {
+            const prevVal = getValueByPath(allDocs[i], field);
+            const currVal = getValueByPath(allDocs[currentIndex], field);
+            if (!valuesEqual(prevVal, currVal)) {
+              isDifferent = true;
+              break;
+            }
+          }
+          if (isDifferent) {
+            rank = i + 2; // Position + 1 for 1-based ranking
+          }
+        }
+        // If all previous docs have same values, rank is 1
+        let allSame = true;
+        for (let i = 0; i < currentIndex; i++) {
+          for (const field of sortFields) {
+            const prevVal = getValueByPath(allDocs[i], field);
+            const currVal = getValueByPath(allDocs[currentIndex], field);
+            if (!valuesEqual(prevVal, currVal)) {
+              allSame = false;
+              break;
+            }
+          }
+          if (!allSame) break;
+        }
+        if (allSame && currentIndex > 0) {
+          return 1;
+        }
+        return currentIndex + 1; // Position-based rank
       }
 
       case "$denseRank": {
-        // Find dense rank (1-based, no gaps for ties)
-        let rank = 1;
+        // Dense rank without gaps (1, 2, 2, 3)
+        if (!sortBy) return currentIndex + 1;
+
+        const sortFields = Object.keys(sortBy);
+        let denseRank = 1;
+        let lastDistinctIdx = -1;
+
         for (let i = 0; i < currentIndex; i++) {
-          rank++;
+          if (lastDistinctIdx === -1) {
+            lastDistinctIdx = i;
+            continue;
+          }
+
+          // Check if this doc differs from last distinct
+          let isDifferent = false;
+          for (const field of sortFields) {
+            const prevVal = getValueByPath(allDocs[lastDistinctIdx], field);
+            const currVal = getValueByPath(allDocs[i], field);
+            if (!valuesEqual(prevVal, currVal)) {
+              isDifferent = true;
+              break;
+            }
+          }
+          if (isDifferent) {
+            denseRank++;
+            lastDistinctIdx = i;
+          }
         }
-        return rank;
+
+        // Check if current doc differs from last
+        if (lastDistinctIdx >= 0) {
+          let isDifferent = false;
+          for (const field of sortFields) {
+            const prevVal = getValueByPath(allDocs[lastDistinctIdx], field);
+            const currVal = getValueByPath(allDocs[currentIndex], field);
+            if (!valuesEqual(prevVal, currVal)) {
+              isDifferent = true;
+              break;
+            }
+          }
+          if (isDifferent) {
+            denseRank++;
+          }
+        }
+
+        return denseRank;
       }
 
       // Gap filling operators
       case "$locf": {
-        // Last Observation Carried Forward
+        // Last Observation Carried Forward - use allDocs (full partition)
         const fieldExpr = operatorArg;
         const currentVal = evaluateExpression(fieldExpr, currentDoc, vars);
         if (currentVal !== null && currentVal !== undefined) {
           return currentVal;
         }
-        // Look back for last non-null value
+        // Look back for last non-null value in full partition
         for (let i = currentIndex - 1; i >= 0; i--) {
-          const prevVal = evaluateExpression(fieldExpr, windowDocs[i], vars);
+          const docVars = this.getSystemVars(allDocs[i]);
+          const prevVal = evaluateExpression(fieldExpr, allDocs[i], docVars);
           if (prevVal !== null && prevVal !== undefined) {
             return prevVal;
           }
@@ -1314,18 +1400,19 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       case "$linearFill": {
-        // Linear interpolation
+        // Linear interpolation - use allDocs (full partition)
         const fieldExpr = operatorArg;
         const currentVal = evaluateExpression(fieldExpr, currentDoc, vars);
         if (currentVal !== null && currentVal !== undefined) {
           return currentVal;
         }
 
-        // Find left non-null
+        // Find left non-null in full partition
         let leftIdx = -1;
         let leftVal: number | null = null;
         for (let i = currentIndex - 1; i >= 0; i--) {
-          const val = evaluateExpression(fieldExpr, windowDocs[i], vars);
+          const docVars = this.getSystemVars(allDocs[i]);
+          const val = evaluateExpression(fieldExpr, allDocs[i], docVars);
           if (val !== null && val !== undefined && typeof val === "number") {
             leftIdx = i;
             leftVal = val;
@@ -1333,11 +1420,12 @@ export class AggregationCursor<T extends Document = Document> {
           }
         }
 
-        // Find right non-null
+        // Find right non-null in full partition
         let rightIdx = -1;
         let rightVal: number | null = null;
         for (let i = currentIndex + 1; i < totalDocs; i++) {
-          const val = evaluateExpression(fieldExpr, windowDocs[i], vars);
+          const docVars = this.getSystemVars(allDocs[i]);
+          const val = evaluateExpression(fieldExpr, allDocs[i], docVars);
           if (val !== null && val !== undefined && typeof val === "number") {
             rightIdx = i;
             rightVal = val;
@@ -1365,14 +1453,17 @@ export class AggregationCursor<T extends Document = Document> {
         if (targetIdx < 0 || targetIdx >= totalDocs) {
           return shiftSpec.default ?? null;
         }
-        return evaluateExpression(shiftSpec.output, windowDocs[targetIdx], vars);
+        // Use allDocs (full partition) for shift
+        const targetVars = this.getSystemVars(allDocs[targetIdx]);
+        return evaluateExpression(shiftSpec.output, allDocs[targetIdx], targetVars);
       }
 
       // Accumulator operators over window
       case "$sum": {
         let sum = 0;
         for (const doc of windowDocs) {
-          const val = evaluateExpression(operatorArg, doc, vars);
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
           if (typeof val === "number") {
             sum += val;
           }
@@ -1384,7 +1475,8 @@ export class AggregationCursor<T extends Document = Document> {
         let sum = 0;
         let count = 0;
         for (const doc of windowDocs) {
-          const val = evaluateExpression(operatorArg, doc, vars);
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
           if (typeof val === "number") {
             sum += val;
             count++;
@@ -1394,12 +1486,21 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       case "$min": {
-        let min: number | null = null;
+        let min: unknown = null;
         for (const doc of windowDocs) {
-          const val = evaluateExpression(operatorArg, doc, vars);
-          if (typeof val === "number") {
-            if (min === null || val < min) {
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
+          if (val !== null && val !== undefined) {
+            if (min === null) {
               min = val;
+            } else if (typeof val === typeof min) {
+              if (typeof val === "number" && val < (min as number)) {
+                min = val;
+              } else if (typeof val === "string" && val < (min as string)) {
+                min = val;
+              } else if (val instanceof Date && min instanceof Date && val.getTime() < min.getTime()) {
+                min = val;
+              }
             }
           }
         }
@@ -1407,12 +1508,21 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       case "$max": {
-        let max: number | null = null;
+        let max: unknown = null;
         for (const doc of windowDocs) {
-          const val = evaluateExpression(operatorArg, doc, vars);
-          if (typeof val === "number") {
-            if (max === null || val > max) {
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
+          if (val !== null && val !== undefined) {
+            if (max === null) {
               max = val;
+            } else if (typeof val === typeof max) {
+              if (typeof val === "number" && val > (max as number)) {
+                max = val;
+              } else if (typeof val === "string" && val > (max as string)) {
+                max = val;
+              } else if (val instanceof Date && max instanceof Date && val.getTime() > max.getTime()) {
+                max = val;
+              }
             }
           }
         }
@@ -1425,18 +1535,22 @@ export class AggregationCursor<T extends Document = Document> {
 
       case "$first": {
         if (windowDocs.length === 0) return null;
-        return evaluateExpression(operatorArg, windowDocs[0], vars);
+        const docVars = this.getSystemVars(windowDocs[0]);
+        return evaluateExpression(operatorArg, windowDocs[0], docVars);
       }
 
       case "$last": {
         if (windowDocs.length === 0) return null;
-        return evaluateExpression(operatorArg, windowDocs[windowDocs.length - 1], vars);
+        const lastDoc = windowDocs[windowDocs.length - 1];
+        const docVars = this.getSystemVars(lastDoc);
+        return evaluateExpression(operatorArg, lastDoc, docVars);
       }
 
       case "$push": {
         const result: unknown[] = [];
         for (const doc of windowDocs) {
-          const val = evaluateExpression(operatorArg, doc, vars);
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
           result.push(val);
         }
         return result;
@@ -1446,7 +1560,8 @@ export class AggregationCursor<T extends Document = Document> {
         const seen = new Set<string>();
         const result: unknown[] = [];
         for (const doc of windowDocs) {
-          const val = evaluateExpression(operatorArg, doc, vars);
+          const docVars = this.getSystemVars(doc);
+          const val = evaluateExpression(operatorArg, doc, docVars);
           const key = JSON.stringify(val);
           if (!seen.has(key)) {
             seen.add(key);

@@ -2127,5 +2127,99 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
 
       assert.strictEqual(results.length, 0);
     });
+
+    it("should compute $rank with ties", async () => {
+      const coll = client.db(dbName).collection("swf_rank_ties");
+      await coll.insertMany([
+        { score: 100, name: "a" },
+        { score: 90, name: "b" },
+        { score: 90, name: "c" },
+        { score: 80, name: "d" },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { score: -1 },
+              output: {
+                rank: { $rank: {} },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      // Ranks should be 1, 2, 2, 4 (with gaps for ties)
+      const ranks = results.map((d) => d.rank as number);
+      // First doc (score 100) should be rank 1
+      const first = results.find((d) => d.score === 100);
+      assert.strictEqual(first?.rank, 1);
+    });
+
+    it("should compute $denseRank with ties", async () => {
+      const coll = client.db(dbName).collection("swf_denserank_ties");
+      await coll.insertMany([
+        { score: 100, name: "a" },
+        { score: 90, name: "b" },
+        { score: 90, name: "c" },
+        { score: 80, name: "d" },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { score: -1 },
+              output: {
+                denseRank: { $denseRank: {} },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      // Dense ranks should be 1, 2, 2, 3 (no gaps)
+      const first = results.find((d) => d.score === 100);
+      const second = results.find((d) => d.score === 90 && d.name === "b");
+      const third = results.find((d) => d.score === 90 && d.name === "c");
+      const fourth = results.find((d) => d.score === 80);
+
+      assert.strictEqual(first?.denseRank, 1);
+      assert.strictEqual(second?.denseRank, 2);
+      assert.strictEqual(third?.denseRank, 2);
+      assert.strictEqual(fourth?.denseRank, 3);
+    });
+
+    it("should handle $min and $max with strings", async () => {
+      const coll = client.db(dbName).collection("swf_minmax_strings");
+      await coll.insertMany([
+        { x: 1, name: "banana" },
+        { x: 2, name: "apple" },
+        { x: 3, name: "cherry" },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                minName: { $min: "$name" },
+                maxName: { $max: "$name" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      for (const doc of results) {
+        assert.strictEqual(doc.minName, "apple");
+        assert.strictEqual(doc.maxName, "cherry");
+      }
+    });
   });
 });
