@@ -112,13 +112,13 @@ After completing each phase:
 | 1.3.3 | `$rand` | Random value comparison | D |
 
 ### Phase 1 Checklist
-- [ ] All tests written and passing
-- [ ] Dual-target tests verified against MongoDB
-- [ ] Error messages match MongoDB
-- [ ] Edge cases covered
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Dual-target tests verified against MongoDB
+- [x] Error messages match MongoDB
+- [x] Edge cases covered
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -150,13 +150,13 @@ After completing each phase:
 | 2.3.1 | `$bit` | Bitwise AND, OR, XOR | D |
 
 ### Phase 2 Checklist
-- [ ] All tests written and passing
-- [ ] Dual-target tests verified against MongoDB
-- [ ] arrayFilters option implemented
-- [ ] Error messages match MongoDB
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Dual-target tests verified against MongoDB
+- [x] arrayFilters option implemented
+- [x] Error messages match MongoDB
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -177,12 +177,12 @@ After completing each phase:
 **Research needed**: Modifier interaction order, behavior with negative positions.
 
 ### Phase 3 Checklist
-- [ ] All tests written and passing
-- [ ] Modifier combinations tested
-- [ ] Edge cases (empty arrays, out of bounds) covered
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Modifier combinations tested
+- [x] Edge cases (empty arrays, out of bounds) covered
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -207,12 +207,12 @@ After completing each phase:
 **Research needed**: $facet sub-pipeline isolation, $bucket boundary handling, $merge whenMatched/whenNotMatched options.
 
 ### Phase 4 Checklist
-- [ ] All tests written and passing
-- [ ] Complex pipeline combinations tested
-- [ ] Error messages match MongoDB
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Complex pipeline combinations tested
+- [x] Error messages match MongoDB
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -263,11 +263,11 @@ After completing each phase:
 | 6.7 | `$trunc` | Truncate to integer | B |
 
 ### Phase 6 Checklist
-- [ ] All tests written and passing
-- [ ] Edge cases (negative, zero, infinity) covered
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Edge cases (negative, zero, infinity) covered
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -293,11 +293,11 @@ After completing each phase:
 | 7.10 | `$sortArray` | Sort array | D |
 
 ### Phase 7 Checklist
-- [ ] All tests written and passing
-- [ ] Null/undefined handling tested
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Null/undefined handling tested
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -322,11 +322,11 @@ After completing each phase:
 | 8.9 | `$substrBytes` | Byte substring | C |
 
 ### Phase 8 Checklist
-- [ ] All tests written and passing
-- [ ] Unicode handling tested
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Unicode handling tested
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -354,12 +354,12 @@ After completing each phase:
 | 9.12 | `$millisecond` | Millisecond component | D |
 
 ### Phase 9 Checklist
-- [ ] All tests written and passing
-- [ ] Timezone handling tested
-- [ ] Leap year edge cases covered
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Timezone handling tested
+- [x] Leap year edge cases covered
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -397,11 +397,11 @@ After completing each phase:
 | 10.4.4 | `$stdDevSamp` | Sample std dev | D |
 
 ### Phase 10 Checklist
-- [ ] All tests written and passing
-- [ ] Type coercion edge cases covered
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Type coercion edge cases covered
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
@@ -450,11 +450,11 @@ After completing each phase:
 | 12.5 | `maxTimeMS` option | Operation timeout | C |
 
 ### Phase 12 Checklist
-- [ ] All tests written and passing
-- [ ] Error handling matches MongoDB
-- [ ] Code review completed
-- [ ] LIMITATIONS.md updated
-- [ ] Changes committed and pushed
+- [x] All tests written and passing
+- [x] Error handling matches MongoDB
+- [x] Code review completed
+- [x] LIMITATIONS.md updated
+- [x] Changes committed and pushed
 
 ---
 
