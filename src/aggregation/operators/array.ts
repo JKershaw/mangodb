@@ -229,3 +229,374 @@ export function evalIn(
 
   return false;
 }
+
+/**
+ * $first - Returns the first element of an array.
+ */
+export function evalFirst(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown {
+  const arr = evaluate(args, doc, vars);
+
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$first requires an array argument, not ${typeName}`);
+  }
+
+  if (arr.length === 0) {
+    return undefined;
+  }
+
+  return arr[0];
+}
+
+/**
+ * $last - Returns the last element of an array.
+ */
+export function evalLast(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown {
+  const arr = evaluate(args, doc, vars);
+
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$last requires an array argument, not ${typeName}`);
+  }
+
+  if (arr.length === 0) {
+    return undefined;
+  }
+
+  return arr[arr.length - 1];
+}
+
+/**
+ * $indexOfArray - Returns the index of first occurrence of a value in an array.
+ */
+export function evalIndexOfArray(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): number | null {
+  const [arrExpr, searchExpr, startExpr, endExpr] = args;
+  const arr = evaluate(arrExpr, doc, vars);
+  const search = evaluate(searchExpr, doc, vars);
+
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$indexOfArray requires an array, not ${typeName}`);
+  }
+
+  let start = 0;
+  let end = arr.length;
+
+  if (startExpr !== undefined) {
+    start = evaluate(startExpr, doc, vars) as number;
+    if (start < 0) {
+      throw new Error("$indexOfArray start index cannot be negative");
+    }
+  }
+
+  if (endExpr !== undefined) {
+    end = evaluate(endExpr, doc, vars) as number;
+    if (end < 0) {
+      throw new Error("$indexOfArray end index cannot be negative");
+    }
+  }
+
+  for (let i = start; i < Math.min(end, arr.length); i++) {
+    if (compareValues(arr[i], search) === 0) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * $isArray - Determines if the operand is an array.
+ */
+export function evalIsArray(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): boolean {
+  // $isArray takes an array with one element in aggregation context
+  let value: unknown;
+  if (Array.isArray(args) && args.length === 1) {
+    value = evaluate(args[0], doc, vars);
+  } else {
+    value = evaluate(args, doc, vars);
+  }
+
+  return Array.isArray(value);
+}
+
+/**
+ * $range - Returns an array of integers in a sequence.
+ */
+export function evalRange(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): number[] {
+  const [startExpr, endExpr, stepExpr] = args;
+  const start = evaluate(startExpr, doc, vars) as number;
+  const end = evaluate(endExpr, doc, vars) as number;
+  const step = stepExpr !== undefined ? (evaluate(stepExpr, doc, vars) as number) : 1;
+
+  if (!Number.isInteger(start) || !Number.isInteger(end) || !Number.isInteger(step)) {
+    throw new Error("$range requires integer arguments");
+  }
+
+  if (step === 0) {
+    throw new Error("$range step cannot be zero");
+  }
+
+  const result: number[] = [];
+
+  if (step > 0) {
+    for (let i = start; i < end; i += step) {
+      result.push(i);
+    }
+  } else {
+    for (let i = start; i > end; i += step) {
+      result.push(i);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * $reverseArray - Returns an array with the elements in reverse order.
+ */
+export function evalReverseArray(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  const arr = evaluate(args, doc, vars);
+
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$reverseArray requires an array argument, not ${typeName}`);
+  }
+
+  return [...arr].reverse();
+}
+
+/**
+ * $arrayToObject - Converts an array of key-value pairs to an object.
+ */
+export function evalArrayToObject(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): Record<string, unknown> | null {
+  const arr = evaluate(args, doc, vars);
+
+  if (arr === null || arr === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$arrayToObject requires an array argument, not ${typeName}`);
+  }
+
+  const result: Record<string, unknown> = {};
+
+  for (const item of arr) {
+    if (Array.isArray(item)) {
+      // Format: [[k1, v1], [k2, v2]]
+      if (item.length !== 2) {
+        throw new Error("$arrayToObject requires array elements with exactly 2 elements");
+      }
+      const [k, v] = item;
+      if (typeof k !== "string") {
+        throw new Error("$arrayToObject requires string keys");
+      }
+      result[k] = v;
+    } else if (item && typeof item === "object") {
+      // Format: [{k: "key1", v: "value1"}, {k: "key2", v: "value2"}]
+      const obj = item as Record<string, unknown>;
+      if ("k" in obj && "v" in obj) {
+        if (typeof obj.k !== "string") {
+          throw new Error("$arrayToObject requires string keys");
+        }
+        result[obj.k] = obj.v;
+      } else {
+        throw new Error("$arrayToObject requires objects with 'k' and 'v' fields");
+      }
+    } else {
+      throw new Error("$arrayToObject requires array elements to be arrays or objects");
+    }
+  }
+
+  return result;
+}
+
+/**
+ * $objectToArray - Converts an object to an array of key-value pairs.
+ */
+export function evalObjectToArray(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): Array<{ k: string; v: unknown }> | null {
+  const obj = evaluate(args, doc, vars);
+
+  if (obj === null || obj === undefined) {
+    return null;
+  }
+
+  if (typeof obj !== "object" || Array.isArray(obj)) {
+    const typeName = getBSONTypeName(obj);
+    throw new Error(`$objectToArray requires an object, not ${typeName}`);
+  }
+
+  return Object.entries(obj as Record<string, unknown>).map(([k, v]) => ({ k, v }));
+}
+
+/**
+ * $zip - Merge two arrays element-wise.
+ */
+export function evalZip(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[][] | null {
+  const spec = args as {
+    inputs: unknown[];
+    useLongestLength?: boolean;
+    defaults?: unknown[];
+  };
+
+  const inputs = spec.inputs.map((input) => evaluate(input, doc, vars));
+
+  // Check for null/undefined
+  for (const arr of inputs) {
+    if (arr === null || arr === undefined) {
+      return null;
+    }
+    if (!Array.isArray(arr)) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`$zip requires array inputs, not ${typeName}`);
+    }
+  }
+
+  const arrays = inputs as unknown[][];
+  const useLongestLength = spec.useLongestLength === true;
+  const defaults = spec.defaults
+    ? spec.defaults.map((d) => evaluate(d, doc, vars))
+    : undefined;
+
+  if (arrays.length === 0) {
+    return [];
+  }
+
+  const lengths = arrays.map((arr) => arr.length);
+  const outputLength = useLongestLength ? Math.max(...lengths) : Math.min(...lengths);
+
+  const result: unknown[][] = [];
+  for (let i = 0; i < outputLength; i++) {
+    const row: unknown[] = [];
+    for (let j = 0; j < arrays.length; j++) {
+      if (i < arrays[j].length) {
+        row.push(arrays[j][i]);
+      } else if (defaults && j < defaults.length) {
+        row.push(defaults[j]);
+      } else {
+        row.push(null);
+      }
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
+/**
+ * $sortArray - Sort an array by specified criteria.
+ */
+export function evalSortArray(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  const spec = args as { input: unknown; sortBy: Record<string, 1 | -1> | 1 | -1 };
+  const input = evaluate(spec.input, doc, vars);
+
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(input)) {
+    const typeName = getBSONTypeName(input);
+    throw new Error(`$sortArray requires an array input, not ${typeName}`);
+  }
+
+  const sorted = [...input];
+  const sortBy = spec.sortBy;
+
+  if (typeof sortBy === "number") {
+    // Sort primitives
+    sorted.sort((a, b) => {
+      const cmp = compareValues(a, b);
+      return sortBy === 1 ? cmp : -cmp;
+    });
+  } else {
+    // Sort by fields
+    const sortFields = Object.entries(sortBy);
+    sorted.sort((a, b) => {
+      for (const [field, dir] of sortFields) {
+        const aObj = a as Record<string, unknown>;
+        const bObj = b as Record<string, unknown>;
+        const aVal = field.includes(".")
+          ? field.split(".").reduce((obj: unknown, key) => (obj as Record<string, unknown>)?.[key], aObj)
+          : aObj[field];
+        const bVal = field.includes(".")
+          ? field.split(".").reduce((obj: unknown, key) => (obj as Record<string, unknown>)?.[key], bObj)
+          : bObj[field];
+        const cmp = compareValues(aVal, bVal);
+        if (cmp !== 0) {
+          return dir === 1 ? cmp : -cmp;
+        }
+      }
+      return 0;
+    });
+  }
+
+  return sorted;
+}

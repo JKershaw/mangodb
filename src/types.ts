@@ -171,6 +171,7 @@ export interface UpdateOperators {
   $inc?: Record<string, number>;
   $push?: Record<string, unknown>;
   $pull?: Record<string, unknown>;
+  $pullAll?: Record<string, unknown[]>;
   $addToSet?: Record<string, unknown>;
   $pop?: Record<string, number>;
   // Phase 13 operators
@@ -180,6 +181,7 @@ export interface UpdateOperators {
   $rename?: Record<string, string>;
   $currentDate?: Record<string, boolean | { $type: "date" | "timestamp" }>;
   $setOnInsert?: Record<string, unknown>;
+  $bit?: Record<string, { and?: number; or?: number; xor?: number }>;
 }
 
 /**

@@ -181,12 +181,21 @@ export interface TestCollection<T extends Document = Document> {
     update: Document,
     options?: UpdateOptions
   ): Promise<UpdateResult>;
+  replaceOne(
+    filter: Partial<T>,
+    replacement: T,
+    options?: { upsert?: boolean }
+  ): Promise<UpdateResult>;
   countDocuments(filter?: Partial<T>): Promise<number>;
   createIndex(
     keySpec: Record<string, 1 | -1>,
     options?: CreateIndexOptions
   ): Promise<string>;
+  createIndexes(
+    indexSpecs: Array<{ key: Record<string, 1 | -1 | "text"> } & CreateIndexOptions>
+  ): Promise<string[]>;
   dropIndex(indexNameOrSpec: string | Record<string, 1 | -1>): Promise<void>;
+  dropIndexes(indexNames?: "*" | string[]): Promise<void>;
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;
   // Phase 8: FindOneAnd* and bulkWrite

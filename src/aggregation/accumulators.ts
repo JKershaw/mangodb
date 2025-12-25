@@ -173,6 +173,107 @@ class AddToSetAccumulator implements Accumulator {
   }
 }
 
+/**
+ * $count accumulator - counts the number of documents in a group.
+ * Note: This is the accumulator form, not the $count stage.
+ */
+class CountAccumulator implements Accumulator {
+  private count = 0;
+
+  accumulate(_doc: Document): void {
+    this.count++;
+  }
+
+  getResult(): number {
+    return this.count;
+  }
+}
+
+/**
+ * $mergeObjects accumulator - merges documents into a single document.
+ */
+class MergeObjectsAccumulator implements Accumulator {
+  private result: Record<string, unknown> = {};
+  private expr: unknown;
+
+  constructor(expr: unknown) {
+    this.expr = expr;
+  }
+
+  accumulate(doc: Document): void {
+    const value = evaluateExpression(this.expr, doc);
+    if (value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value)) {
+      Object.assign(this.result, value);
+    }
+  }
+
+  getResult(): Record<string, unknown> {
+    return this.result;
+  }
+}
+
+/**
+ * $stdDevPop accumulator - calculates the population standard deviation.
+ */
+class StdDevPopAccumulator implements Accumulator {
+  private values: number[] = [];
+  private expr: unknown;
+
+  constructor(expr: unknown) {
+    this.expr = expr;
+  }
+
+  accumulate(doc: Document): void {
+    const value = evaluateExpression(this.expr, doc);
+    if (typeof value === "number" && !isNaN(value)) {
+      this.values.push(value);
+    }
+  }
+
+  getResult(): number | null {
+    if (this.values.length === 0) {
+      return null;
+    }
+
+    const n = this.values.length;
+    const mean = this.values.reduce((a, b) => a + b, 0) / n;
+    const squaredDiffs = this.values.map((v) => Math.pow(v - mean, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / n;
+    return Math.sqrt(variance);
+  }
+}
+
+/**
+ * $stdDevSamp accumulator - calculates the sample standard deviation.
+ */
+class StdDevSampAccumulator implements Accumulator {
+  private values: number[] = [];
+  private expr: unknown;
+
+  constructor(expr: unknown) {
+    this.expr = expr;
+  }
+
+  accumulate(doc: Document): void {
+    const value = evaluateExpression(this.expr, doc);
+    if (typeof value === "number" && !isNaN(value)) {
+      this.values.push(value);
+    }
+  }
+
+  getResult(): number | null {
+    if (this.values.length < 2) {
+      return null;
+    }
+
+    const n = this.values.length;
+    const mean = this.values.reduce((a, b) => a + b, 0) / n;
+    const squaredDiffs = this.values.map((v) => Math.pow(v - mean, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (n - 1);
+    return Math.sqrt(variance);
+  }
+}
+
 export function createAccumulator(op: string, expr: unknown): Accumulator {
   switch (op) {
     case "$sum":
@@ -191,6 +292,14 @@ export function createAccumulator(op: string, expr: unknown): Accumulator {
       return new PushAccumulator(expr);
     case "$addToSet":
       return new AddToSetAccumulator(expr);
+    case "$count":
+      return new CountAccumulator();
+    case "$mergeObjects":
+      return new MergeObjectsAccumulator(expr);
+    case "$stdDevPop":
+      return new StdDevPopAccumulator(expr);
+    case "$stdDevSamp":
+      return new StdDevSampAccumulator(expr);
     default:
       throw new Error(`unknown group operator '${op}'`);
   }

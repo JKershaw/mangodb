@@ -91,6 +91,92 @@ function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
 }
 
 /**
+ * Check if a value is valid for bitwise operations.
+ * Only numbers (int, double) are valid.
+ */
+function isValidBitwiseValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Parse a bitwise operator argument into an array of bit positions.
+ * Supports:
+ * - Position array: [0, 2, 5] - bit positions to check
+ * - Numeric bitmask: 50 - converts to bit positions based on set bits
+ */
+function parseBitOperatorArgument(value: unknown, opName: string): number[] {
+  // Handle position array
+  if (Array.isArray(value)) {
+    const positions: number[] = [];
+    for (const item of value) {
+      if (typeof item !== "number" || !Number.isInteger(item)) {
+        throw new Error(
+          `bit position must be an integer but was given: ${typeof item === "number" ? item : typeof item}`
+        );
+      }
+      if (item < 0) {
+        throw new Error("bit positions must be >= 0");
+      }
+      positions.push(item);
+    }
+    return positions;
+  }
+
+  // Handle numeric bitmask
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `${opName} bitmask value is invalid :: caused by :: ${
+          Number.isNaN(value) ? "NaN" : "Infinity"
+        } is an invalid argument`
+      );
+    }
+    if (value < 0) {
+      throw new Error(`${opName} bitmask must be a non-negative number`);
+    }
+    // Convert bitmask to array of bit positions
+    const positions: number[] = [];
+    let mask = Math.floor(value);
+    let pos = 0;
+    while (mask > 0) {
+      if (mask & 1) {
+        positions.push(pos);
+      }
+      mask = Math.floor(mask / 2);
+      pos++;
+    }
+    return positions;
+  }
+
+  throw new Error(
+    `${opName} takes an array of bit positions or an integer bitmask`
+  );
+}
+
+/**
+ * Check if a specific bit is set in a number.
+ * Uses BigInt for accurate bit operations on large numbers and handles negative numbers.
+ */
+function isBitSet(value: number, position: number): boolean {
+  // For JavaScript numbers, we need to handle both positive and negative numbers
+  // Negative numbers use two's complement representation
+  // JavaScript bitwise operators work on 32-bit integers, so we use BigInt for positions > 30
+
+  if (position < 31) {
+    // Use standard bitwise operations for positions within 32-bit range
+    // For negative numbers, JavaScript automatically uses two's complement
+    const intValue = Math.trunc(value);
+    return ((intValue >> position) & 1) === 1;
+  } else {
+    // Use BigInt for larger bit positions
+    // BigInt properly handles two's complement for negative numbers
+    const bigValue = BigInt(Math.trunc(value));
+    const bigPos = BigInt(position);
+    return ((bigValue >> bigPos) & 1n) === 1n;
+  }
+}
+
+/**
  * Check if an object contains query operators (keys starting with $).
  *
  * @description Determines whether a value is an object where all keys are MongoDB query operators.
@@ -534,6 +620,100 @@ export function matchesOperators(
         break;
       }
 
+      case "$bitsAllSet": {
+        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAllSet");
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            let allSet = true;
+            for (const pos of bitPositions) {
+              if (!isBitSet(numValue, pos)) {
+                allSet = false;
+                break;
+              }
+            }
+            if (allSet) {
+              anyMatch = true;
+              break;
+            }
+          }
+        }
+        if (!anyMatch) return false;
+        break;
+      }
+
+      case "$bitsAllClear": {
+        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAllClear");
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            let allClear = true;
+            for (const pos of bitPositions) {
+              if (isBitSet(numValue, pos)) {
+                allClear = false;
+                break;
+              }
+            }
+            if (allClear) {
+              anyMatch = true;
+              break;
+            }
+          }
+        }
+        if (!anyMatch) return false;
+        break;
+      }
+
+      case "$bitsAnySet": {
+        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAnySet");
+        if (bitPositions.length === 0) return false; // No bits to check = no match
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            for (const pos of bitPositions) {
+              if (isBitSet(numValue, pos)) {
+                anyMatch = true;
+                break;
+              }
+            }
+            if (anyMatch) break;
+          }
+        }
+        if (!anyMatch) return false;
+        break;
+      }
+
+      case "$bitsAnyClear": {
+        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAnyClear");
+        if (bitPositions.length === 0) return false; // No bits to check = no match
+        // For arrays, check if any element matches
+        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+        let anyMatch = false;
+        for (const val of valuesToCheck) {
+          if (isValidBitwiseValue(val)) {
+            const numValue = val as number;
+            for (const pos of bitPositions) {
+              if (!isBitSet(numValue, pos)) {
+                anyMatch = true;
+                break;
+              }
+            }
+            if (anyMatch) break;
+          }
+        }
+        if (!anyMatch) return false;
+        break;
+      }
+
       case "$and":
         throw new Error("unknown operator: $and");
 
@@ -664,6 +844,12 @@ export function matchesFilter<T extends Document>(
       if (!result) {
         return false;
       }
+      continue;
+    }
+
+    // Handle $comment - purely for logging/profiling, does not affect query results
+    if (key === "$comment") {
+      // No-op: comments are ignored in query matching
       continue;
     }
 

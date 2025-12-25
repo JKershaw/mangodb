@@ -48,3 +48,51 @@ export function evalIfNull(
   }
   return null;
 }
+
+/**
+ * $switch - Evaluates a series of case expressions and returns the value of
+ * the first expression that evaluates to true.
+ */
+export function evalSwitch(
+  args: unknown,
+  doc: Document,
+  _vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown {
+  if (typeof args !== "object" || args === null) {
+    throw new Error("$switch requires an object as an argument");
+  }
+
+  const spec = args as { branches?: unknown[]; default?: unknown };
+
+  if (!spec.branches || !Array.isArray(spec.branches)) {
+    throw new Error("$switch requires 'branches' to be an array");
+  }
+
+  for (const branch of spec.branches) {
+    if (typeof branch !== "object" || branch === null) {
+      throw new Error("$switch requires each branch to be an object");
+    }
+
+    const branchObj = branch as { case?: unknown; then?: unknown };
+
+    if (branchObj.case === undefined) {
+      throw new Error("$switch found a branch without a 'case' expression");
+    }
+
+    if (branchObj.then === undefined) {
+      throw new Error("$switch found a branch without a 'then' expression");
+    }
+
+    const caseResult = evaluate(branchObj.case, doc);
+    if (caseResult) {
+      return evaluate(branchObj.then, doc);
+    }
+  }
+
+  if (spec.default !== undefined) {
+    return evaluate(spec.default, doc);
+  }
+
+  throw new Error("$switch could not find a matching branch, and no default was specified");
+}

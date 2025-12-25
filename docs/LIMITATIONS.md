@@ -17,10 +17,10 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| Query Operators | 23/39 (59%) | Missing geospatial, bitwise |
-| Update Operators | 13/20 (65%) | Missing positional operators |
-| Aggregation Stages | 13/34 (38%) | Core stages implemented |
-| Expression Operators | 57/112 (51%) | Missing advanced math, regex |
+| Query Operators | 28/39 (72%) | Missing geospatial, projection |
+| Update Operators | 18/20 (90%) | Missing positional operators only |
+| Aggregation Stages | 19/34 (56%) | Core and priority stages implemented |
+| Expression Operators | 106/112 (95%) | Nearly complete coverage |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
 
@@ -70,13 +70,12 @@ None of these operators are supported:
 
 **Reason**: Would require GIS library integration and geospatial index support.
 
-### Bitwise Operators ❌ Not Implemented
+### Bitwise Operators ✅ Complete
 
-None of these operators are supported:
-- `$bitsAllClear`
-- `$bitsAllSet`
-- `$bitsAnyClear`
-- `$bitsAnySet`
+All bitwise query operators are fully implemented:
+- `$bitsAllClear`, `$bitsAllSet`, `$bitsAnyClear`, `$bitsAnySet`
+
+Supports position arrays and numeric bitmasks. Handles negative numbers with two's complement.
 
 ### Projection Operators ❌ Not Implemented
 
@@ -92,8 +91,8 @@ These projection-specific operators are not supported:
 
 | Operator | Status | Notes |
 |----------|--------|-------|
-| `$comment` | ❌ | Query comments not implemented |
-| `$rand` | ❌ | Random value generation |
+| `$comment` | ✅ | Query comments (no-op, for logging/profiling) |
+| `$rand` | ✅ | Available as aggregation expression in `$expr` |
 
 ---
 
@@ -113,7 +112,7 @@ All field update operators are fully implemented:
 | `$pull` | ✅ | Supports query conditions |
 | `$addToSet` | ✅ | Supports `$each` modifier |
 | `$pop` | ✅ | Supports 1 (last) and -1 (first) |
-| `$pullAll` | ❌ | Use `$pull` with `$in` as workaround |
+| `$pullAll` | ✅ | Remove all matching values |
 
 ### Positional Update Operators ❌ Not Implemented
 
@@ -127,20 +126,20 @@ All field update operators are fully implemented:
 
 **Workaround**: Read the document, modify the array in application code, then replace.
 
-### Array Update Modifiers ⚠️ Partial
+### Array Update Modifiers ✅ Complete
 
 | Modifier | Status | Notes |
 |----------|--------|-------|
 | `$each` | ✅ | Works with `$push` and `$addToSet` |
-| `$position` | ❌ | Insert at specific array index |
-| `$slice` | ❌ | Limit array size after push |
-| `$sort` | ❌ | Sort array after push |
+| `$position` | ✅ | Insert at specific array index (negative counts from end) |
+| `$slice` | ✅ | Limit array size after push (positive/negative/zero) |
+| `$sort` | ✅ | Sort array after push (ascending/descending, by field) |
 
-### Bitwise Update Operator ❌ Not Implemented
+### Bitwise Update Operator ✅ Implemented
 
-| Operator | Status |
-|----------|--------|
-| `$bit` | ❌ |
+| Operator | Status | Notes |
+|----------|--------|-------|
+| `$bit` | ✅ | Supports `and`, `or`, `xor` operations |
 
 ---
 
@@ -163,33 +162,33 @@ All field update operators are fully implemented:
 | `$set` | Alias for `$addFields` |
 | `$replaceRoot` | Replace document root |
 | `$out` | Write to collection (must be final) |
+| `$sortByCount` | Group and count by expression |
+| `$sample` | Random sampling |
+| `$facet` | Multiple sub-pipelines |
+| `$bucket` | Group into buckets |
+| `$bucketAuto` | Auto-create buckets |
+| `$unionWith` | Union collections |
 
 ### Not Implemented Stages ❌
 
 | Stage | Description | Reason |
 |-------|-------------|--------|
-| `$bucket` | Group into buckets | Not implemented |
-| `$bucketAuto` | Auto-create buckets | Not implemented |
 | `$changeStream` | Real-time changes | Requires change streams |
 | `$collStats` | Collection statistics | Use `collection.stats()` instead |
 | `$densify` | Fill gaps in data | Not implemented |
 | `$documents` | Inject literal documents | Not implemented |
-| `$facet` | Multiple sub-pipelines | Not implemented |
 | `$fill` | Fill missing values | Not implemented |
 | `$geoNear` | Geospatial query | Requires geo indexes |
 | `$graphLookup` | Recursive lookup | Not implemented |
 | `$indexStats` | Index usage stats | Not implemented |
 | `$listSessions` | Active sessions | No session support |
-| `$merge` | Merge into collection | Use `$out` instead |
+| `$merge` | Merge into collection | Not implemented |
 | `$planCacheStats` | Query plan stats | No query planner |
 | `$redact` | Field-level access control | Not implemented |
 | `$replaceWith` | Replace document (4.4+) | Use `$replaceRoot` |
-| `$sample` | Random sampling | Not implemented |
 | `$search` | Atlas full-text search | Atlas-only feature |
 | `$searchMeta` | Atlas search metadata | Atlas-only feature |
 | `$setWindowFields` | Window functions | Not implemented |
-| `$sortByCount` | Group and count | Use `$group` + `$sort` |
-| `$unionWith` | Union collections | Not implemented |
 | `$unset` | Remove fields | Use `$project` with exclusion |
 
 ### $lookup Limitations
@@ -207,53 +206,54 @@ Only the basic form is supported:
 
 ## Aggregation Expression Operators
 
-### Arithmetic Operators ⚠️ Partial (9/16)
+### Arithmetic Operators ✅ Complete (17/17)
+
+All arithmetic expression operators are implemented:
+- `$abs`, `$add`, `$ceil`, `$divide`, `$exp`, `$floor`, `$ln`, `$log`, `$log10`
+- `$mod`, `$multiply`, `$pow`, `$rand`, `$round`, `$sqrt`, `$subtract`, `$trunc`
+
+### Array Operators ✅ Nearly Complete (18/24)
+
+All commonly used array operators are now implemented:
+- `$arrayElemAt`, `$arrayToObject`, `$concatArrays`, `$filter`, `$first`, `$in`, `$indexOfArray`
+- `$isArray`, `$last`, `$map`, `$objectToArray`, `$range`, `$reduce`, `$reverseArray`
+- `$size`, `$slice`, `$sortArray`, `$zip`
+
+### String Operators ✅ Complete (20/20)
+
+All string operators are now implemented:
+- `$concat`, `$indexOfBytes`, `$indexOfCP`, `$ltrim`, `$regexFind`, `$regexFindAll`, `$regexMatch`
+- `$replaceAll`, `$replaceOne`, `$rtrim`, `$split`, `$strcasecmp`, `$strLenBytes`, `$strLenCP`
+- `$substrBytes`, `$substrCP`, `$toLower`, `$toString`, `$toUpper`, `$trim`
+
+### Date Operators ✅ Complete (20/20)
+
+All date operators are now implemented:
+- `$dateAdd`, `$dateDiff`, `$dateFromParts`, `$dateFromString`, `$dateToParts`, `$dateSubtract`
+- `$dateToString`, `$dayOfMonth`, `$dayOfWeek`, `$dayOfYear`, `$hour`, `$isoDayOfWeek`
+- `$isoWeek`, `$isoWeekYear`, `$millisecond`, `$minute`, `$month`, `$second`, `$week`, `$year`
+
+### Comparison Operators ✅ Complete (7/7)
+
+All comparison expression operators are implemented:
+- `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$cmp`
+
+### Conditional Operators ✅ Complete (3/3)
+
+All conditional expression operators are implemented:
+- `$cond`, `$ifNull`, `$switch`
+
+### Type Operators ✅ Nearly Complete (10/11)
 
 | Implemented | Not Implemented |
 |-------------|-----------------|
-| `$abs`, `$add`, `$ceil`, `$divide`, `$floor`, `$mod`, `$multiply`, `$round`, `$subtract` | `$exp`, `$ln`, `$log`, `$log10`, `$pow`, `$sqrt`, `$trunc` |
+| `$toBool`, `$toDate`, `$toDouble`, `$toInt`, `$type`, `$convert`, `$isNumber`, `$toDecimal`, `$toLong`, `$toObjectId` | `$accumulator` (custom JS) |
 
-### Array Operators ⚠️ Partial (8/24)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$arrayElemAt`, `$concatArrays`, `$filter`, `$in`, `$map`, `$reduce`, `$size`, `$slice` | `$arrayToObject`, `$first`, `$indexOfArray`, `$isArray`, `$last`, `$objectToArray`, `$range`, `$reverseArray`, `$zip`, and others |
-
-### String Operators ⚠️ Partial (11/20)
+### Accumulator Operators ✅ Nearly Complete (12/13)
 
 | Implemented | Not Implemented |
 |-------------|-----------------|
-| `$concat`, `$indexOfCP`, `$ltrim`, `$rtrim`, `$split`, `$strLenCP`, `$substrCP`, `$toLower`, `$toString`, `$toUpper`, `$trim` | `$indexOfBytes`, `$regexFind`, `$regexFindAll`, `$regexMatch`, `$replaceAll`, `$replaceOne`, `$strcasecmp`, `$strLenBytes`, `$substrBytes` |
-
-### Date Operators ⚠️ Partial (8/18)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$dateToString`, `$dayOfMonth`, `$dayOfWeek`, `$hour`, `$minute`, `$month`, `$second`, `$year` | `$dateAdd`, `$dateDiff`, `$dateFromParts`, `$dateFromString`, `$dateToParts`, `$dateSubtract`, `$dayOfYear`, `$isoDayOfWeek`, `$isoWeek`, `$isoWeekYear`, `$millisecond`, `$week` |
-
-### Comparison Operators ✅ Nearly Complete (6/7)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne` | `$cmp` |
-
-### Conditional Operators ⚠️ Partial (2/3)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$cond`, `$ifNull` | `$switch` |
-
-### Type Operators ⚠️ Partial (5/11)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$toBool`, `$toDate`, `$toDouble`, `$toInt`, `$type` | `$convert`, `$isNumber`, `$toDecimal`, `$toLong`, `$toObjectId` |
-
-### Accumulator Operators ⚠️ Partial (8/13)
-
-| Implemented | Not Implemented |
-|-------------|-----------------|
-| `$addToSet`, `$avg`, `$first`, `$last`, `$max`, `$min`, `$push`, `$sum` | `$accumulator`, `$count`, `$mergeObjects`, `$stdDevPop`, `$stdDevSamp` |
+| `$addToSet`, `$avg`, `$first`, `$last`, `$max`, `$min`, `$push`, `$sum`, `$count`, `$mergeObjects`, `$stdDevPop`, `$stdDevSamp` | `$accumulator` (custom JS) |
 
 ---
 
@@ -324,25 +324,22 @@ These features don't apply to a file-based implementation:
 All core CRUD methods:
 - `insertOne`, `insertMany`
 - `find`, `findOne`
-- `updateOne`, `updateMany`
+- `updateOne`, `updateMany`, `replaceOne`
 - `deleteOne`, `deleteMany`
 - `findOneAndUpdate`, `findOneAndReplace`, `findOneAndDelete`
 - `bulkWrite` (ordered and unordered)
 - `aggregate`
 - `countDocuments`, `estimatedDocumentCount`, `distinct`
-- `createIndex`, `dropIndex`, `indexes`, `listIndexes`
+- `createIndex`, `createIndexes`, `dropIndex`, `dropIndexes`, `indexes`, `listIndexes`
 - `drop`, `rename`, `stats`
 
 ### Not Implemented ❌
 
 | Method | Workaround |
 |--------|------------|
-| `replaceOne` | Use `bulkWrite` with `replaceOne` operation |
 | `watch` | Not available - poll with `find()` |
 | `initializeOrderedBulkOp` | Use `bulkWrite()` with `ordered: true` |
 | `initializeUnorderedBulkOp` | Use `bulkWrite()` with `ordered: false` |
-| `createIndexes` | Call `createIndex` in a loop |
-| `dropIndexes` | Call `dropIndex` in a loop |
 
 ### Method Options Not Supported ❌
 

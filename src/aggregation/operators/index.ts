@@ -24,6 +24,14 @@ export const operators = {
   $floor: arithmetic.evalFloor,
   $round: arithmetic.evalRound,
   $mod: arithmetic.evalMod,
+  $rand: arithmetic.evalRand,
+  $exp: arithmetic.evalExp,
+  $ln: arithmetic.evalLn,
+  $log: arithmetic.evalLog,
+  $log10: arithmetic.evalLog10,
+  $pow: arithmetic.evalPow,
+  $sqrt: arithmetic.evalSqrt,
+  $trunc: arithmetic.evalTrunc,
 
   // String
   $concat: string.evalConcat,
@@ -37,6 +45,15 @@ export const operators = {
   $rtrim: string.evalRTrim,
   $toString: string.evalToString,
   $indexOfCP: string.evalIndexOfCP,
+  $regexFind: string.evalRegexFind,
+  $regexFindAll: string.evalRegexFindAll,
+  $regexMatch: string.evalRegexMatch,
+  $replaceOne: string.evalReplaceOne,
+  $replaceAll: string.evalReplaceAll,
+  $strcasecmp: string.evalStrcasecmp,
+  $strLenBytes: string.evalStrLenBytes,
+  $indexOfBytes: string.evalIndexOfBytes,
+  $substrBytes: string.evalSubstrBytes,
 
   // Comparison
   $gt: comparison.evalGt,
@@ -45,10 +62,12 @@ export const operators = {
   $lte: comparison.evalLte,
   $eq: comparison.evalEq,
   $ne: comparison.evalNe,
+  $cmp: comparison.evalCmp,
 
   // Conditional
   $cond: conditional.evalCond,
   $ifNull: conditional.evalIfNull,
+  $switch: conditional.evalSwitch,
 
   // Array
   $size: array.evalSize,
@@ -59,6 +78,16 @@ export const operators = {
   $map: array.evalMap,
   $reduce: array.evalReduce,
   $in: array.evalIn,
+  $first: array.evalFirst,
+  $last: array.evalLast,
+  $indexOfArray: array.evalIndexOfArray,
+  $isArray: array.evalIsArray,
+  $range: array.evalRange,
+  $reverseArray: array.evalReverseArray,
+  $arrayToObject: array.evalArrayToObject,
+  $objectToArray: array.evalObjectToArray,
+  $zip: array.evalZip,
+  $sortArray: array.evalSortArray,
 
   // Type conversion
   $toInt: typeConversion.evalToInt,
@@ -66,6 +95,11 @@ export const operators = {
   $toBool: typeConversion.evalToBool,
   $toDate: typeConversion.evalToDate,
   $type: typeConversion.evalType,
+  $isNumber: typeConversion.evalIsNumber,
+  $toLong: typeConversion.evalToLong,
+  $toDecimal: typeConversion.evalToDecimal,
+  $toObjectId: typeConversion.evalToObjectId,
+  $convert: typeConversion.evalConvert,
 
   // Date
   $year: date.evalYear,
@@ -76,4 +110,16 @@ export const operators = {
   $second: date.evalSecond,
   $dayOfWeek: date.evalDayOfWeek,
   $dateToString: date.evalDateToString,
+  $millisecond: date.evalMillisecond,
+  $dayOfYear: date.evalDayOfYear,
+  $week: date.evalWeek,
+  $isoWeek: date.evalIsoWeek,
+  $isoWeekYear: date.evalIsoWeekYear,
+  $isoDayOfWeek: date.evalIsoDayOfWeek,
+  $dateAdd: date.evalDateAdd,
+  $dateSubtract: date.evalDateSubtract,
+  $dateDiff: date.evalDateDiff,
+  $dateFromParts: date.evalDateFromParts,
+  $dateToParts: date.evalDateToParts,
+  $dateFromString: date.evalDateFromString,
 };
