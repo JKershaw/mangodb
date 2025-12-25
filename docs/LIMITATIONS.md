@@ -418,6 +418,21 @@ These options are not supported on any method:
 | **ObjectId Generation** | Uses `bson` library (compatible) |
 | **Error Codes** | MongoDB-compatible error codes for common errors |
 
+### JSON Storage Limitations
+
+These differences arise from using JSON instead of BSON for storage:
+
+| Aspect | MongoDB | MangoDB |
+|--------|---------|---------|
+| **`undefined` values** | Stored as explicit undefined | Stripped during serialization (treated as missing) |
+| **`NaN`** | Stored as NaN | Stored as `null` |
+| **`Infinity`** | Stored as Infinity | Stored as `null` |
+| **`-Infinity`** | Stored as -Infinity | Stored as `null` |
+| **Binary data** | Native BinData type | Base64 encoded strings |
+| **Decimal128** | Native decimal type | Converted to JavaScript number |
+
+**Impact**: Code relying on `undefined` field existence, NaN/Infinity comparisons, or high-precision decimals may behave differently.
+
 ---
 
 ## Recommended Usage

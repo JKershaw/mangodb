@@ -398,7 +398,11 @@ export function compareValues(a: unknown, b: unknown): number {
   if (bIsNullish) return 1;  // everything is greater than null/undefined
 
   if (a instanceof ObjectId && b instanceof ObjectId) {
-    return a.toHexString().localeCompare(b.toHexString());
+    const aHex = a.toHexString();
+    const bHex = b.toHexString();
+    if (aHex < bHex) return -1;
+    if (aHex > bHex) return 1;
+    return 0;
   }
 
   if (a instanceof Date && b instanceof Date) {
@@ -410,7 +414,10 @@ export function compareValues(a: unknown, b: unknown): number {
       return a - b;
     }
     if (typeof a === "string" && typeof b === "string") {
-      return a.localeCompare(b);
+      // MongoDB uses binary comparison by default (not locale-aware)
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
     }
     if (typeof a === "boolean" && typeof b === "boolean") {
       if (a === b) return 0;
@@ -418,10 +425,9 @@ export function compareValues(a: unknown, b: unknown): number {
     }
   }
 
-  // For different types, use BSON type ordering
-  const aOrder = getBSONTypeOrder(a);
-  const bOrder = getBSONTypeOrder(b);
-  return aOrder - bOrder;
+  // Different types are incomparable in MongoDB query operators
+  // Return NaN to indicate no match for $gt, $lt, $gte, $lte
+  return NaN;
 }
 
 /**
