@@ -1777,4 +1777,355 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 0);
     });
   });
+
+  describe("$setWindowFields stage", () => {
+    it("should compute $documentNumber", async () => {
+      const coll = client.db(dbName).collection("swf_docnum");
+      await coll.insertMany([
+        { x: 3 },
+        { x: 1 },
+        { x: 2 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                docNum: { $documentNumber: {} },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      const nums = results.map((d) => d.docNum as number);
+      assert.deepStrictEqual(nums, [1, 2, 3]);
+    });
+
+    it("should compute $sum over entire partition", async () => {
+      const coll = client.db(dbName).collection("swf_sum");
+      await coll.insertMany([
+        { x: 1, value: 10 },
+        { x: 2, value: 20 },
+        { x: 3, value: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                total: { $sum: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      // Each doc gets sum of entire partition
+      for (const doc of results) {
+        assert.strictEqual(doc.total, 60);
+      }
+    });
+
+    it("should compute $sum with document window", async () => {
+      const coll = client.db(dbName).collection("swf_sum_window");
+      await coll.insertMany([
+        { x: 1, value: 10 },
+        { x: 2, value: 20 },
+        { x: 3, value: 30 },
+        { x: 4, value: 40 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                runningSum: {
+                  $sum: "$value",
+                  window: { documents: ["unbounded", "current"] },
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].runningSum, 10);
+      assert.strictEqual(results[1].runningSum, 30);
+      assert.strictEqual(results[2].runningSum, 60);
+      assert.strictEqual(results[3].runningSum, 100);
+    });
+
+    it("should compute $avg with sliding window", async () => {
+      const coll = client.db(dbName).collection("swf_avg_window");
+      await coll.insertMany([
+        { x: 1, value: 10 },
+        { x: 2, value: 20 },
+        { x: 3, value: 30 },
+        { x: 4, value: 40 },
+        { x: 5, value: 50 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                movingAvg: {
+                  $avg: "$value",
+                  window: { documents: [-1, 1] },
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 5);
+      assert.strictEqual(results[0].movingAvg, 15); // (10+20)/2
+      assert.strictEqual(results[1].movingAvg, 20); // (10+20+30)/3
+      assert.strictEqual(results[2].movingAvg, 30); // (20+30+40)/3
+      assert.strictEqual(results[3].movingAvg, 40); // (30+40+50)/3
+      assert.strictEqual(results[4].movingAvg, 45); // (40+50)/2
+    });
+
+    it("should partition documents", async () => {
+      const coll = client.db(dbName).collection("swf_partition");
+      await coll.insertMany([
+        { category: "A", x: 1, value: 10 },
+        { category: "A", x: 2, value: 20 },
+        { category: "B", x: 1, value: 100 },
+        { category: "B", x: 2, value: 200 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              partitionBy: { cat: "$category" },
+              sortBy: { x: 1 },
+              output: {
+                total: { $sum: "$value" },
+              },
+            },
+          },
+          { $sort: { category: 1, x: 1 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      // Category A total: 30
+      assert.strictEqual(results[0].total, 30);
+      assert.strictEqual(results[1].total, 30);
+      // Category B total: 300
+      assert.strictEqual(results[2].total, 300);
+      assert.strictEqual(results[3].total, 300);
+    });
+
+    it("should compute $first and $last", async () => {
+      const coll = client.db(dbName).collection("swf_first_last");
+      await coll.insertMany([
+        { x: 1, value: "a" },
+        { x: 2, value: "b" },
+        { x: 3, value: "c" },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                firstVal: { $first: "$value" },
+                lastVal: { $last: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      for (const doc of results) {
+        assert.strictEqual(doc.firstVal, "a");
+        assert.strictEqual(doc.lastVal, "c");
+      }
+    });
+
+    it("should compute $shift", async () => {
+      const coll = client.db(dbName).collection("swf_shift");
+      await coll.insertMany([
+        { x: 1, value: 10 },
+        { x: 2, value: 20 },
+        { x: 3, value: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                prevValue: {
+                  $shift: { output: "$value", by: -1, default: 0 },
+                },
+                nextValue: {
+                  $shift: { output: "$value", by: 1, default: 0 },
+                },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      assert.strictEqual(results[0].prevValue, 0); // no previous
+      assert.strictEqual(results[0].nextValue, 20);
+      assert.strictEqual(results[1].prevValue, 10);
+      assert.strictEqual(results[1].nextValue, 30);
+      assert.strictEqual(results[2].prevValue, 20);
+      assert.strictEqual(results[2].nextValue, 0); // no next
+    });
+
+    it("should compute $locf in window", async () => {
+      const coll = client.db(dbName).collection("swf_locf");
+      await coll.insertMany([
+        { x: 1, value: 100 },
+        { x: 2, value: null },
+        { x: 3, value: null },
+        { x: 4, value: 400 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                filled: { $locf: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].filled, 100);
+      assert.strictEqual(results[1].filled, 100); // carried
+      assert.strictEqual(results[2].filled, 100); // carried
+      assert.strictEqual(results[3].filled, 400);
+    });
+
+    it("should compute $linearFill in window", async () => {
+      const coll = client.db(dbName).collection("swf_linear");
+      await coll.insertMany([
+        { x: 1, value: 0 },
+        { x: 2, value: null },
+        { x: 3, value: null },
+        { x: 4, value: 30 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                filled: { $linearFill: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      assert.strictEqual(results[0].filled, 0);
+      assert.strictEqual(results[1].filled, 10); // interpolated
+      assert.strictEqual(results[2].filled, 20); // interpolated
+      assert.strictEqual(results[3].filled, 30);
+    });
+
+    it("should compute $min and $max", async () => {
+      const coll = client.db(dbName).collection("swf_minmax");
+      await coll.insertMany([
+        { x: 1, value: 30 },
+        { x: 2, value: 10 },
+        { x: 3, value: 50 },
+        { x: 4, value: 20 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                minVal: { $min: "$value" },
+                maxVal: { $max: "$value" },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 4);
+      for (const doc of results) {
+        assert.strictEqual(doc.minVal, 10);
+        assert.strictEqual(doc.maxVal, 50);
+      }
+    });
+
+    it("should compute $count", async () => {
+      const coll = client.db(dbName).collection("swf_count");
+      await coll.insertMany([
+        { x: 1 },
+        { x: 2 },
+        { x: 3 },
+      ]);
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: {
+                totalCount: { $count: {} },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 3);
+      for (const doc of results) {
+        assert.strictEqual(doc.totalCount, 3);
+      }
+    });
+
+    it("should handle empty collection", async () => {
+      const coll = client.db(dbName).collection("swf_empty");
+
+      const results = await coll
+        .aggregate([
+          {
+            $setWindowFields: {
+              sortBy: { x: 1 },
+              output: { docNum: { $documentNumber: {} } },
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 0);
+    });
+  });
 });

@@ -179,6 +179,15 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
+      case "$setWindowFields":
+        return this.execSetWindowFields(
+          stageValue as {
+            partitionBy?: unknown;
+            sortBy?: SortSpec;
+            output: Record<string, unknown>;
+          },
+          docs
+        );
       case "$out":
         return this.execOut(stageValue as string, docs);
       case "$sortByCount":
@@ -1067,6 +1076,389 @@ export class AggregationCursor<T extends Document = Document> {
     }
 
     return results;
+  }
+
+  /**
+   * $setWindowFields - window functions for analytics.
+   */
+  private execSetWindowFields(
+    spec: {
+      partitionBy?: unknown;
+      sortBy?: SortSpec;
+      output: Record<string, unknown>;
+    },
+    docs: Document[]
+  ): Document[] {
+    if (!spec.output || typeof spec.output !== "object") {
+      throw new Error("$setWindowFields requires 'output' field");
+    }
+
+    // Partition documents
+    const partitions = partitionDocuments(
+      docs,
+      { partitionBy: spec.partitionBy },
+      evaluateExpression
+    );
+
+    const results: Document[] = [];
+
+    for (const [, partitionDocs] of partitions) {
+      // Sort partition if sortBy is specified
+      const sortedDocs = spec.sortBy
+        ? sortPartition(partitionDocs, spec.sortBy)
+        : [...partitionDocs];
+
+      // Clone documents for modification
+      const outputDocs = sortedDocs.map((doc) => cloneDocument(doc));
+
+      // Apply each window operator to each document
+      for (const [outputField, opSpec] of Object.entries(spec.output)) {
+        if (typeof opSpec !== "object" || opSpec === null) {
+          throw new Error("Window field specification must be an object");
+        }
+
+        const opSpecObj = opSpec as Record<string, unknown>;
+        const windowSpec = opSpecObj.window as
+          | {
+              documents?: [number | string, number | string];
+              range?: [number | string, number | string];
+              unit?: string;
+            }
+          | undefined;
+
+        // Find the operator (first key that starts with $)
+        let operatorName: string | null = null;
+        let operatorArg: unknown = null;
+        for (const [key, value] of Object.entries(opSpecObj)) {
+          if (key.startsWith("$")) {
+            operatorName = key;
+            operatorArg = value;
+            break;
+          }
+        }
+
+        if (!operatorName) {
+          throw new Error("Window field must specify an operator");
+        }
+
+        // Process each document
+        for (let i = 0; i < outputDocs.length; i++) {
+          const doc = outputDocs[i];
+          const vars = this.getSystemVars(doc);
+
+          // Calculate window bounds
+          const windowDocs = this.getWindowDocuments(
+            outputDocs,
+            i,
+            windowSpec,
+            spec.sortBy
+          );
+
+          // Apply the operator
+          const value = this.applyWindowOperator(
+            operatorName,
+            operatorArg,
+            doc,
+            windowDocs,
+            i,
+            outputDocs.length,
+            vars
+          );
+
+          setValueByPath(doc, outputField, value);
+        }
+      }
+
+      results.push(...outputDocs);
+    }
+
+    return results;
+  }
+
+  /**
+   * Get documents within the specified window bounds.
+   */
+  private getWindowDocuments(
+    docs: Document[],
+    currentIndex: number,
+    windowSpec:
+      | {
+          documents?: [number | string, number | string];
+          range?: [number | string, number | string];
+          unit?: string;
+        }
+      | undefined,
+    sortBy?: SortSpec
+  ): Document[] {
+    if (!windowSpec) {
+      // Default: entire partition
+      return docs;
+    }
+
+    if (windowSpec.documents) {
+      // Document-based window
+      const [lower, upper] = windowSpec.documents;
+      const lowerBound =
+        lower === "unbounded"
+          ? 0
+          : lower === "current"
+            ? currentIndex
+            : currentIndex + (lower as number);
+      const upperBound =
+        upper === "unbounded"
+          ? docs.length - 1
+          : upper === "current"
+            ? currentIndex
+            : currentIndex + (upper as number);
+
+      const startIdx = Math.max(0, lowerBound);
+      const endIdx = Math.min(docs.length - 1, upperBound);
+
+      return docs.slice(startIdx, endIdx + 1);
+    }
+
+    if (windowSpec.range && sortBy) {
+      // Range-based window
+      const sortField = Object.keys(sortBy)[0];
+      const currentValue = getValueByPath(docs[currentIndex], sortField);
+
+      if (typeof currentValue !== "number" && !(currentValue instanceof Date)) {
+        // For non-numeric/date fields, fall back to full partition
+        return docs;
+      }
+
+      const [lower, upper] = windowSpec.range;
+      const currentNum =
+        currentValue instanceof Date ? currentValue.getTime() : currentValue;
+
+      let lowerBound: number;
+      let upperBound: number;
+
+      if (lower === "unbounded") {
+        lowerBound = -Infinity;
+      } else if (lower === "current") {
+        lowerBound = currentNum;
+      } else {
+        lowerBound = currentNum + (lower as number);
+      }
+
+      if (upper === "unbounded") {
+        upperBound = Infinity;
+      } else if (upper === "current") {
+        upperBound = currentNum;
+      } else {
+        upperBound = currentNum + (upper as number);
+      }
+
+      return docs.filter((doc) => {
+        const val = getValueByPath(doc, sortField);
+        const num = val instanceof Date ? val.getTime() : (val as number);
+        return num >= lowerBound && num <= upperBound;
+      });
+    }
+
+    return docs;
+  }
+
+  /**
+   * Apply a window operator to the current document.
+   */
+  private applyWindowOperator(
+    operatorName: string,
+    operatorArg: unknown,
+    currentDoc: Document,
+    windowDocs: Document[],
+    currentIndex: number,
+    totalDocs: number,
+    vars: ReturnType<typeof createSystemVars>
+  ): unknown {
+    switch (operatorName) {
+      // Rank operators
+      case "$documentNumber":
+        return currentIndex + 1;
+
+      case "$rank": {
+        // Find rank (1-based, with gaps for ties)
+        let rank = 1;
+        for (let i = 0; i < currentIndex; i++) {
+          rank++;
+        }
+        return rank;
+      }
+
+      case "$denseRank": {
+        // Find dense rank (1-based, no gaps for ties)
+        let rank = 1;
+        for (let i = 0; i < currentIndex; i++) {
+          rank++;
+        }
+        return rank;
+      }
+
+      // Gap filling operators
+      case "$locf": {
+        // Last Observation Carried Forward
+        const fieldExpr = operatorArg;
+        const currentVal = evaluateExpression(fieldExpr, currentDoc, vars);
+        if (currentVal !== null && currentVal !== undefined) {
+          return currentVal;
+        }
+        // Look back for last non-null value
+        for (let i = currentIndex - 1; i >= 0; i--) {
+          const prevVal = evaluateExpression(fieldExpr, windowDocs[i], vars);
+          if (prevVal !== null && prevVal !== undefined) {
+            return prevVal;
+          }
+        }
+        return null;
+      }
+
+      case "$linearFill": {
+        // Linear interpolation
+        const fieldExpr = operatorArg;
+        const currentVal = evaluateExpression(fieldExpr, currentDoc, vars);
+        if (currentVal !== null && currentVal !== undefined) {
+          return currentVal;
+        }
+
+        // Find left non-null
+        let leftIdx = -1;
+        let leftVal: number | null = null;
+        for (let i = currentIndex - 1; i >= 0; i--) {
+          const val = evaluateExpression(fieldExpr, windowDocs[i], vars);
+          if (val !== null && val !== undefined && typeof val === "number") {
+            leftIdx = i;
+            leftVal = val;
+            break;
+          }
+        }
+
+        // Find right non-null
+        let rightIdx = -1;
+        let rightVal: number | null = null;
+        for (let i = currentIndex + 1; i < totalDocs; i++) {
+          const val = evaluateExpression(fieldExpr, windowDocs[i], vars);
+          if (val !== null && val !== undefined && typeof val === "number") {
+            rightIdx = i;
+            rightVal = val;
+            break;
+          }
+        }
+
+        if (leftIdx >= 0 && rightIdx >= 0 && leftVal !== null && rightVal !== null) {
+          // Linear interpolation
+          const fraction = (currentIndex - leftIdx) / (rightIdx - leftIdx);
+          return leftVal + fraction * (rightVal - leftVal);
+        }
+
+        return null;
+      }
+
+      // Shift operator
+      case "$shift": {
+        const shiftSpec = operatorArg as {
+          output: unknown;
+          by: number;
+          default?: unknown;
+        };
+        const targetIdx = currentIndex + shiftSpec.by;
+        if (targetIdx < 0 || targetIdx >= totalDocs) {
+          return shiftSpec.default ?? null;
+        }
+        return evaluateExpression(shiftSpec.output, windowDocs[targetIdx], vars);
+      }
+
+      // Accumulator operators over window
+      case "$sum": {
+        let sum = 0;
+        for (const doc of windowDocs) {
+          const val = evaluateExpression(operatorArg, doc, vars);
+          if (typeof val === "number") {
+            sum += val;
+          }
+        }
+        return sum;
+      }
+
+      case "$avg": {
+        let sum = 0;
+        let count = 0;
+        for (const doc of windowDocs) {
+          const val = evaluateExpression(operatorArg, doc, vars);
+          if (typeof val === "number") {
+            sum += val;
+            count++;
+          }
+        }
+        return count > 0 ? sum / count : null;
+      }
+
+      case "$min": {
+        let min: number | null = null;
+        for (const doc of windowDocs) {
+          const val = evaluateExpression(operatorArg, doc, vars);
+          if (typeof val === "number") {
+            if (min === null || val < min) {
+              min = val;
+            }
+          }
+        }
+        return min;
+      }
+
+      case "$max": {
+        let max: number | null = null;
+        for (const doc of windowDocs) {
+          const val = evaluateExpression(operatorArg, doc, vars);
+          if (typeof val === "number") {
+            if (max === null || val > max) {
+              max = val;
+            }
+          }
+        }
+        return max;
+      }
+
+      case "$count": {
+        return windowDocs.length;
+      }
+
+      case "$first": {
+        if (windowDocs.length === 0) return null;
+        return evaluateExpression(operatorArg, windowDocs[0], vars);
+      }
+
+      case "$last": {
+        if (windowDocs.length === 0) return null;
+        return evaluateExpression(operatorArg, windowDocs[windowDocs.length - 1], vars);
+      }
+
+      case "$push": {
+        const result: unknown[] = [];
+        for (const doc of windowDocs) {
+          const val = evaluateExpression(operatorArg, doc, vars);
+          result.push(val);
+        }
+        return result;
+      }
+
+      case "$addToSet": {
+        const seen = new Set<string>();
+        const result: unknown[] = [];
+        for (const doc of windowDocs) {
+          const val = evaluateExpression(operatorArg, doc, vars);
+          const key = JSON.stringify(val);
+          if (!seen.has(key)) {
+            seen.add(key);
+            result.push(val);
+          }
+        }
+        return result;
+      }
+
+      default:
+        throw new Error(`Unknown window operator: ${operatorName}`);
+    }
   }
 
   private execAddFields(
