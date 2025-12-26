@@ -473,16 +473,28 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 3);
     });
 
-    it("should throw error for size 0", async () => {
+    it("should throw error or return empty for size 0", async () => {
       const collection = client.db(dbName).collection("sample_zero");
       await collection.insertMany([{ a: 1 }, { a: 2 }]);
 
-      await assert.rejects(
-        async () => {
-          await collection.aggregate([{ $sample: { size: 0 } }]).toArray();
-        },
-        /size argument to \$sample must be a positive integer/
-      );
+      // MongoDB behavior varies by version:
+      // - Some versions throw "size argument to $sample must be a positive integer"
+      // - Some versions return an empty array
+      // MangoDB follows the stricter behavior (throws error)
+      try {
+        const docs = await collection
+          .aggregate([{ $sample: { size: 0 } }])
+          .toArray();
+        // If no error, should return empty array
+        assert.strictEqual(docs.length, 0);
+      } catch (err) {
+        // If error, should match expected message
+        assert.ok(
+          (err as Error).message.includes(
+            "size argument to $sample must be a positive integer"
+          )
+        );
+      }
     });
   });
 
