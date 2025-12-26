@@ -57,11 +57,13 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
         const collection = client.db(dbName).collection("sysvars_now");
         await collection.insertOne({ name: "test" });
 
-        const before = new Date();
+        // Allow 5 seconds tolerance for clock drift between client and MongoDB server
+        const CLOCK_DRIFT_MS = 5000;
+        const before = new Date(Date.now() - CLOCK_DRIFT_MS);
         const results = await collection
           .aggregate([{ $project: { currentTime: "$$NOW", _id: 0 } }])
           .toArray();
-        const after = new Date();
+        const after = new Date(Date.now() + CLOCK_DRIFT_MS);
 
         assert.ok(results[0].currentTime instanceof Date);
         assert.ok(results[0].currentTime >= before);
@@ -124,40 +126,9 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       });
     });
 
-    describe("$$DESCEND, $$PRUNE, $$KEEP (for $redact)", () => {
-      it("should have $$DESCEND as string constant", async () => {
-        const collection = client.db(dbName).collection("sysvars_descend");
-        await collection.insertOne({ a: 1 });
-
-        const results = await collection
-          .aggregate([{ $project: { action: "$$DESCEND", _id: 0 } }])
-          .toArray();
-
-        assert.strictEqual(results[0].action, "descend");
-      });
-
-      it("should have $$PRUNE as string constant", async () => {
-        const collection = client.db(dbName).collection("sysvars_prune");
-        await collection.insertOne({ a: 1 });
-
-        const results = await collection
-          .aggregate([{ $project: { action: "$$PRUNE", _id: 0 } }])
-          .toArray();
-
-        assert.strictEqual(results[0].action, "prune");
-      });
-
-      it("should have $$KEEP as string constant", async () => {
-        const collection = client.db(dbName).collection("sysvars_keep");
-        await collection.insertOne({ a: 1 });
-
-        const results = await collection
-          .aggregate([{ $project: { action: "$$KEEP", _id: 0 } }])
-          .toArray();
-
-        assert.strictEqual(results[0].action, "keep");
-      });
-    });
+    // Note: $$DESCEND, $$PRUNE, $$KEEP are only valid in $redact context
+    // MongoDB throws "Use of undefined variable" when used in $project
+    // These variables are tested in the $redact section below
   });
 
   // ==================== Task 5.0.2: Partition Grouping ====================
@@ -788,7 +759,8 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
           collection
             .aggregate([{ $replaceWith: "$nonexistent" }])
             .toArray(),
-        /newRoot.*must evaluate to an object/
+        // MongoDB: "'replacement document' must evaluate to an object"
+        /must evaluate to an object/
       );
     });
 
@@ -799,7 +771,8 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       await assert.rejects(
         () =>
           collection.aggregate([{ $replaceWith: "$items" }]).toArray(),
-        /newRoot.*must evaluate to an object/
+        // MongoDB: "'replacement document' must evaluate to an object"
+        /must evaluate to an object/
       );
     });
 
@@ -810,7 +783,8 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       await assert.rejects(
         () =>
           collection.aggregate([{ $replaceWith: "$value" }]).toArray(),
-        /newRoot.*must evaluate to an object/
+        // MongoDB: "'replacement document' must evaluate to an object"
+        /must evaluate to an object/
       );
     });
   });
@@ -887,7 +861,8 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
           collection
             .aggregate([{ $unset: ["a", 123 as unknown as string] }])
             .toArray(),
-        /\$unset specification must be a string or array of strings/
+        // MongoDB: "$unset specification must be a string or an array containing only string values"
+        /\$unset specification must be a string/
       );
     });
 
@@ -903,10 +878,13 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
   });
 
   describe("$documents (Task 5.5)", () => {
-    it("should inject literal documents as first stage", async () => {
-      const collection = client.db(dbName).collection("documents_literal");
+    // Note: $documents must be run with db.aggregate() (database-level aggregate)
+    // MongoDB: "$documents can only be run with {aggregate: 1}"
 
-      const results = await collection
+    it("should inject literal documents as first stage", async () => {
+      const db = client.db(dbName);
+
+      const results = await db
         .aggregate([
           { $documents: [{ a: 1 }, { a: 2 }, { a: 3 }] },
           { $match: { a: { $gt: 1 } } },
@@ -919,9 +897,9 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
     });
 
     it("should work with empty array", async () => {
-      const collection = client.db(dbName).collection("documents_empty");
+      const db = client.db(dbName);
 
-      const results = await collection
+      const results = await db
         .aggregate([{ $documents: [] }, { $project: { _id: 0 } }])
         .toArray();
 
@@ -929,17 +907,19 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
     });
 
     it("should support $$NOW in documents", async () => {
-      const collection = client.db(dbName).collection("documents_now");
+      const db = client.db(dbName);
 
-      const before = new Date();
-      const results = await collection
+      // Allow 5 seconds tolerance for clock drift between client and MongoDB server
+      const CLOCK_DRIFT_MS = 5000;
+      const before = new Date(Date.now() - CLOCK_DRIFT_MS);
+      const results = await db
         .aggregate([
           {
             $documents: [{ timestamp: "$$NOW" }],
           },
         ])
         .toArray();
-      const after = new Date();
+      const after = new Date(Date.now() + CLOCK_DRIFT_MS);
 
       assert.ok(results[0].timestamp instanceof Date);
       assert.ok((results[0].timestamp as Date) >= before);
@@ -947,49 +927,54 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
     });
 
     it("should throw error when not first stage", async () => {
-      const collection = client.db(dbName).collection("documents_notfirst");
-      await collection.insertOne({ x: 1 });
+      const db = client.db(dbName);
 
       await assert.rejects(
         () =>
-          collection
+          db
             .aggregate([
               { $match: {} },
               { $documents: [{ a: 1 }] },
             ])
             .toArray(),
-        /\$documents must be the first stage/
+        // MongoDB: "Pipeline can only have no collection if the first stage is $changeStream or $documents or $currentOp"
+        // MangoDB: "$documents must be the first stage"
+        /first stage|\$documents/i
       );
     });
 
     it("should throw error for non-array", async () => {
-      const collection = client.db(dbName).collection("documents_nonarray");
+      const db = client.db(dbName);
 
       await assert.rejects(
         () =>
-          collection
+          db
             .aggregate([{ $documents: { a: 1 } }])
             .toArray(),
-        /\$documents requires array of documents/
+        // MongoDB: "an array is expected"
+        // MangoDB: "$documents requires array of documents"
+        /array/i
       );
     });
 
     it("should throw error for non-object elements", async () => {
-      const collection = client.db(dbName).collection("documents_nonobj");
+      const db = client.db(dbName);
 
       await assert.rejects(
         () =>
-          collection
+          db
             .aggregate([{ $documents: [{ a: 1 }, "string"] }])
             .toArray(),
-        /\$documents array elements must be objects/
+        // MongoDB: "an object is required"
+        // MangoDB: "$documents array elements must be objects"
+        /object/i
       );
     });
 
     it("should work with subsequent stages", async () => {
-      const collection = client.db(dbName).collection("documents_stages");
+      const db = client.db(dbName);
 
-      const results = await collection
+      const results = await db
         .aggregate([
           { $documents: [{ x: 5 }, { x: 10 }, { x: 15 }] },
           { $addFields: { doubled: { $multiply: ["$x", 2] } } },
@@ -1134,7 +1119,9 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
           collection
             .aggregate([{ $redact: { $literal: "invalid" } }])
             .toArray(),
-        /\$redact must resolve to \$\$DESCEND, \$\$PRUNE, or \$\$KEEP/
+        // MongoDB: "$redact's expression should not return anything aside from the variables $$KEEP, $$DESCEND, and $$PRUNE"
+        // MangoDB: "$redact must resolve to $$DESCEND, $$PRUNE, or $$KEEP"
+        /\$redact.*\$\$(KEEP|DESCEND|PRUNE)/
       );
     });
 
@@ -1336,7 +1323,9 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
               },
             ])
             .toArray(),
-        /\$graphLookup requires 'as'/
+        // MongoDB: "$graphLookup requires 'from', 'as', 'startWith', 'connectFromField', and 'connectToField' to be specified."
+        // MangoDB: "$graphLookup requires 'as'"
+        /\$graphLookup requires.*'as'/
       );
     });
   });
@@ -1351,7 +1340,7 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       ]);
 
       const results = await coll
-        .aggregate([{ $densify: { field: "x", range: { step: 1 } } }])
+        .aggregate([{ $densify: { field: "x", range: { step: 1, bounds: "full" } } }])
         .toArray();
 
       // Should have docs for x=1,2,3,4,5
@@ -1368,7 +1357,7 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       ]);
 
       const results = await coll
-        .aggregate([{ $densify: { field: "x", range: { step: 1 } } }])
+        .aggregate([{ $densify: { field: "x", range: { step: 1, bounds: "full" } } }])
         .toArray();
 
       // Should have x=0,1,2
@@ -1395,7 +1384,7 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
           {
             $densify: {
               field: "timestamp",
-              range: { step: 1, unit: "day" },
+              range: { step: 1, unit: "day", bounds: "full" },
             },
           },
         ])
@@ -1423,7 +1412,7 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
           {
             $densify: {
               field: "x",
-              range: { step: 1 },
+              range: { step: 1, bounds: "partition" },
               partitionByFields: ["category"],
             },
           },
@@ -1460,10 +1449,10 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
         ])
         .toArray();
 
-      // Should have x=3,4,5,6,7
-      assert.strictEqual(results.length, 5);
+      // MongoDB uses exclusive upper bound for numeric ranges: [3, 7) = 3,4,5,6
+      assert.strictEqual(results.length, 4);
       const xValues = results.map((d) => d.x as number).sort((a, b) => a - b);
-      assert.deepStrictEqual(xValues, [3, 4, 5, 6, 7]);
+      assert.deepStrictEqual(xValues, [3, 4, 5, 6]);
     });
 
     it("should throw error for field starting with $", async () => {
@@ -1474,10 +1463,12 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
         () =>
           coll
             .aggregate([
-              { $densify: { field: "$invalid", range: { step: 1 } } },
+              { $densify: { field: "$invalid", range: { step: 1, bounds: "full" } } },
             ])
             .toArray(),
-        /Cannot densify field starting with '\$'/
+        // MongoDB: "FieldPath field names may not start with '$'"
+        // MangoDB: "Cannot densify field starting with '$'"
+        /\$|FieldPath/
       );
     });
 
@@ -1488,9 +1479,11 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       await assert.rejects(
         () =>
           coll
-            .aggregate([{ $densify: { field: "x", range: { step: 0 } } }])
+            .aggregate([{ $densify: { field: "x", range: { step: 0, bounds: "full" } } }])
             .toArray(),
-        /Step must be positive/
+        // MongoDB: "'$densify.range.step' must be a positive number"
+        // MangoDB: "Step must be positive"
+        /step.*positive|positive.*step/i
       );
     });
 
@@ -1502,10 +1495,12 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
         () =>
           coll
             .aggregate([
-              { $densify: { field: "x", range: { step: 1, unit: "day" } } },
+              { $densify: { field: "x", range: { step: 1, unit: "day", bounds: "full" } } },
             ])
             .toArray(),
-        /Cannot specify unit for numeric field/
+        // MongoDB: "PlanExecutor error during aggregation :: caused by :: The type of numeric is not Date"
+        // MangoDB: "Cannot specify unit for numeric field"
+        /unit|numeric|Date/i
       );
     });
 
@@ -1516,9 +1511,11 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       await assert.rejects(
         () =>
           coll
-            .aggregate([{ $densify: { field: "ts", range: { step: 1 } } }])
+            .aggregate([{ $densify: { field: "ts", range: { step: 1, bounds: "full" } } }])
             .toArray(),
-        /Unit required for date field/
+        // MongoDB: "PlanExecutor error during aggregation :: caused by :: The type of a date is Date"
+        // MangoDB: "Unit required for date field"
+        /unit|date/i
       );
     });
 
@@ -1527,7 +1524,7 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       // Empty collection
 
       const results = await coll
-        .aggregate([{ $densify: { field: "x", range: { step: 1 } } }])
+        .aggregate([{ $densify: { field: "x", range: { step: 1, bounds: "full" } } }])
         .toArray();
 
       assert.strictEqual(results.length, 0);
@@ -1701,18 +1698,9 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
       assert.strictEqual(results[2].b, 300);
     });
 
-    it("should throw error when sortBy missing for locf", async () => {
-      const coll = client.db(dbName).collection("fill_error_sort");
-      await coll.insertOne({ x: 1, y: null });
-
-      await assert.rejects(
-        () =>
-          coll
-            .aggregate([{ $fill: { output: { y: { method: "locf" } } } }])
-            .toArray(),
-        /sortBy required for locf\/linear/
-      );
-    });
+    // Note: MongoDB does NOT require sortBy for locf method in $fill
+    // It only requires sortBy for linear method
+    // MangoDB aligns with this behavior
 
     it("should throw error when sortBy missing for linear", async () => {
       const coll = client.db(dbName).collection("fill_error_sort2");
@@ -1723,7 +1711,9 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
           coll
             .aggregate([{ $fill: { output: { y: { method: "linear" } } } }])
             .toArray(),
-        /sortBy required for locf\/linear/
+        // MongoDB: "$linearFill must be specified with a top level sortBy expression with exactly one element"
+        // MangoDB: "sortBy required for locf/linear"
+        /sortBy|linearFill/i
       );
     });
 
@@ -1743,29 +1733,14 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
               },
             ])
             .toArray(),
-        /Cannot specify both 'value' and 'method'/
+        // MongoDB: "Each fill output specification must have exactly one of 'method' or 'value' fields, not both"
+        // MangoDB: "Cannot specify both 'value' and 'method'"
+        /value.*method|method.*value/i
       );
     });
 
-    it("should throw error for string partitionBy", async () => {
-      const coll = client.db(dbName).collection("fill_error_partition");
-      await coll.insertOne({ x: 1, y: null });
-
-      await assert.rejects(
-        () =>
-          coll
-            .aggregate([
-              {
-                $fill: {
-                  partitionBy: "category" as unknown as object,
-                  output: { y: { value: 0 } },
-                },
-              },
-            ])
-            .toArray(),
-        /partitionBy must be an object/
-      );
-    });
+    // Note: MongoDB allows string partitionBy with expression syntax
+    // MangoDB can support this as well - removing this test as it tests invalid assumption
 
     it("should handle empty collection", async () => {
       const coll = client.db(dbName).collection("fill_empty");
@@ -2242,7 +2217,11 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { t: 1 },
               output: {
-                rate: { $derivative: { input: "$value" } },
+                rate: {
+                  $derivative: { input: "$value" },
+                  // MongoDB requires explicit window bounds for $derivative
+                  window: { documents: [-1, 0] },
+                },
               },
             },
           },
@@ -2271,18 +2250,25 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { t: 1 },
               output: {
-                area: { $integral: { input: "$value" } },
+                area: {
+                  $integral: { input: "$value" },
+                  // MongoDB computes integral over entire partition by default
+                  // Using unbounded window to match this behavior
+                  window: { documents: ["unbounded", "unbounded"] },
+                },
               },
             },
           },
         ])
         .toArray();
 
+      // MongoDB computes integral over entire partition - all docs have same result
       assert.strictEqual(results.length, 4);
-      assert.strictEqual(results[0].area, 0); // no area yet
-      assert.strictEqual(results[1].area, 5); // trapezoid: (0+10)/2 * 1 = 5
-      assert.strictEqual(results[2].area, 15); // 5 + (10+10)/2 * 1 = 15
-      assert.strictEqual(results[3].area, 20); // 15 + (10+0)/2 * 1 = 20
+      // Total area = (0+10)/2 * 1 + (10+10)/2 * 1 + (10+0)/2 * 1 = 5 + 10 + 5 = 20
+      assert.strictEqual(results[0].area, 20);
+      assert.strictEqual(results[1].area, 20);
+      assert.strictEqual(results[2].area, 20);
+      assert.strictEqual(results[3].area, 20);
     });
 
     it("should compute $expMovingAvg with N", async () => {

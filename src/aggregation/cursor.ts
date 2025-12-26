@@ -917,6 +917,8 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Generate all values from lower to upper bound
+      // Note: MongoDB uses exclusive upper bound for explicit bounds arrays [lower, upper)
+      const isExplicitBounds = Array.isArray(spec.range.bounds);
       let current = lowerBound;
       while (true) {
         const currentKey =
@@ -924,7 +926,8 @@ export class AggregationCursor<T extends Document = Document> {
         const upperKey =
           upperBound instanceof Date ? upperBound.getTime() : upperBound;
 
-        if (currentKey > upperKey) break;
+        // Exclusive upper bound for explicit bounds, inclusive for partition/full
+        if (isExplicitBounds ? currentKey >= upperKey : currentKey > upperKey) break;
 
         if (existingDocsByValue.has(currentKey)) {
           // Use existing document
@@ -1591,6 +1594,7 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Integral operator - area under curve (trapezoidal rule)
+      // Uses windowDocs to respect window bounds
       case "$integral": {
         const integralSpec = operatorArg as {
           input: unknown;
@@ -1602,9 +1606,10 @@ export class AggregationCursor<T extends Document = Document> {
         const sortField = Object.keys(sortBy)[0];
         let totalArea = 0;
 
-        for (let i = 1; i <= currentIndex; i++) {
-          const prevDoc = allDocs[i - 1];
-          const currDoc = allDocs[i];
+        // Use windowDocs to respect window bounds
+        for (let i = 1; i < windowDocs.length; i++) {
+          const prevDoc = windowDocs[i - 1];
+          const currDoc = windowDocs[i];
 
           const prevVars = this.getSystemVars(prevDoc);
           const currVars = this.getSystemVars(currDoc);

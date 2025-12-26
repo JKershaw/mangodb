@@ -73,6 +73,7 @@ export interface TestDb {
     options?: ListCollectionsOptions
   ): ListCollectionsCursor;
   stats(): Promise<DbStats>;
+  aggregate<T extends Document = Document>(pipeline: Document[]): AggregationCursor<T>;
 }
 
 export interface UpdateResult {

@@ -1,4 +1,5 @@
 import { MangoCollection } from "./collection.ts";
+import { AggregationCursor, type AggregationDbContext } from "./aggregation/index.ts";
 import { rm, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { matchesFilter } from "./query-matcher.ts";
@@ -8,6 +9,8 @@ import type {
   ListCollectionsOptions,
   CollectionInfo,
   DbStats,
+  PipelineStage,
+  AggregateOptions,
 } from "./types.ts";
 
 /**
@@ -217,6 +220,45 @@ export class MangoDb {
       indexSize,
       ok: 1,
     };
+  }
+
+  /**
+   * Run an aggregation pipeline on the database.
+   *
+   * This is used for aggregation stages that don't require a collection,
+   * such as $documents which injects literal documents into the pipeline.
+   *
+   * @param pipeline - Array of aggregation pipeline stages
+   * @param _options - Aggregation options (currently unused)
+   * @returns An AggregationCursor to iterate results
+   *
+   * @example
+   * ```typescript
+   * // Use $documents to inject literal documents
+   * const results = await db.aggregate([
+   *   { $documents: [{ a: 1 }, { a: 2 }] },
+   *   { $match: { a: { $gt: 1 } } }
+   * ]).toArray();
+   * ```
+   */
+  aggregate<T extends Document = Document>(
+    pipeline: PipelineStage[],
+    _options?: AggregateOptions
+  ): AggregationCursor<T> {
+    // Create database context for $lookup and other stages that need collection access
+    const dbContext: AggregationDbContext = {
+      getCollection: (name: string) => {
+        return new MangoCollection(this.dataDir, this.name, name);
+      },
+    };
+
+    // For database-level aggregate, start with empty documents
+    // Stages like $documents will inject their own documents
+    return new AggregationCursor<T>(
+      async () => [],
+      pipeline,
+      dbContext
+    );
   }
 }
 
