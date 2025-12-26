@@ -350,8 +350,35 @@ export interface BulkWriteResult {
  * - "text" for text indexes
  * - "2d" for 2d planar geospatial indexes
  * - "2dsphere" for 2dsphere geospatial indexes
+ * - "hashed" for hashed indexes
  */
-export type IndexKeySpec = Record<string, 1 | -1 | "text" | "2d" | "2dsphere">;
+export type IndexKeySpec = Record<
+  string,
+  1 | -1 | "text" | "2d" | "2dsphere" | "hashed"
+>;
+
+/**
+ * Collation options for locale-aware string comparison.
+ * Controls how string comparison is performed for index operations.
+ * @property locale - ICU locale identifier (required)
+ * @property strength - Comparison level: 1 (base), 2 (+accents), 3 (+case), 4 (+width), 5 (identical)
+ * @property caseLevel - Whether to consider case as a separate level
+ * @property caseFirst - Sort order for uppercase vs lowercase: "upper", "lower", or "off"
+ * @property numericOrdering - Whether to compare numeric strings as numbers
+ * @property alternate - How to handle whitespace/punctuation: "non-ignorable" or "shifted"
+ * @property maxVariable - Which characters are affected by alternate: "punct" or "space"
+ * @property backwards - Whether to reverse secondary difference sorting (e.g., French accents)
+ */
+export interface CollationOptions {
+  locale: string;
+  strength?: 1 | 2 | 3 | 4 | 5;
+  caseLevel?: boolean;
+  caseFirst?: "upper" | "lower" | "off";
+  numericOrdering?: boolean;
+  alternate?: "non-ignorable" | "shifted";
+  maxVariable?: "punct" | "space";
+  backwards?: boolean;
+}
 
 /**
  * Options for creating an index.
@@ -363,6 +390,11 @@ export type IndexKeySpec = Record<string, 1 | -1 | "text" | "2d" | "2dsphere">;
  * @property partialFilterExpression - Only index documents matching this filter expression
  * @property min - Minimum bound for 2d index coordinates (default: -180)
  * @property max - Maximum bound for 2d index coordinates (default: 180)
+ * @property hidden - When true, the index is hidden from the query planner
+ * @property collation - Locale-aware string comparison options
+ * @property weights - Field weights for text indexes (1-99999)
+ * @property default_language - Default language for text indexes
+ * @property wildcardProjection - Include/exclude fields for wildcard indexes
  */
 export interface CreateIndexOptions {
   unique?: boolean;
@@ -373,6 +405,14 @@ export interface CreateIndexOptions {
   // Geospatial index options (for 2d indexes)
   min?: number;
   max?: number;
+  // Phase 11: New index options
+  hidden?: boolean;
+  collation?: CollationOptions;
+  // Text index options
+  weights?: Record<string, number>;
+  default_language?: string;
+  // Wildcard index options
+  wildcardProjection?: Record<string, 0 | 1>;
 }
 
 /**
@@ -388,6 +428,12 @@ export interface CreateIndexOptions {
  * @property min - Minimum coordinate bound for 2d indexes
  * @property max - Maximum coordinate bound for 2d indexes
  * @property 2dsphereIndexVersion - Version of 2dsphere index (typically 3)
+ * @property hidden - Whether this index is hidden from the query planner
+ * @property collation - Locale-aware string comparison options
+ * @property weights - Field weights for text indexes
+ * @property default_language - Default language for text indexes
+ * @property textIndexVersion - Version of text index (typically 3)
+ * @property wildcardProjection - Include/exclude fields for wildcard indexes
  */
 export interface IndexInfo {
   v: number;
@@ -401,6 +447,15 @@ export interface IndexInfo {
   min?: number;
   max?: number;
   "2dsphereIndexVersion"?: number;
+  // Phase 11: New index metadata
+  hidden?: boolean;
+  collation?: CollationOptions;
+  // Text index metadata
+  weights?: Record<string, number>;
+  default_language?: string;
+  textIndexVersion?: number;
+  // Wildcard index metadata
+  wildcardProjection?: Record<string, 0 | 1>;
 }
 
 /**

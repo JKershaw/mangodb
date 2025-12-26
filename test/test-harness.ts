@@ -94,14 +94,32 @@ export interface FindOptions {
   skip?: number;
 }
 
+export interface CollationOptions {
+  locale: string;
+  strength?: 1 | 2 | 3 | 4 | 5;
+  caseLevel?: boolean;
+  caseFirst?: "upper" | "lower" | "off";
+  numericOrdering?: boolean;
+  alternate?: "non-ignorable" | "shifted";
+  maxVariable?: "punct" | "space";
+  backwards?: boolean;
+}
+
 export interface IndexInfo {
   v: number;
-  key: Record<string, 1 | -1 | "text">;
+  key: Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed">;
   name: string;
   unique?: boolean;
   sparse?: boolean;
   expireAfterSeconds?: number;
   partialFilterExpression?: Record<string, unknown>;
+  // Phase 11: New index metadata
+  hidden?: boolean;
+  collation?: CollationOptions;
+  weights?: Record<string, number>;
+  default_language?: string;
+  textIndexVersion?: number;
+  wildcardProjection?: Record<string, 0 | 1>;
 }
 
 export interface CreateIndexOptions {
@@ -110,6 +128,12 @@ export interface CreateIndexOptions {
   sparse?: boolean;
   expireAfterSeconds?: number;
   partialFilterExpression?: Record<string, unknown>;
+  // Phase 11: New index options
+  hidden?: boolean;
+  collation?: CollationOptions;
+  weights?: Record<string, number>;
+  default_language?: string;
+  wildcardProjection?: Record<string, 0 | 1>;
 }
 
 export interface IndexCursor {
@@ -190,13 +214,13 @@ export interface TestCollection<T extends Document = Document> {
   ): Promise<UpdateResult>;
   countDocuments(filter?: Partial<T>): Promise<number>;
   createIndex(
-    keySpec: Record<string, 1 | -1 | "text" | "2d" | "2dsphere">,
+    keySpec: Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed">,
     options?: CreateIndexOptions
   ): Promise<string>;
   createIndexes(
-    indexSpecs: Array<{ key: Record<string, 1 | -1 | "text" | "2d" | "2dsphere"> } & CreateIndexOptions>
+    indexSpecs: Array<{ key: Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed"> } & CreateIndexOptions>
   ): Promise<string[]>;
-  dropIndex(indexNameOrSpec: string | Record<string, 1 | -1 | "text" | "2d" | "2dsphere">): Promise<void>;
+  dropIndex(indexNameOrSpec: string | Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed">): Promise<void>;
   dropIndexes(indexNames?: "*" | string[]): Promise<void>;
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;

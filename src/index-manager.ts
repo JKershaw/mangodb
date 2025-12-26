@@ -158,6 +158,105 @@ export class IndexManager {
       }
     }
 
+    // Validate hashed index restrictions
+    const hashedFields = Object.entries(keySpec).filter(
+      ([, v]) => v === "hashed"
+    );
+    if (hashedFields.length > 0) {
+      // Cannot be unique
+      if (options.unique) {
+        throw new InvalidIndexOptionsError("hashed indexes cannot be unique");
+      }
+      // Cannot have multiple hashed fields in one index
+      if (hashedFields.length > 1) {
+        throw new InvalidIndexOptionsError(
+          "can only have one hashed index field"
+        );
+      }
+    }
+
+    // Validate wildcard index restrictions
+    const wildcardFields = Object.keys(keySpec).filter((k) => k.includes("$**"));
+    if (wildcardFields.length > 0) {
+      // Cannot be unique
+      if (options.unique) {
+        throw new InvalidIndexOptionsError("wildcard indexes cannot be unique");
+      }
+      // Cannot be compound
+      if (Object.keys(keySpec).length > 1) {
+        throw new InvalidIndexOptionsError(
+          "wildcard indexes cannot be compound"
+        );
+      }
+      // Validate wildcardProjection if provided
+      if (options.wildcardProjection) {
+        const nonIdKeys = Object.keys(options.wildcardProjection).filter(
+          (k) => k !== "_id"
+        );
+        const nonIdValues = nonIdKeys.map((k) => options.wildcardProjection![k]);
+        const hasInclusion = nonIdValues.some((v) => v === 1);
+        const hasExclusion = nonIdValues.some((v) => v === 0);
+        if (hasInclusion && hasExclusion) {
+          throw new InvalidIndexOptionsError(
+            "wildcardProjection cannot mix inclusion and exclusion"
+          );
+        }
+      }
+    }
+
+    // Validate hidden option
+    if (options.hidden === true) {
+      const isIdIndex =
+        Object.keys(keySpec).length === 1 && "_id" in keySpec;
+      if (isIdIndex) {
+        throw new InvalidIndexOptionsError("cannot hide _id index");
+      }
+    }
+
+    // Validate text index options
+    const hasTextIndex = Object.values(keySpec).includes("text");
+
+    if (options.weights) {
+      if (!hasTextIndex) {
+        throw new InvalidIndexOptionsError(
+          "weights option requires a text index"
+        );
+      }
+      // Validate weight values
+      for (const [field, weight] of Object.entries(options.weights)) {
+        if (
+          typeof weight !== "number" ||
+          weight < 1 ||
+          weight > 99999 ||
+          !Number.isInteger(weight)
+        ) {
+          throw new InvalidIndexOptionsError(
+            `weight for field '${field}' must be an integer between 1 and 99999`
+          );
+        }
+      }
+    }
+
+    if (options.default_language !== undefined) {
+      if (!hasTextIndex) {
+        throw new InvalidIndexOptionsError(
+          "default_language option requires a text index"
+        );
+      }
+    }
+
+    // Validate collation option
+    if (options.collation) {
+      if (hasTextIndex) {
+        throw new InvalidIndexOptionsError(
+          "text indexes do not support collation"
+        );
+      }
+      if (!options.collation.locale || options.collation.locale.trim() === "") {
+        throw new InvalidIndexOptionsError("collation locale is required");
+      }
+    }
+
     const indexes = await this.loadIndexes();
     const indexName = options.name || this.generateIndexName(keySpec);
 
@@ -220,6 +319,36 @@ export class IndexManager {
         newIndex.max = options.max ?? 180;
       } else if (geoField.type === "2dsphere") {
         newIndex["2dsphereIndexVersion"] = 3;
+      }
+    }
+
+    // Phase 11: Add new index metadata
+
+    // Hidden option
+    if (options.hidden !== undefined) {
+      newIndex.hidden = options.hidden;
+    }
+
+    // Collation option
+    if (options.collation) {
+      newIndex.collation = options.collation;
+    }
+
+    // Text index options
+    if (options.weights) {
+      newIndex.weights = options.weights;
+      newIndex.textIndexVersion = 3;
+    }
+    if (options.default_language !== undefined) {
+      newIndex.default_language = options.default_language;
+      newIndex.textIndexVersion = 3;
+    }
+
+    // Wildcard index metadata (implicitly sparse)
+    if (wildcardFields.length > 0) {
+      newIndex.sparse = true;
+      if (options.wildcardProjection) {
+        newIndex.wildcardProjection = options.wildcardProjection;
       }
     }
 
@@ -325,24 +454,56 @@ export class IndexManager {
   }
 
   /**
+   * Hash a value for hashed index comparison.
+   * Floating-point numbers are truncated to 64-bit integer before hashing.
+   * Arrays cannot be hashed (multikey not supported for hashed indexes).
+   * @param value - Value to hash
+   * @returns A string representation of the hashed value
+   * @throws Error if value is an array (hashed indexes don't support arrays)
+   */
+  private hashValue(value: unknown): string {
+    if (Array.isArray(value)) {
+      throw new Error("hashed indexes do not support array values");
+    }
+
+    // Truncate floating-point to integer (MongoDB behavior)
+    let normalizedValue = value;
+    if (typeof value === "number" && !Number.isInteger(value)) {
+      normalizedValue = Math.trunc(value);
+    }
+
+    // Use consistent JSON representation for hashing
+    return `hashed:${JSON.stringify(normalizedValue)}`;
+  }
+
+  /**
    * Extract the key value from a document for a given index key specification.
    * Supports nested field paths using dot notation.
    * Missing fields are treated as null (matching MongoDB behavior).
+   * For hashed indexes, values are hashed and arrays are rejected.
    * @param doc - Document to extract values from
    * @param keySpec - Index key specification
    * @returns Object mapping field names to their values in the document
+   * @throws Error if a hashed field contains an array value
    */
   extractKeyValue<T extends Document>(
     doc: T,
     keySpec: IndexKeySpec
   ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
-    for (const field of Object.keys(keySpec)) {
+    for (const [field, direction] of Object.entries(keySpec)) {
       const value = getValueByPath(doc, field);
       // Missing fields (undefined) are treated as null for uniqueness checks
       // This matches MongoDB behavior where { a: 1 } and { a: 1, b: null }
       // have the same index key for index { a: 1, b: 1 }
-      result[field] = value === undefined ? null : value;
+      const normalizedValue = value === undefined ? null : value;
+
+      if (direction === "hashed") {
+        // For hashed indexes, hash the value (arrays will throw)
+        result[field] = this.hashValue(normalizedValue);
+      } else {
+        result[field] = normalizedValue;
+      }
     }
     return result;
   }

@@ -21,7 +21,8 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 | Update Operators | 18/20 (90%) | Missing positional operators only |
 | Aggregation Stages | 28/34 (82%) | Core stages + window functions + geospatial |
 | Expression Operators | 106/112 (95%) | Nearly complete coverage |
-| Index Types | 7/8 (88%) | Missing hashed only |
+| Index Types | 9/9 (100%) | All types including hashed, wildcard |
+| Index Options | 10/10 (100%) | All options including collation, hidden, weights |
 | Core Features | Limited | No transactions, sessions, streams |
 
 ---
@@ -302,29 +303,32 @@ All conditional expression operators are implemented:
 
 | Type | Options Supported |
 |------|-------------------|
-| Single Field | `unique`, `sparse`, `name` |
-| Compound | `unique`, `sparse`, `name` |
-| Text | Basic tokenized search |
+| Single Field | `unique`, `sparse`, `name`, `hidden`, `collation` |
+| Compound | `unique`, `sparse`, `name`, `hidden`, `collation` |
+| Text | `weights`, `default_language` (basic tokenized search) |
 | TTL | `expireAfterSeconds` (single field only) |
 | Partial | `partialFilterExpression` |
 | 2d | Flat/planar geospatial index |
 | 2dsphere | Spherical geospatial index |
+| Hashed | Hash-based index (cannot be unique, no array values) |
+| Wildcard | Dynamic field indexing (`$**`, `wildcardProjection`) |
 
-### Not Implemented Index Types ❌
+### Index Options ✅
 
-| Type | Description |
-|------|-------------|
-| Hashed | Hash-based sharding index |
-| Wildcard | Dynamic field indexing |
+| Option | Status | Notes |
+|--------|--------|-------|
+| `unique` | ✅ | Enforces unique values (not on hashed/wildcard) |
+| `sparse` | ✅ | Only index documents with the field |
+| `name` | ✅ | Custom index name |
+| `hidden` | ✅ | Hide from query planner (constraints still enforced) |
+| `collation` | ✅ | Locale-aware comparison (metadata stored) |
+| `weights` | ✅ | Text index field weights (1-99999) |
+| `default_language` | ✅ | Text index language (metadata stored) |
+| `wildcardProjection` | ✅ | Include/exclude fields for wildcard indexes |
+| `expireAfterSeconds` | ✅ | TTL index expiration |
+| `partialFilterExpression` | ✅ | Partial index filter |
 
-### Not Implemented Index Options ❌
-
-| Option | Description |
-|--------|-------------|
-| `collation` | Locale-aware string comparison |
-| `hidden` | Hide index from query planner |
-| `weights` | Text index field weights |
-| `default_language` | Text index language |
+**Note**: MangoDB does not use indexes for query optimization - they are for constraint enforcement and API compatibility.
 
 ---
 
@@ -352,7 +356,7 @@ These features don't apply to a file-based implementation:
 | **GridFS** | Large file storage | Use filesystem directly |
 | **Capped Collections** | Fixed-size, auto-rotating | Manually manage size |
 | **Schema Validation** | Server-side validation | Validate in application |
-| **Collation** | Locale-aware operations | Handle in application |
+| **Collation** | Locale-aware query operations | Index collation metadata stored |
 
 ---
 
