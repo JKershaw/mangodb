@@ -12,6 +12,7 @@ import { MongoClient } from "mongodb";
 import { MangoClient } from "../src/index.ts";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 export interface TestClient {
   connect(): Promise<void>;
@@ -280,7 +281,7 @@ export async function createTestClient(): Promise<{
       cleanup,
     };
   } else {
-    const dataDir = `/tmp/mangodb_test_${randomUUID()}`;
+    const dataDir = `${tmpdir()}/mangodb_test_${randomUUID()}`;
     const client = new MangoClient(dataDir);
 
     const cleanup = async () => {
