@@ -157,54 +157,169 @@ export class MangoCollection<T extends Document = Document> {
   }
 
   /**
-   * Check if a document matches a text search query.
-   * Tokenizes the search string and matches if ANY token appears in ANY text field.
-   * Case-insensitive matching.
-   *
-   * @param doc - Document to check
-   * @param searchString - Text to search for (space-separated tokens)
-   * @param textFields - Fields that are text-indexed
-   * @returns True if any token matches any text field
+   * Parse a text search string into include terms, exclude terms, and phrases.
    */
-  private matchesTextSearch(doc: T, searchString: string, textFields: string[]): boolean {
-    // Empty search string matches nothing
-    if (!searchString || searchString.trim() === "") {
-      return false;
+  private parseTextSearch(searchString: string): {
+    includeTerms: string[];
+    excludeTerms: string[];
+    phrases: string[];
+  } {
+    const includeTerms: string[] = [];
+    const excludeTerms: string[] = [];
+    const phrases: string[] = [];
+
+    // Extract phrases in quotes first
+    const phraseRegex = /"([^"]+)"/g;
+    let match;
+    let remaining = searchString;
+
+    while ((match = phraseRegex.exec(searchString)) !== null) {
+      phrases.push(match[1]);
+      remaining = remaining.replace(match[0], " ");
     }
 
-    // Tokenize by whitespace
-    const tokens = searchString.toLowerCase().split(/\s+/).filter(t => t.length > 0);
-    if (tokens.length === 0) {
-      return false;
-    }
-
-    // Check each text field
-    for (const field of textFields) {
-      const value = getValueByPath(doc, field);
-      if (typeof value === "string") {
-        const lowerValue = value.toLowerCase();
-        // Match if ANY token is found as substring
-        if (tokens.some(token => lowerValue.includes(token))) {
-          return true;
-        }
+    // Process remaining terms
+    const tokens = remaining.split(/\s+/).filter((t) => t.length > 0);
+    for (const token of tokens) {
+      if (token.startsWith("-") && token.length > 1) {
+        excludeTerms.push(token.slice(1));
+      } else if (!token.startsWith("-")) {
+        includeTerms.push(token);
       }
     }
 
-    return false;
+    return { includeTerms, excludeTerms, phrases };
+  }
+
+  /**
+   * Tokenize text into words for matching.
+   */
+  private tokenizeText(text: string): string[] {
+    return text.split(/[\s\-_.,;:!?'"()\[\]{}]+/).filter((t) => t.length > 0);
+  }
+
+  /**
+   * Check if a document matches a text search query and calculate score.
+   * Supports:
+   * - Multiple terms (OR matching)
+   * - Phrases in quotes (exact phrase matching)
+   * - Negation with minus prefix
+   * - Case sensitivity option
+   *
+   * @param doc - Document to check
+   * @param searchString - Text to search for
+   * @param textFields - Fields that are text-indexed
+   * @param caseSensitive - Whether to match case-sensitively
+   * @returns Score (0 if no match, positive if match)
+   */
+  private matchesTextSearch(
+    doc: T,
+    searchString: string,
+    textFields: string[],
+    caseSensitive: boolean = false
+  ): number {
+    // Empty search string matches nothing
+    if (!searchString || searchString.trim() === "") {
+      return 0;
+    }
+
+    const { includeTerms, excludeTerms, phrases } = this.parseTextSearch(searchString);
+
+    // If nothing to search for, no match
+    if (includeTerms.length === 0 && phrases.length === 0) {
+      return 0;
+    }
+
+    // Collect all text content from indexed fields
+    const allTextContent: string[] = [];
+    for (const field of textFields) {
+      const value = getValueByPath(doc, field);
+      if (typeof value === "string") {
+        allTextContent.push(value);
+      }
+    }
+
+    if (allTextContent.length === 0) {
+      return 0;
+    }
+
+    const fullText = allTextContent.join(" ");
+    const normalizedFullText = caseSensitive ? fullText : fullText.toLowerCase();
+    const textTokens = this.tokenizeText(normalizedFullText);
+
+    // Check exclusions first - if any excluded term is found, no match
+    for (const term of excludeTerms) {
+      const normalizedTerm = caseSensitive ? term : term.toLowerCase();
+      if (textTokens.some((t) => t === normalizedTerm || t.includes(normalizedTerm))) {
+        return 0;
+      }
+    }
+
+    // Check phrases - all phrases must match
+    for (const phrase of phrases) {
+      const normalizedPhrase = caseSensitive ? phrase : phrase.toLowerCase();
+      if (!normalizedFullText.includes(normalizedPhrase)) {
+        return 0;
+      }
+    }
+
+    // Check include terms - at least one must match (OR logic)
+    let score = 0;
+    const totalTerms = includeTerms.length + phrases.length;
+
+    for (const term of includeTerms) {
+      const normalizedTerm = caseSensitive ? term : term.toLowerCase();
+      // Count occurrences for scoring
+      const matches = textTokens.filter(
+        (t) => t === normalizedTerm || t.includes(normalizedTerm)
+      ).length;
+      if (matches > 0) {
+        score += matches;
+      }
+    }
+
+    // Add phrase matches to score
+    for (const phrase of phrases) {
+      const normalizedPhrase = caseSensitive ? phrase : phrase.toLowerCase();
+      const regex = new RegExp(normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      const matches = (normalizedFullText.match(regex) || []).length;
+      score += matches * 2; // Weight phrases higher
+    }
+
+    // If we have include terms but none matched, no match
+    if (includeTerms.length > 0 && score === 0) {
+      return 0;
+    }
+
+    // Normalize score by total text length for fairer comparison
+    return score / Math.max(1, Math.sqrt(textTokens.length));
+  }
+
+  /**
+   * Symbol for storing text scores on documents (internal use).
+   */
+  private static readonly TEXT_SCORE_KEY = Symbol.for("mangodb.textScore");
+
+  /**
+   * Get text score from a document (internal use).
+   */
+  static getTextScore<D extends Document>(doc: D): number | undefined {
+    return (doc as Record<symbol, number>)[MangoCollection.TEXT_SCORE_KEY];
   }
 
   /**
    * Filter documents with $text query support.
    * Handles $text operator and delegates to matchesFilter for other conditions.
+   * Attaches text scores to documents for $meta projection.
    *
    * @param documents - Documents to filter
    * @param filter - Query filter that may contain $text
-   * @returns Filtered documents
+   * @returns Filtered documents with text scores attached
    * @throws TextIndexRequiredError if $text is used without a text index
    */
   private async filterWithTextSupport(documents: T[], filter: Filter<T>): Promise<T[]> {
     const textQuery = (filter as Record<string, unknown>).$text as
-      | { $search?: string }
+      | { $search?: string; $caseSensitive?: boolean }
       | undefined;
 
     if (textQuery) {
@@ -215,19 +330,28 @@ export class MangoCollection<T extends Document = Document> {
       }
 
       const searchString = textQuery.$search || "";
+      const caseSensitive = textQuery.$caseSensitive || false;
 
       // Create a filter without $text for additional conditions
       const remainingFilter = { ...filter } as Record<string, unknown>;
       delete remainingFilter.$text;
 
-      // Apply both text search and regular filter
-      return documents.filter((doc) => {
-        const matchesText = this.matchesTextSearch(doc, searchString, textFields);
-        const matchesOther =
-          Object.keys(remainingFilter).length === 0 ||
-          matchesFilter(doc, remainingFilter as Filter<T>);
-        return matchesText && matchesOther;
-      });
+      // Apply both text search and regular filter, storing scores
+      const results: T[] = [];
+      for (const doc of documents) {
+        const score = this.matchesTextSearch(doc, searchString, textFields, caseSensitive);
+        if (score > 0) {
+          const matchesOther =
+            Object.keys(remainingFilter).length === 0 ||
+            matchesFilter(doc, remainingFilter as Filter<T>);
+          if (matchesOther) {
+            // Attach score to document
+            (doc as Record<symbol, number>)[MangoCollection.TEXT_SCORE_KEY] = score;
+            results.push(doc);
+          }
+        }
+      }
+      return results;
     }
 
     return documents.filter((doc) => matchesFilter(doc, filter));

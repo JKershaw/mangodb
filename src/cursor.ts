@@ -8,8 +8,36 @@ import { BadHintError } from "./errors.ts";
 import type { IndexInfo } from "./types.ts";
 
 type Document = Record<string, unknown>;
-type SortSpec = Record<string, 1 | -1>;
+type MetaSort = { $meta: "textScore" };
+type SortSpec = Record<string, 1 | -1 | MetaSort>;
 type HintSpec = string | Record<string, unknown>;
+
+/**
+ * Symbol key for storing text search scores on documents.
+ * This is shared with MangoCollection.
+ */
+const TEXT_SCORE_KEY = Symbol.for("mangodb.textScore");
+
+/**
+ * Get text score from a document.
+ * @param doc - Document that may have a text score attached
+ * @returns The text score, or undefined if not set
+ */
+export function getTextScore<D extends Document>(doc: D): number | undefined {
+  return (doc as Record<symbol, number>)[TEXT_SCORE_KEY];
+}
+
+/**
+ * Check if a sort value is a $meta operator.
+ */
+function isMetaSort(value: unknown): value is MetaSort {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "$meta" in value &&
+    (value as MetaSort).$meta === "textScore"
+  );
+}
 
 /**
  * Function to validate an index hint.
@@ -130,6 +158,9 @@ export class MangoCursor<T extends Document = Document> {
    *
    * // Sort by single field
    * cursor.sort({ createdAt: -1 });
+   *
+   * // Sort by text search score (for $text queries)
+   * cursor.sort({ score: { $meta: "textScore" } });
    * ```
    */
   sort(spec: SortSpec): MangoCursor<T> {
@@ -286,16 +317,27 @@ export class MangoCursor<T extends Document = Document> {
     if (this.sortSpec) {
       const sortFields = Object.entries(this.sortSpec) as [
         string,
-        1 | -1,
+        1 | -1 | MetaSort,
       ][];
       docs = [...docs].sort((a, b) => {
-        for (const [field, direction] of sortFields) {
-          const aValue = getValueByPath(a, field);
-          const bValue = getValueByPath(b, field);
-          // Use direction-aware comparison for proper array handling
-          const comparison = compareValuesForSort(aValue, bValue, direction);
-          if (comparison !== 0) {
-            return direction === 1 ? comparison : -comparison;
+        for (const [field, directionOrMeta] of sortFields) {
+          // Handle $meta: "textScore" sort - sort by text score descending
+          if (isMetaSort(directionOrMeta)) {
+            const aScore = getTextScore(a) ?? 0;
+            const bScore = getTextScore(b) ?? 0;
+            // Text score sort is descending (higher score = better match = comes first)
+            if (bScore !== aScore) {
+              return bScore - aScore;
+            }
+          } else {
+            const direction = directionOrMeta;
+            const aValue = getValueByPath(a, field);
+            const bValue = getValueByPath(b, field);
+            // Use direction-aware comparison for proper array handling
+            const comparison = compareValuesForSort(aValue, bValue, direction);
+            if (comparison !== 0) {
+              return direction === 1 ? comparison : -comparison;
+            }
           }
         }
         return 0;
@@ -313,9 +355,16 @@ export class MangoCursor<T extends Document = Document> {
       docs = docs.slice(0, this.limitValue);
     }
 
-    // Apply projection
+    // Apply projection, passing text scores as metadata
     if (this.projectionSpec) {
-      docs = docs.map((doc) => applyProjection(doc, this.projectionSpec!));
+      docs = docs.map((doc) => {
+        const textScore = getTextScore(doc);
+        return applyProjection(
+          doc,
+          this.projectionSpec!,
+          textScore !== undefined ? { textScore } : undefined
+        );
+      });
     }
 
     return docs;

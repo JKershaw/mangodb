@@ -6,7 +6,7 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 | Category | Implemented | Coverage |
 |----------|-------------|----------|
-| Query Operators | 36 | ~92% |
+| Query Operators | 37 | ~95% |
 | Update Operators | 20 | 100% |
 | Aggregation Stages | 30 | ~88% |
 | Expression Operators | 90+ | ~95% |
@@ -26,8 +26,8 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 - `$elemMatch`, `$size`, `$all`
 
 ### Evaluation Operators (Partial)
-- Implemented: `$regex`, `$expr`, `$mod`
-- Not implemented: `$jsonSchema`, `$where`, `$text` (full-text search)
+- Implemented: `$regex`, `$expr`, `$mod`, `$text` (basic full-text search)
+- Not implemented: `$jsonSchema`, `$where`
 
 ### Bitwise Operators (All Implemented)
 - `$bitsAllClear`, `$bitsAllSet`, `$bitsAnyClear`, `$bitsAnySet`
@@ -35,9 +35,8 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 ### Geospatial Operators (All Implemented)
 - `$geoWithin`, `$geoIntersects`, `$near`, `$nearSphere`
 
-### Projection Operators (Partial)
-- Implemented: `$slice`, `$elemMatch`, `$` (positional)
-- Not implemented: `$meta` (text search scores)
+### Projection Operators (All Implemented)
+- `$slice`, `$elemMatch`, `$` (positional), `$meta` (textScore)
 
 ## Update Operators
 
@@ -189,7 +188,6 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 - No authentication/authorization
 
 ### Query
-- `$text` full-text search not implemented
 - `$where` JavaScript evaluation not implemented
 - `$jsonSchema` validation not implemented
 
@@ -200,7 +198,11 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 ### Indexes
 - Collation support is basic (locale-aware sorting not fully implemented)
-- Text search is simplified (no stemming, language support)
+
+### Text Search
+- `$text` search is simplified (no stemming, no language-specific stop words)
+- Supports: phrase search (`"exact phrase"`), negation (`-term`), `$caseSensitive`
+- `$meta: "textScore"` supported for projection and sorting
 
 ### Performance
 - All documents loaded into memory for operations
@@ -211,7 +213,7 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 MangoDB is tested against both its own implementation and real MongoDB to ensure compatibility:
 
-- **MangoDB tests**: 1271 passing
-- **MongoDB tests**: 1264 passing
+- **MangoDB tests**: 1283 passing
+- **MongoDB tests**: 1276 passing
 
 The test suite covers all implemented features with edge cases.
