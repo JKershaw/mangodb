@@ -161,7 +161,14 @@ export class AggregationCursor<T extends Document = Document> {
         return this.execGroup(stageValue as { _id: unknown; [key: string]: unknown }, docs);
       case "$lookup":
         return this.execLookup(
-          stageValue as { from: string; localField: string; foreignField: string; as: string },
+          stageValue as {
+            from: string;
+            localField?: string;
+            foreignField?: string;
+            let?: Record<string, unknown>;
+            pipeline?: PipelineStage[];
+            as: string;
+          },
           docs
         );
       case "$addFields":
@@ -225,6 +232,16 @@ export class AggregationCursor<T extends Document = Document> {
         );
       case "$out":
         return this.execOut(stageValue as string, docs);
+      case "$merge":
+        return this.execMerge(
+          stageValue as {
+            into: string | { db?: string; coll: string };
+            on?: string | string[];
+            whenMatched?: "replace" | "keepExisting" | "merge" | "fail" | PipelineStage[];
+            whenNotMatched?: "insert" | "discard" | "fail";
+          },
+          docs
+        );
       case "$sortByCount":
         return this.execSortByCount(stageValue, docs);
       case "$sample":
@@ -680,17 +697,18 @@ export class AggregationCursor<T extends Document = Document> {
   }
 
   private async execLookup(
-    lookupSpec: { from: string; localField: string; foreignField: string; as: string },
+    lookupSpec: {
+      from: string;
+      localField?: string;
+      foreignField?: string;
+      let?: Record<string, unknown>;
+      pipeline?: PipelineStage[];
+      as: string;
+    },
     docs: Document[]
   ): Promise<Document[]> {
     if (!lookupSpec.from) {
       throw new Error("$lookup requires 'from' field");
-    }
-    if (!lookupSpec.localField) {
-      throw new Error("$lookup requires 'localField' field");
-    }
-    if (!lookupSpec.foreignField) {
-      throw new Error("$lookup requires 'foreignField' field");
     }
     if (!lookupSpec.as) {
       throw new Error("$lookup requires 'as' field");
@@ -700,22 +718,104 @@ export class AggregationCursor<T extends Document = Document> {
       throw new Error("$lookup requires database context");
     }
 
+    // Check if this is the pipeline form (has pipeline) or simple form (has localField/foreignField)
+    const isPipelineForm = lookupSpec.pipeline !== undefined;
+
+    if (!isPipelineForm) {
+      // Simple form - requires localField and foreignField
+      if (!lookupSpec.localField) {
+        throw new Error("$lookup requires 'localField' field");
+      }
+      if (!lookupSpec.foreignField) {
+        throw new Error("$lookup requires 'foreignField' field");
+      }
+
+      const foreignCollection = this.dbContext.getCollection(lookupSpec.from);
+      const foreignDocs = await foreignCollection.find({}).toArray();
+
+      return docs.map((doc) => {
+        const localValue = getValueByPath(doc, lookupSpec.localField!);
+
+        const matches = foreignDocs.filter((foreignDoc) => {
+          const foreignValue = getValueByPath(foreignDoc, lookupSpec.foreignField!);
+          return valuesEqual(localValue, foreignValue);
+        });
+
+        return {
+          ...doc,
+          [lookupSpec.as]: matches,
+        };
+      });
+    }
+
+    // Pipeline form - execute pipeline for each input document
     const foreignCollection = this.dbContext.getCollection(lookupSpec.from);
+    const letVars = lookupSpec.let || {};
+    const pipeline = lookupSpec.pipeline || [];
+
+    const results: Document[] = [];
     const foreignDocs = await foreignCollection.find({}).toArray();
 
-    return docs.map((doc) => {
-      const localValue = getValueByPath(doc, lookupSpec.localField);
+    for (const doc of docs) {
+      // Evaluate let variables in the context of the current document
+      const resolvedLetVars: Record<string, unknown> = {};
+      for (const [varName, varExpr] of Object.entries(letVars)) {
+        resolvedLetVars[varName] = evaluateExpression(varExpr, doc, this.getSystemVars(doc));
+      }
 
-      const matches = foreignDocs.filter((foreignDoc) => {
-        const foreignValue = getValueByPath(foreignDoc, lookupSpec.foreignField);
-        return valuesEqual(localValue, foreignValue);
-      });
+      // Substitute $$varName references in the pipeline with actual values
+      const substitutedPipeline = this.substituteLetVars(pipeline, resolvedLetVars) as PipelineStage[];
 
-      return {
+      // Execute the pipeline on foreign documents
+      const pipelineCursor = new AggregationCursor(
+        async () => [...foreignDocs], // Clone to prevent mutation
+        substitutedPipeline,
+        this.dbContext
+      );
+
+      const matches = await pipelineCursor.toArray();
+
+      results.push({
         ...doc,
         [lookupSpec.as]: matches,
-      };
-    });
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Recursively substitute $$varName references with actual values.
+   */
+  private substituteLetVars(obj: unknown, vars: Record<string, unknown>): unknown {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (typeof obj === "string") {
+      // Check for $$varName reference
+      if (obj.startsWith("$$") && !obj.startsWith("$$ROOT") && !obj.startsWith("$$CURRENT") && !obj.startsWith("$$NOW")) {
+        const varName = obj.slice(2);
+        if (varName in vars) {
+          return vars[varName];
+        }
+      }
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.substituteLetVars(item, vars));
+    }
+
+    if (typeof obj === "object") {
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = this.substituteLetVars(value, vars);
+      }
+      return result;
+    }
+
+    return obj;
   }
 
   /**
@@ -1896,6 +1996,99 @@ export class AggregationCursor<T extends Document = Document> {
       await targetCollection.insertMany(docs);
     }
 
+    return [];
+  }
+
+  /**
+   * $merge - Writes documents to a collection, with options for handling matches.
+   */
+  private async execMerge(
+    spec: {
+      into: string | { db?: string; coll: string };
+      on?: string | string[];
+      whenMatched?: "replace" | "keepExisting" | "merge" | "fail" | PipelineStage[];
+      whenNotMatched?: "insert" | "discard" | "fail";
+    },
+    docs: Document[]
+  ): Promise<Document[]> {
+    if (!this.dbContext) {
+      throw new Error("$merge requires database context");
+    }
+
+    // Get target collection name
+    const collectionName = typeof spec.into === "string"
+      ? spec.into
+      : spec.into.coll;
+
+    const targetCollection = this.dbContext.getCollection(collectionName);
+
+    // Get match field(s) - default to _id
+    const matchFields = spec.on
+      ? (Array.isArray(spec.on) ? spec.on : [spec.on])
+      : ["_id"];
+
+    // Get behaviors - defaults
+    const whenMatched = spec.whenMatched || "merge";
+    const whenNotMatched = spec.whenNotMatched || "insert";
+
+    // Process each document from the pipeline
+    for (const doc of docs) {
+      // Build filter based on match fields
+      const filter: Record<string, unknown> = {};
+      for (const field of matchFields) {
+        filter[field] = getValueByPath(doc as Record<string, unknown>, field);
+      }
+
+      // Find existing document
+      const existingDoc = await targetCollection.findOne(filter);
+
+      if (existingDoc) {
+        // Document exists - apply whenMatched behavior
+        switch (whenMatched) {
+          case "replace":
+            await targetCollection.replaceOne(filter, doc);
+            break;
+          case "keepExisting":
+            // Do nothing - keep the existing document
+            break;
+          case "merge":
+            // Merge source doc fields into existing doc
+            const mergedDoc = { ...existingDoc, ...doc };
+            await targetCollection.replaceOne(filter, mergedDoc);
+            break;
+          case "fail":
+            throw new Error(`$merge found matching document for ${JSON.stringify(filter)}`);
+          default:
+            // If it's a pipeline, we'd need to execute it - simplified for now
+            if (Array.isArray(whenMatched)) {
+              // Apply pipeline to existing doc - simplified implementation
+              const cursor = new AggregationCursor(
+                async () => [existingDoc],
+                whenMatched,
+                this.dbContext
+              );
+              const [updatedDoc] = await cursor.toArray();
+              if (updatedDoc) {
+                await targetCollection.replaceOne(filter, updatedDoc);
+              }
+            }
+        }
+      } else {
+        // No existing document - apply whenNotMatched behavior
+        switch (whenNotMatched) {
+          case "insert":
+            await targetCollection.insertOne(doc);
+            break;
+          case "discard":
+            // Do nothing - discard the document
+            break;
+          case "fail":
+            throw new Error(`$merge found no matching document for ${JSON.stringify(filter)}`);
+        }
+      }
+    }
+
+    // $merge returns empty array like $out
     return [];
   }
 

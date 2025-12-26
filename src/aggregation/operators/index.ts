@@ -64,6 +64,11 @@ export const operators = {
   $ne: comparison.evalNe,
   $cmp: comparison.evalCmp,
 
+  // Boolean/Logical
+  $and: comparison.evalAnd,
+  $or: comparison.evalOr,
+  $not: comparison.evalNot,
+
   // Conditional
   $cond: conditional.evalCond,
   $ifNull: conditional.evalIfNull,

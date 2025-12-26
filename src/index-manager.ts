@@ -569,9 +569,14 @@ export class IndexManager {
       const partialFilter = idx.partialFilterExpression;
 
       for (const doc of existingDocs) {
-        const docId = (doc as { _id?: { toHexString(): string } })._id;
-        if (docId && excludeIds.has(docId.toHexString())) {
-          continue;
+        const docId = (doc as { _id?: unknown })._id;
+        if (docId !== undefined) {
+          const idStr = typeof (docId as { toHexString?: () => string }).toHexString === "function"
+            ? (docId as { toHexString(): string }).toHexString()
+            : String(docId);
+          if (excludeIds.has(idStr)) {
+            continue;
+          }
         }
 
         // For sparse indexes: skip if ALL indexed fields are missing

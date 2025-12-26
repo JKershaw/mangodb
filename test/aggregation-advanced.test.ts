@@ -878,6 +878,162 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 1);
       assert.strictEqual((results[0].comments as Document[]).length, 3);
     });
+
+    it("should support pipeline form with let and pipeline", async () => {
+      const orders = client.db(dbName).collection("lookup_pipe_orders");
+      const inventory = client.db(dbName).collection("lookup_pipe_inventory");
+
+      await orders.insertOne({
+        _id: 1,
+        item: "almonds",
+        price: 12,
+        quantity: 2,
+      });
+
+      await inventory.insertMany([
+        { sku: "almonds", description: "product 1", instock: 120 },
+        { sku: "bread", description: "product 2", instock: 80 },
+        { sku: "cashews", description: "product 3", instock: 60 },
+      ]);
+
+      const results = await orders
+        .aggregate([
+          {
+            $lookup: {
+              from: "lookup_pipe_inventory",
+              let: { orderItem: "$item" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: { $eq: ["$sku", "$$orderItem"] },
+                  },
+                },
+                { $project: { description: 1, instock: 1, _id: 0 } },
+              ],
+              as: "fromItems",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.ok(Array.isArray(results[0].fromItems));
+      assert.strictEqual((results[0].fromItems as Document[]).length, 1);
+      assert.strictEqual(
+        (results[0].fromItems as Document[])[0].description,
+        "product 1"
+      );
+      assert.strictEqual((results[0].fromItems as Document[])[0].instock, 120);
+    });
+
+    it("should filter and aggregate in pipeline lookup", async () => {
+      const customers = client.db(dbName).collection("lookup_pipe_customers");
+      const transactions = client.db(dbName).collection("lookup_pipe_txn");
+
+      await customers.insertMany([
+        { _id: 1, name: "Alice", minSpend: 100 },
+        { _id: 2, name: "Bob", minSpend: 50 },
+      ]);
+
+      await transactions.insertMany([
+        { customerId: 1, amount: 80 },
+        { customerId: 1, amount: 150 },
+        { customerId: 1, amount: 50 },
+        { customerId: 2, amount: 200 },
+      ]);
+
+      const results = await customers
+        .aggregate([
+          {
+            $lookup: {
+              from: "lookup_pipe_txn",
+              let: { custId: "$_id", minAmt: "$minSpend" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ["$customerId", "$$custId"] },
+                        { $gte: ["$amount", "$$minAmt"] },
+                      ],
+                    },
+                  },
+                },
+              ],
+              as: "qualifyingTransactions",
+            },
+          },
+          { $sort: { _id: 1 } },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 2);
+      // Alice: minSpend 100, so only transactions >= 100 qualify (150)
+      assert.strictEqual(
+        (results[0].qualifyingTransactions as Document[]).length,
+        1
+      );
+      // Bob: minSpend 50, so transactions >= 50 qualify (200)
+      assert.strictEqual(
+        (results[1].qualifyingTransactions as Document[]).length,
+        1
+      );
+    });
+
+    it("should return all foreign docs when pipeline has no $match", async () => {
+      const main = client.db(dbName).collection("lookup_pipe_main");
+      const items = client.db(dbName).collection("lookup_pipe_items");
+
+      await main.insertOne({ _id: 1, name: "Test" });
+      await items.insertMany([
+        { value: 10 },
+        { value: 20 },
+        { value: 30 },
+      ]);
+
+      const results = await main
+        .aggregate([
+          {
+            $lookup: {
+              from: "lookup_pipe_items",
+              let: {},
+              pipeline: [{ $sort: { value: 1 } }],
+              as: "allItems",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual((results[0].allItems as Document[]).length, 3);
+    });
+
+    it("should work without let clause", async () => {
+      const primary = client.db(dbName).collection("lookup_pipe_prim");
+      const secondary = client.db(dbName).collection("lookup_pipe_sec");
+
+      await primary.insertOne({ _id: 1 });
+      await secondary.insertMany([
+        { active: true, value: 1 },
+        { active: false, value: 2 },
+        { active: true, value: 3 },
+      ]);
+
+      const results = await primary
+        .aggregate([
+          {
+            $lookup: {
+              from: "lookup_pipe_sec",
+              pipeline: [{ $match: { active: true } }],
+              as: "activeItems",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual((results[0].activeItems as Document[]).length, 2);
+    });
   });
 
   // ==================== $out Stage ====================
@@ -1058,6 +1214,244 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].region, "North");
       assert.strictEqual(results[0].totalSales, 220);
       assert.strictEqual(results[0].count, 2);
+    });
+  });
+
+  // ==================== $merge Stage ====================
+
+  describe("$merge Stage", () => {
+    it("should insert documents when no match exists (whenNotMatched: insert)", async () => {
+      const source = client.db(dbName).collection("merge_source1");
+      const target = client.db(dbName).collection("merge_target1");
+
+      await source.insertMany([
+        { _id: 1, name: "Alice", score: 100 },
+        { _id: 2, name: "Bob", score: 90 },
+      ]);
+
+      await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_target1",
+              whenMatched: "replace",
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      const targetDocs = await target.find({}).toArray();
+      targetDocs.sort((a, b) => (a._id as number) - (b._id as number));
+
+      assert.strictEqual(targetDocs.length, 2);
+      assert.strictEqual(targetDocs[0].name, "Alice");
+      assert.strictEqual(targetDocs[1].name, "Bob");
+    });
+
+    it("should replace matching documents (whenMatched: replace)", async () => {
+      const source = client.db(dbName).collection("merge_source2");
+      const target = client.db(dbName).collection("merge_target2");
+
+      // Pre-populate target with old data
+      await target.insertMany([
+        { _id: 1, name: "Old Alice", score: 50 },
+        { _id: 3, name: "Charlie", score: 80 },
+      ]);
+
+      // Source with updated data
+      await source.insertMany([
+        { _id: 1, name: "New Alice", score: 100 },
+        { _id: 2, name: "Bob", score: 90 },
+      ]);
+
+      await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_target2",
+              whenMatched: "replace",
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      const targetDocs = await target.find({}).toArray();
+      targetDocs.sort((a, b) => (a._id as number) - (b._id as number));
+
+      assert.strictEqual(targetDocs.length, 3);
+      assert.strictEqual(targetDocs[0].name, "New Alice"); // Replaced
+      assert.strictEqual(targetDocs[1].name, "Bob"); // Inserted
+      assert.strictEqual(targetDocs[2].name, "Charlie"); // Unchanged
+    });
+
+    it("should keep existing documents (whenMatched: keepExisting)", async () => {
+      const source = client.db(dbName).collection("merge_source3");
+      const target = client.db(dbName).collection("merge_target3");
+
+      // Pre-populate target
+      await target.insertMany([
+        { _id: 1, name: "Original Alice", score: 50 },
+      ]);
+
+      // Source with different data for same _id
+      await source.insertMany([
+        { _id: 1, name: "New Alice", score: 100 },
+        { _id: 2, name: "Bob", score: 90 },
+      ]);
+
+      await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_target3",
+              whenMatched: "keepExisting",
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      const targetDocs = await target.find({}).toArray();
+      targetDocs.sort((a, b) => (a._id as number) - (b._id as number));
+
+      assert.strictEqual(targetDocs.length, 2);
+      assert.strictEqual(targetDocs[0].name, "Original Alice"); // Kept
+      assert.strictEqual(targetDocs[1].name, "Bob"); // Inserted
+    });
+
+    it("should merge fields (whenMatched: merge)", async () => {
+      const source = client.db(dbName).collection("merge_source4");
+      const target = client.db(dbName).collection("merge_target4");
+
+      // Pre-populate target with partial data
+      await target.insertMany([
+        { _id: 1, name: "Alice", extra: "preserved" },
+      ]);
+
+      // Source with additional/updated data
+      await source.insertMany([
+        { _id: 1, score: 100, status: "active" },
+      ]);
+
+      await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_target4",
+              whenMatched: "merge",
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      const doc = await target.findOne({ _id: 1 });
+      assert.ok(doc);
+      assert.strictEqual(doc.name, "Alice"); // Preserved from target
+      assert.strictEqual(doc.extra, "preserved"); // Preserved from target
+      assert.strictEqual(doc.score, 100); // Added from source
+      assert.strictEqual(doc.status, "active"); // Added from source
+    });
+
+    it("should discard non-matching documents (whenNotMatched: discard)", async () => {
+      const source = client.db(dbName).collection("merge_source5");
+      const target = client.db(dbName).collection("merge_target5");
+
+      // Pre-populate target
+      await target.insertMany([
+        { _id: 1, name: "Alice" },
+      ]);
+
+      // Source with mix of matching and non-matching
+      await source.insertMany([
+        { _id: 1, name: "Updated Alice", score: 100 },
+        { _id: 2, name: "Bob", score: 90 }, // No match - should be discarded
+      ]);
+
+      await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_target5",
+              whenMatched: "replace",
+              whenNotMatched: "discard",
+            },
+          },
+        ])
+        .toArray();
+
+      const targetDocs = await target.find({}).toArray();
+
+      assert.strictEqual(targetDocs.length, 1);
+      assert.strictEqual(targetDocs[0].name, "Updated Alice");
+      assert.strictEqual(targetDocs[0].score, 100);
+    });
+
+    it("should match on custom field (on option)", async () => {
+      const source = client.db(dbName).collection("merge_source6");
+      const target = client.db(dbName).collection("merge_target6");
+
+      // MongoDB requires a unique index on the 'on' field
+      await target.createIndex({ uniqueId: 1 }, { unique: true });
+
+      // Target with unique userId
+      await target.insertMany([
+        { _id: 100, uniqueId: "user1", name: "Old Name" },
+      ]);
+
+      // Source matching on uniqueId - use $project to remove _id before merging
+      await source.insertMany([
+        { _id: 999, uniqueId: "user1", name: "New Name", score: 100 },
+        { _id: 888, uniqueId: "user2", name: "Bob", score: 90 },
+      ]);
+
+      await source
+        .aggregate([
+          { $project: { _id: 0, uniqueId: 1, name: 1, score: 1 } },
+          {
+            $merge: {
+              into: "merge_target6",
+              on: "uniqueId",
+              whenMatched: "merge",
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      const targetDocs = await target.find({}).toArray();
+      targetDocs.sort((a, b) =>
+        String(a.uniqueId).localeCompare(String(b.uniqueId))
+      );
+
+      assert.strictEqual(targetDocs.length, 2);
+      // First doc should be updated (matched on uniqueId), preserving _id
+      assert.strictEqual(targetDocs[0].uniqueId, "user1");
+      assert.strictEqual(targetDocs[0].name, "New Name");
+      assert.strictEqual((targetDocs[0] as { _id: number })._id, 100); // Original _id preserved
+      // Second doc should be inserted
+      assert.strictEqual(targetDocs[1].uniqueId, "user2");
+    });
+
+    it("should return empty array like $out", async () => {
+      const source = client.db(dbName).collection("merge_source7");
+      await source.insertOne({ value: 1 });
+
+      const results = await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_target7",
+              whenMatched: "replace",
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.deepStrictEqual(results, []);
     });
   });
 });

@@ -18,13 +18,17 @@ export interface GeoIndexInfo {
 }
 
 /**
- * Interface for database context needed by $lookup and $out stages.
+ * Interface for database context needed by $lookup, $out, and $merge stages.
  */
 export interface AggregationDbContext {
   getCollection(name: string): {
     find(filter: Document): { toArray(): Promise<Document[]> };
+    findOne(filter: Document): Promise<Document | null>;
     deleteMany(filter: Document): Promise<unknown>;
+    insertOne(doc: Document): Promise<unknown>;
     insertMany(docs: Document[]): Promise<unknown>;
+    replaceOne(filter: Document, replacement: Document): Promise<unknown>;
+    updateOne(filter: Document, update: Document): Promise<unknown>;
   };
   /** Get geo indexes for the current collection (used by $geoNear) */
   getGeoIndexes?(): Promise<GeoIndexInfo[]>;

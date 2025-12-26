@@ -1187,21 +1187,31 @@ export class MangoCollection<T extends Document = Document> {
     }
 
     const docToReplace = matches[0];
-    const originalId = (docToReplace as { _id?: ObjectId })._id;
+    const originalId = (docToReplace as { _id?: unknown })._id;
     const newDoc = { ...replacement } as T;
-    if (originalId) {
+    if (originalId !== undefined) {
       (newDoc as Record<string, unknown>)._id = originalId;
     }
+
+    // Convert _id to string for unique constraint check
+    const idString = originalId && typeof (originalId as ObjectId).toHexString === "function"
+      ? (originalId as ObjectId).toHexString()
+      : String(originalId);
 
     await this.indexManager.checkUniqueConstraints(
       [newDoc],
       documents,
-      originalId ? new Set([originalId.toHexString()]) : new Set()
+      originalId ? new Set([idString]) : new Set()
     );
 
     const idx = documents.findIndex((doc) => {
-      const id = (doc as { _id?: ObjectId })._id;
-      return id && originalId && id.equals(originalId);
+      const id = (doc as { _id?: unknown })._id;
+      if (id === undefined || originalId === undefined) return false;
+      // Handle both ObjectId and primitive _id values
+      if (typeof (id as ObjectId).equals === "function" && typeof (originalId as ObjectId).equals === "function") {
+        return (id as ObjectId).equals(originalId as ObjectId);
+      }
+      return id === originalId;
     });
 
     if (idx !== -1) {
