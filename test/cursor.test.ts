@@ -64,6 +64,25 @@ describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
         assert.strictEqual(docs[2].name, "Charlie");
       });
 
+      it("should sort strings using binary comparison (uppercase before lowercase)", async () => {
+        const collection = client.db(dbName).collection("sort_str_binary");
+        await collection.insertMany([
+          { name: "banana" },
+          { name: "Apple" },
+          { name: "apple" },
+          { name: "Banana" },
+        ]);
+
+        const docs = await collection.find({}).sort({ name: 1 }).toArray();
+
+        // MongoDB uses binary comparison: A-Z (65-90) before a-z (97-122)
+        assert.strictEqual(docs.length, 4);
+        assert.strictEqual(docs[0].name, "Apple");
+        assert.strictEqual(docs[1].name, "Banana");
+        assert.strictEqual(docs[2].name, "apple");
+        assert.strictEqual(docs[3].name, "banana");
+      });
+
       it("should sort dates ascending", async () => {
         const collection = client.db(dbName).collection("sort_date_asc");
         const date1 = new Date("2024-01-01");

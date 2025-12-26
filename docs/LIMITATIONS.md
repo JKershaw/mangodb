@@ -19,7 +19,7 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 |----------|----------|-------|
 | Query Operators | 28/39 (72%) | Missing geospatial, projection |
 | Update Operators | 18/20 (90%) | Missing positional operators only |
-| Aggregation Stages | 19/34 (56%) | Core and priority stages implemented |
+| Aggregation Stages | 27/34 (79%) | Core stages + window functions |
 | Expression Operators | 106/112 (95%) | Nearly complete coverage |
 | Index Types | 5/8 (63%) | Missing geospatial, hashed |
 | Core Features | Limited | No transactions, sessions, streams |
@@ -156,11 +156,12 @@ All field update operators are fully implemented:
 | `$skip` | Non-negative integer validation |
 | `$count` | Returns single document with count |
 | `$unwind` | Supports `preserveNullAndEmptyArrays`, `includeArrayIndex` |
-| `$group` | 8 accumulator operators |
+| `$group` | 12 accumulator operators |
 | `$lookup` | Basic form (localField/foreignField) |
 | `$addFields` | Add/modify fields |
 | `$set` | Alias for `$addFields` |
 | `$replaceRoot` | Replace document root |
+| `$replaceWith` | Alias for `$replaceRoot` |
 | `$out` | Write to collection (must be final) |
 | `$sortByCount` | Group and count by expression |
 | `$sample` | Random sampling |
@@ -168,6 +169,46 @@ All field update operators are fully implemented:
 | `$bucket` | Group into buckets |
 | `$bucketAuto` | Auto-create buckets |
 | `$unionWith` | Union collections |
+| `$redact` | Field-level access control with `$$DESCEND`, `$$PRUNE`, `$$KEEP` |
+| `$graphLookup` | Recursive graph traversal with `maxDepth`, `depthField`, `restrictSearchWithMatch` |
+| `$documents` | Inject literal documents (must be first stage) |
+| `$unset` | Remove fields from documents |
+| `$densify` | Fill gaps in numeric/date sequences with partitioning |
+| `$fill` | Fill null values with `value`, `locf`, or `linear` methods |
+| `$setWindowFields` | Window functions (see below) |
+
+### $setWindowFields Operators
+
+The `$setWindowFields` stage supports the following window operators:
+
+| Operator | Status | Notes |
+|----------|--------|-------|
+| `$documentNumber` | ✅ | Sequential position |
+| `$rank` | ✅ | Rank with gaps for ties |
+| `$denseRank` | ✅ | Rank without gaps |
+| `$sum` | ✅ | Over window |
+| `$avg` | ✅ | Over window |
+| `$min` | ✅ | Over window (numbers, strings, dates) |
+| `$max` | ✅ | Over window (numbers, strings, dates) |
+| `$count` | ✅ | Over window |
+| `$first` | ✅ | First value in window |
+| `$last` | ✅ | Last value in window |
+| `$push` | ✅ | Collect values in window |
+| `$addToSet` | ✅ | Collect unique values in window |
+| `$locf` | ✅ | Last observation carried forward |
+| `$linearFill` | ✅ | Linear interpolation |
+| `$shift` | ✅ | Access value at relative offset |
+| `$derivative` | ✅ | Rate of change |
+| `$integral` | ✅ | Area under curve (trapezoidal) |
+| `$expMovingAvg` | ✅ | Exponential moving average |
+| `$covariancePop` | ✅ | Population covariance |
+| `$covarianceSamp` | ✅ | Sample covariance |
+| `$stdDevPop` | ✅ | Population standard deviation |
+| `$stdDevSamp` | ✅ | Sample standard deviation |
+
+**Window bounds**: Both `documents` and `range` bounds are supported with `"unbounded"`, `"current"`, and integer offsets.
+
+**Known limitation**: `"full"` bounds option in `$densify` uses partition bounds instead of global bounds.
 
 ### Not Implemented Stages ❌
 
@@ -175,21 +216,13 @@ All field update operators are fully implemented:
 |-------|-------------|--------|
 | `$changeStream` | Real-time changes | Requires change streams |
 | `$collStats` | Collection statistics | Use `collection.stats()` instead |
-| `$densify` | Fill gaps in data | Not implemented |
-| `$documents` | Inject literal documents | Not implemented |
-| `$fill` | Fill missing values | Not implemented |
 | `$geoNear` | Geospatial query | Requires geo indexes |
-| `$graphLookup` | Recursive lookup | Not implemented |
 | `$indexStats` | Index usage stats | Not implemented |
 | `$listSessions` | Active sessions | No session support |
 | `$merge` | Merge into collection | Not implemented |
 | `$planCacheStats` | Query plan stats | No query planner |
-| `$redact` | Field-level access control | Not implemented |
-| `$replaceWith` | Replace document (4.4+) | Use `$replaceRoot` |
 | `$search` | Atlas full-text search | Atlas-only feature |
 | `$searchMeta` | Atlas search metadata | Atlas-only feature |
-| `$setWindowFields` | Window functions | Not implemented |
-| `$unset` | Remove fields | Use `$project` with exclusion |
 
 ### $lookup Limitations
 
@@ -384,6 +417,21 @@ These options are not supported on any method:
 | **Atomicity** | Single-document only, no multi-document atomicity |
 | **ObjectId Generation** | Uses `bson` library (compatible) |
 | **Error Codes** | MongoDB-compatible error codes for common errors |
+
+### JSON Storage Limitations
+
+These differences arise from using JSON instead of BSON for storage:
+
+| Aspect | MongoDB | MangoDB |
+|--------|---------|---------|
+| **`undefined` values** | Stored as explicit undefined | Stripped during serialization (treated as missing) |
+| **`NaN`** | Stored as NaN | Stored as `null` |
+| **`Infinity`** | Stored as Infinity | Stored as `null` |
+| **`-Infinity`** | Stored as -Infinity | Stored as `null` |
+| **Binary data** | Native BinData type | Base64 encoded strings |
+| **Decimal128** | Native decimal type | Converted to JavaScript number |
+
+**Impact**: Code relying on `undefined` field existence, NaN/Infinity comparisons, or high-precision decimals may behave differently.
 
 ---
 

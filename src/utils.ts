@@ -144,7 +144,7 @@ export function getTypeOrder(value: unknown): number {
  * - Different types: compare by BSON type order
  * - Same type: compare by value using type-specific comparison
  * - Numbers: numeric comparison
- * - Strings: lexicographic comparison using localeCompare
+ * - Strings: binary (byte-by-byte) comparison
  * - Booleans: false < true
  * - Dates: chronological order
  * - ObjectIds: hex string comparison
@@ -183,7 +183,10 @@ export function compareScalarValues(a: unknown, b: unknown): number {
   }
 
   if (typeof a === "string" && typeof b === "string") {
-    return a.localeCompare(b);
+    // MongoDB uses binary comparison by default (not locale-aware)
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
   }
 
   if (typeof a === "boolean" && typeof b === "boolean") {
@@ -197,12 +200,20 @@ export function compareScalarValues(a: unknown, b: unknown): number {
   }
 
   if (a instanceof ObjectId && b instanceof ObjectId) {
-    return a.toHexString().localeCompare(b.toHexString());
+    const aHex = a.toHexString();
+    const bHex = b.toHexString();
+    if (aHex < bHex) return -1;
+    if (aHex > bHex) return 1;
+    return 0;
   }
 
   // For objects, use JSON string comparison as fallback
   if (typeof a === "object" && typeof b === "object") {
-    return JSON.stringify(a).localeCompare(JSON.stringify(b));
+    const aStr = JSON.stringify(a);
+    const bStr = JSON.stringify(b);
+    if (aStr < bStr) return -1;
+    if (aStr > bStr) return 1;
+    return 0;
   }
 
   return 0;
