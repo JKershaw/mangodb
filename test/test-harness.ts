@@ -261,7 +261,8 @@ export async function createTestClient(): Promise<{
   dbName: string;
   cleanup: () => Promise<void>;
 }> {
-  const dbName = `mangodb_test_${randomUUID().replace(/-/g, "")}`;
+  // Use clearly test-only prefix (_mtest_) + short UUID to stay under Atlas 38-byte limit
+  const dbName = `_mtest_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
 
   if (isMongoDBMode()) {
     const client = new MongoClient(MONGODB_URI!);

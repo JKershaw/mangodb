@@ -20,6 +20,7 @@
     "precommit": "npm run typecheck",
     "typecheck": "tsc",
     "test": "node --experimental-strip-types --test test/**/*.test.ts",
+    "test:mongodb": "export $(cat .env.mongodb) && node --experimental-strip-types test/cleanup-atlas.js && node --experimental-strip-types --test --test-concurrency=8 test/**/*.test.ts",
     "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts",
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/**/*.test.ts",
     "prepublishOnly": "npm run clean && npm run build && npm test",
@@ -52,6 +53,7 @@
     "@types/node": "^25.0.3",
     "husky": "^9.1.7",
     "mongodb": "^6.21.0",
+    "mongodb-memory-server": "^11.0.1",
     "typescript": "^5.7.2"
   },
   "engines": {
