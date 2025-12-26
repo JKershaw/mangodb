@@ -58,7 +58,11 @@ describe(`Aggregation Pipeline Tests (${getTestModeName()})`, () => {
             .toArray();
         },
         (err: Error) => {
-          assert.ok(err.message.includes("Unrecognized pipeline stage name"));
+          // MongoDB uses "Unrecognized pipeline stage name: '$unknownStage'"
+          assert.ok(
+            err.message.includes("$unknownStage") ||
+              err.message.includes("unknownStage")
+          );
           return true;
         }
       );

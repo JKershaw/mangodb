@@ -530,7 +530,6 @@ export interface RenameOptions {
  * @property storageSize - Same as dataSize for MangoDB
  * @property indexes - Total number of indexes
  * @property indexSize - Total size of index files in bytes
- * @property totalSize - dataSize + indexSize
  * @property ok - Status indicator (1 for success)
  */
 export interface DbStats {
@@ -542,7 +541,6 @@ export interface DbStats {
   storageSize: number;
   indexes: number;
   indexSize: number;
-  totalSize: number;
   ok: 1;
 }
 

@@ -481,18 +481,21 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
   });
 
   // ==================== $currentDate Operator ====================
+  // Allow 5 seconds tolerance for clock drift between client and MongoDB server
+  const CLOCK_DRIFT_MS = 5000;
+
   describe("$currentDate operator", () => {
     it("should set field to current date with true", async () => {
       const collection = client.db(dbName).collection("currentdate_true");
       await collection.insertOne({ name: "Alice" });
-      const before = new Date();
+      const before = new Date(Date.now() - CLOCK_DRIFT_MS);
 
       await collection.updateOne(
         { name: "Alice" },
         { $currentDate: { lastModified: true } }
       );
 
-      const after = new Date();
+      const after = new Date(Date.now() + CLOCK_DRIFT_MS);
       const doc = await collection.findOne({ name: "Alice" });
       assert.ok(doc?.lastModified instanceof Date);
       assert.ok((doc?.lastModified as Date) >= before);
@@ -502,14 +505,14 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
     it("should set field to current date with $type: date", async () => {
       const collection = client.db(dbName).collection("currentdate_type_date");
       await collection.insertOne({ name: "Alice" });
-      const before = new Date();
+      const before = new Date(Date.now() - CLOCK_DRIFT_MS);
 
       await collection.updateOne(
         { name: "Alice" },
         { $currentDate: { lastModified: { $type: "date" } } }
       );
 
-      const after = new Date();
+      const after = new Date(Date.now() + CLOCK_DRIFT_MS);
       const doc = await collection.findOne({ name: "Alice" });
       assert.ok(doc?.lastModified instanceof Date);
       assert.ok((doc?.lastModified as Date) >= before);
@@ -815,7 +818,7 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
     it("should combine $currentDate with $set", async () => {
       const collection = client.db(dbName).collection("combine_currentdate_set");
       await collection.insertOne({ name: "Alice" });
-      const before = new Date();
+      const before = new Date(Date.now() - CLOCK_DRIFT_MS);
 
       await collection.updateOne(
         { name: "Alice" },
@@ -825,7 +828,7 @@ describe(`Phase 13: Additional Update Operators (${getTestModeName()})`, () => {
         }
       );
 
-      const after = new Date();
+      const after = new Date(Date.now() + CLOCK_DRIFT_MS);
       const doc = await collection.findOne({ name: "Alice" });
       assert.strictEqual(doc?.status, "active");
       assert.ok((doc?.updatedAt as Date) >= before);

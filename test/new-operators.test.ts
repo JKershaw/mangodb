@@ -473,16 +473,15 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(docs.length, 3);
     });
 
-    it("should throw error for size 0", async () => {
+    it("should return empty array for size 0", async () => {
       const collection = client.db(dbName).collection("sample_zero");
       await collection.insertMany([{ a: 1 }, { a: 2 }]);
 
-      await assert.rejects(
-        async () => {
-          await collection.aggregate([{ $sample: { size: 0 } }]).toArray();
-        },
-        /size argument to \$sample must be a positive integer/
-      );
+      const docs = await collection
+        .aggregate([{ $sample: { size: 0 } }])
+        .toArray();
+
+      assert.strictEqual(docs.length, 0);
     });
   });
 
@@ -686,7 +685,7 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
       await collection2.insertMany([{ source: "B", val: 2 }]);
 
       const docs = await collection1
-        .aggregate([{ $unionWith: "union_other" }])
+        .aggregate([{ $unionWith: { coll: "union_other" } }])
         .toArray();
 
       assert.strictEqual(docs.length, 2);

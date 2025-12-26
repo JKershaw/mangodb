@@ -215,7 +215,6 @@ export class MangoDb {
       storageSize: dataSize,
       indexes,
       indexSize,
-      totalSize: dataSize + indexSize,
       ok: 1,
     };
   }

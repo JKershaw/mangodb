@@ -588,7 +588,6 @@ describe(`Administrative Operations Tests (${getTestModeName()})`, () => {
       assert.strictEqual(typeof stats.dataSize, "number");
       assert.strictEqual(typeof stats.storageSize, "number");
       assert.strictEqual(typeof stats.indexSize, "number");
-      assert.strictEqual(typeof stats.totalSize, "number");
     });
 
     it("should return ok: 1", async () => {

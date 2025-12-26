@@ -130,7 +130,7 @@ export class AggregationCursor<T extends Document = Document> {
         );
       case "$unionWith":
         return this.execUnionWith(
-          stageValue as string | { coll: string; pipeline?: PipelineStage[] },
+          stageValue as { coll: string; pipeline?: PipelineStage[] },
           docs
         );
       default:
@@ -581,13 +581,13 @@ export class AggregationCursor<T extends Document = Document> {
       throw new Error("$sample requires a 'size' field");
     }
     if (typeof spec.size !== "number" || !Number.isInteger(spec.size)) {
-      throw new Error("size argument to $sample must be a positive integer");
+      throw new Error("size argument to $sample must be a non-negative integer");
     }
-    if (spec.size <= 0) {
-      throw new Error("size argument to $sample must be a positive integer");
+    if (spec.size < 0) {
+      throw new Error("size argument to $sample must be a non-negative integer");
     }
 
-    if (docs.length === 0) {
+    if (spec.size === 0 || docs.length === 0) {
       return [];
     }
 
@@ -933,19 +933,19 @@ export class AggregationCursor<T extends Document = Document> {
    * $unionWith - Combines documents from two collections.
    */
   private async execUnionWith(
-    spec: string | { coll: string; pipeline?: PipelineStage[] },
+    spec: { coll: string; pipeline?: PipelineStage[] },
     docs: Document[]
   ): Promise<Document[]> {
     if (!this.dbContext) {
       throw new Error("$unionWith requires database context");
     }
 
-    const collName = typeof spec === "string" ? spec : spec.coll;
-    const pipeline = typeof spec === "object" ? spec.pipeline : undefined;
-
-    if (!collName) {
-      throw new Error("$unionWith requires a collection name");
+    if (typeof spec !== "object" || !spec.coll) {
+      throw new Error("$unionWith requires a 'coll' field");
     }
+
+    const collName = spec.coll;
+    const pipeline = spec.pipeline;
 
     const foreignCollection = this.dbContext.getCollection(collName);
     let foreignDocs = await foreignCollection.find({}).toArray();
