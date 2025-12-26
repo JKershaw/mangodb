@@ -1,7 +1,7 @@
 /**
  * Update operators for MongoDB-compatible document modifications.
  */
-import type { Document, UpdateOperators, Filter, QueryOperators } from "./types.ts";
+import type { Document, UpdateOperators, Filter, QueryOperators, ArrayFilter } from "./types.ts";
 import {
   setValueByPath,
   deleteValueByPath,
@@ -10,7 +10,216 @@ import {
   valuesEqual,
   compareValues,
 } from "./document-utils.ts";
-import { isOperatorObject, matchesOperators, matchesPullCondition } from "./query-matcher.ts";
+import { isOperatorObject, matchesOperators, matchesPullCondition, matchesFilter } from "./query-matcher.ts";
+
+/**
+ * Context for positional update operators.
+ * Provides information about which array indices matched during query filtering.
+ */
+export interface PositionalContext {
+  /** Map of array field path to the first matched index for $ operator */
+  matchedArrayIndex?: Map<string, number>;
+  /** Array filters for $[identifier] operators */
+  arrayFilters?: ArrayFilter[];
+}
+
+/**
+ * Check if a path contains positional operators ($, $[], $[identifier]).
+ */
+function hasPositionalOperator(path: string): boolean {
+  return path.includes(".$") || path.includes(".$[");
+}
+
+/**
+ * Parse a path segment to check for positional operators.
+ * Returns { type: "index", value: number } for numeric indices
+ * Returns { type: "$", value: null } for $ operator
+ * Returns { type: "$[]", value: null } for $[] operator
+ * Returns { type: "$[identifier]", value: string } for $[identifier] operator
+ * Returns { type: "field", value: string } for regular fields
+ */
+function parsePathSegment(segment: string): { type: string; value: unknown } {
+  if (/^\d+$/.test(segment)) {
+    return { type: "index", value: parseInt(segment, 10) };
+  }
+  if (segment === "$") {
+    return { type: "$", value: null };
+  }
+  if (segment === "$[]") {
+    return { type: "$[]", value: null };
+  }
+  const identifierMatch = segment.match(/^\$\[(\w+)\]$/);
+  if (identifierMatch) {
+    return { type: "$[identifier]", value: identifierMatch[1] };
+  }
+  return { type: "field", value: segment };
+}
+
+/**
+ * Find the array filter that matches a given identifier.
+ */
+function findArrayFilter(identifier: string, arrayFilters?: ArrayFilter[]): ArrayFilter | undefined {
+  if (!arrayFilters) return undefined;
+
+  for (const filter of arrayFilters) {
+    const keys = Object.keys(filter);
+    // Array filter has keys like "elem.status" where "elem" is the identifier
+    for (const key of keys) {
+      if (key === identifier || key.startsWith(identifier + ".")) {
+        return filter;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if an array element matches an array filter.
+ * The filter uses identifier prefix, which we need to strip.
+ *
+ * Examples:
+ * - { elem: { $lt: 70 } } with element=60 → matches (60 < 70)
+ * - { elem: "red" } with element="red" → matches
+ * - { "elem.qty": { $gt: 5 } } with element={ qty: 10 } → matches
+ */
+function elementMatchesArrayFilter(
+  element: unknown,
+  identifier: string,
+  filter: ArrayFilter
+): boolean {
+  // Translate the filter to remove identifier prefix
+  const translatedFilter: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(filter)) {
+    if (key === identifier) {
+      // Direct match on element itself - { elem: value }
+      // Check if value is an operator object like { $lt: 70 }
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        const valueObj = value as Record<string, unknown>;
+        const hasOperators = Object.keys(valueObj).some(k => k.startsWith("$"));
+        if (hasOperators) {
+          // Value is operator object - apply directly to element
+          return matchesFilter({ _elem: element }, { _elem: valueObj });
+        }
+      }
+      // Direct equality check
+      return matchesFilter({ _elem: element }, { _elem: value });
+    } else if (key.startsWith(identifier + ".")) {
+      // Strip the identifier prefix: "elem.qty" → "qty"
+      const newKey = key.slice(identifier.length + 1);
+      translatedFilter[newKey] = value;
+    }
+  }
+
+  if (Object.keys(translatedFilter).length > 0) {
+    if (typeof element !== "object" || element === null) {
+      // Primitive element can't have nested fields
+      return false;
+    }
+    return matchesFilter(element as Document, translatedFilter);
+  }
+
+  return true;
+}
+
+/**
+ * Resolve positional operators in a path and return all concrete paths.
+ * For $ operator: replaces with the matched index
+ * For $[] operator: expands to all array indices
+ * For $[identifier] operator: expands to indices matching the array filter
+ */
+function resolvePositionalPaths(
+  doc: Document,
+  path: string,
+  context?: PositionalContext
+): string[] {
+  if (!hasPositionalOperator(path)) {
+    return [path];
+  }
+
+  const segments = path.split(".");
+  return resolveSegments(doc, segments, 0, "", context);
+}
+
+/**
+ * Recursively resolve path segments with positional operators.
+ */
+function resolveSegments(
+  doc: Document,
+  segments: string[],
+  index: number,
+  currentPath: string,
+  context?: PositionalContext
+): string[] {
+  if (index >= segments.length) {
+    return [currentPath];
+  }
+
+  const segment = segments[index];
+  const parsed = parsePathSegment(segment);
+
+  if (parsed.type === "$") {
+    // $ operator - replace with matched index
+    const arrayPath = currentPath || segments.slice(0, index).join(".");
+    const matchedIndex = context?.matchedArrayIndex?.get(arrayPath);
+
+    if (matchedIndex === undefined) {
+      // No matched index found - try to use 0 as default or skip
+      // In MongoDB, using $ without a matching query is an error
+      throw new Error(`The positional operator did not find the match needed from the query.`);
+    }
+
+    const newPath = currentPath ? `${currentPath}.${matchedIndex}` : String(matchedIndex);
+    return resolveSegments(doc, segments, index + 1, newPath, context);
+  }
+
+  if (parsed.type === "$[]") {
+    // $[] operator - expand to all array indices
+    const arrayPath = currentPath || segments.slice(0, index).join(".");
+    const arr = getValueAtPath(doc as Record<string, unknown>, arrayPath);
+
+    if (!Array.isArray(arr)) {
+      return []; // Not an array, no paths to update
+    }
+
+    const results: string[] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const newPath = currentPath ? `${currentPath}.${i}` : String(i);
+      results.push(...resolveSegments(doc, segments, index + 1, newPath, context));
+    }
+    return results;
+  }
+
+  if (parsed.type === "$[identifier]") {
+    // $[identifier] operator - expand to indices matching array filter
+    const identifier = parsed.value as string;
+    const filter = findArrayFilter(identifier, context?.arrayFilters);
+
+    if (!filter) {
+      throw new Error(`No array filter found for identifier '${identifier}'`);
+    }
+
+    const arrayPath = currentPath || segments.slice(0, index).join(".");
+    const arr = getValueAtPath(doc as Record<string, unknown>, arrayPath);
+
+    if (!Array.isArray(arr)) {
+      return []; // Not an array, no paths to update
+    }
+
+    const results: string[] = [];
+    for (let i = 0; i < arr.length; i++) {
+      if (elementMatchesArrayFilter(arr[i], identifier, filter)) {
+        const newPath = currentPath ? `${currentPath}.${i}` : String(i);
+        results.push(...resolveSegments(doc, segments, index + 1, newPath, context));
+      }
+    }
+    return results;
+  }
+
+  // Regular field or numeric index
+  const newPath = currentPath ? `${currentPath}.${segment}` : segment;
+  return resolveSegments(doc, segments, index + 1, newPath, context);
+}
 
 /**
  * Push modifier object structure.
@@ -200,30 +409,40 @@ function applyArrayPush(
  */
 export function applyUpdateOperators<T extends Document>(
   doc: T,
-  update: UpdateOperators
+  update: UpdateOperators,
+  context?: PositionalContext
 ): T {
   const result = cloneDocument(doc);
 
   // Apply $set
   if (update.$set) {
     for (const [path, value] of Object.entries(update.$set)) {
-      setValueByPath(result as Record<string, unknown>, path, value);
+      const resolvedPaths = resolvePositionalPaths(result, path, context);
+      for (const resolvedPath of resolvedPaths) {
+        setValueByPath(result as Record<string, unknown>, resolvedPath, value);
+      }
     }
   }
 
   // Apply $unset
   if (update.$unset) {
     for (const path of Object.keys(update.$unset)) {
-      deleteValueByPath(result as Record<string, unknown>, path);
+      const resolvedPaths = resolvePositionalPaths(result, path, context);
+      for (const resolvedPath of resolvedPaths) {
+        deleteValueByPath(result as Record<string, unknown>, resolvedPath);
+      }
     }
   }
 
   // Apply $inc
   if (update.$inc) {
     for (const [path, increment] of Object.entries(update.$inc)) {
-      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
-      const numericCurrent = typeof currentValue === "number" ? currentValue : 0;
-      setValueByPath(result as Record<string, unknown>, path, numericCurrent + increment);
+      const resolvedPaths = resolvePositionalPaths(result, path, context);
+      for (const resolvedPath of resolvedPaths) {
+        const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
+        const numericCurrent = typeof currentValue === "number" ? currentValue : 0;
+        setValueByPath(result as Record<string, unknown>, resolvedPath, numericCurrent + increment);
+      }
     }
   }
 
@@ -329,13 +548,14 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $min - only update if new value is less than current
   if (update.$min) {
     for (const [path, minValue] of Object.entries(update.$min)) {
-      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
-      if (currentValue === undefined) {
-        // Field doesn't exist, create it with the specified value
-        setValueByPath(result as Record<string, unknown>, path, minValue);
-      } else if (compareValues(minValue, currentValue) < 0) {
-        // New value is less than current, update it
-        setValueByPath(result as Record<string, unknown>, path, minValue);
+      const resolvedPaths = resolvePositionalPaths(result, path, context);
+      for (const resolvedPath of resolvedPaths) {
+        const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
+        if (currentValue === undefined) {
+          setValueByPath(result as Record<string, unknown>, resolvedPath, minValue);
+        } else if (compareValues(minValue, currentValue) < 0) {
+          setValueByPath(result as Record<string, unknown>, resolvedPath, minValue);
+        }
       }
     }
   }
@@ -343,13 +563,14 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $max - only update if new value is greater than current
   if (update.$max) {
     for (const [path, maxValue] of Object.entries(update.$max)) {
-      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
-      if (currentValue === undefined) {
-        // Field doesn't exist, create it with the specified value
-        setValueByPath(result as Record<string, unknown>, path, maxValue);
-      } else if (compareValues(maxValue, currentValue) > 0) {
-        // New value is greater than current, update it
-        setValueByPath(result as Record<string, unknown>, path, maxValue);
+      const resolvedPaths = resolvePositionalPaths(result, path, context);
+      for (const resolvedPath of resolvedPaths) {
+        const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
+        if (currentValue === undefined) {
+          setValueByPath(result as Record<string, unknown>, resolvedPath, maxValue);
+        } else if (compareValues(maxValue, currentValue) > 0) {
+          setValueByPath(result as Record<string, unknown>, resolvedPath, maxValue);
+        }
       }
     }
   }
@@ -357,17 +578,18 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $mul - multiply field by a number
   if (update.$mul) {
     for (const [path, multiplier] of Object.entries(update.$mul)) {
-      const currentValue = getValueAtPath(result as Record<string, unknown>, path);
-      if (currentValue === undefined) {
-        // Field doesn't exist, create it with value 0 (not the multiplied value!)
-        setValueByPath(result as Record<string, unknown>, path, 0);
-      } else if (typeof currentValue !== "number") {
-        // Non-numeric field value - throw error
-        throw new Error(
-          `Cannot apply $mul to a value of non-numeric type. Field '${path}' has non-numeric type ${typeof currentValue}`
-        );
-      } else {
-        setValueByPath(result as Record<string, unknown>, path, currentValue * multiplier);
+      const resolvedPaths = resolvePositionalPaths(result, path, context);
+      for (const resolvedPath of resolvedPaths) {
+        const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
+        if (currentValue === undefined) {
+          setValueByPath(result as Record<string, unknown>, resolvedPath, 0);
+        } else if (typeof currentValue !== "number") {
+          throw new Error(
+            `Cannot apply $mul to a value of non-numeric type. Field '${resolvedPath}' has non-numeric type ${typeof currentValue}`
+          );
+        } else {
+          setValueByPath(result as Record<string, unknown>, resolvedPath, currentValue * multiplier);
+        }
       }
     }
   }

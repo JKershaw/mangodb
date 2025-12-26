@@ -54,6 +54,7 @@ import {
   applyUpdateOperators,
   createDocumentFromFilter,
   validateReplacement,
+  type PositionalContext,
 } from "./update-operators.ts";
 
 import { IndexManager } from "./index-manager.ts";
@@ -827,6 +828,132 @@ export class MangoCollection<T extends Document = Document> {
 
   // ==================== Update Operations ====================
 
+  /**
+   * Find matched array indices for positional $ operator.
+   * Analyzes the filter to determine which array element indices matched.
+   */
+  private findMatchedArrayIndices(
+    doc: T,
+    filter: Filter<T>
+  ): Map<string, number> | undefined {
+    const matchedIndices = new Map<string, number>();
+
+    for (const [key, condition] of Object.entries(filter)) {
+      // Skip _id and logical operators
+      if (key === "_id" || key.startsWith("$")) continue;
+
+      // Check for dot notation indicating array element query (e.g., "items.status")
+      if (key.includes(".")) {
+        const parts = key.split(".");
+        let current: unknown = doc;
+        let arrayPath = "";
+
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+
+          if (current === null || current === undefined) break;
+
+          if (Array.isArray(current)) {
+            // Found array - check for matching index
+            const remainingPath = parts.slice(i).join(".");
+            for (let idx = 0; idx < current.length; idx++) {
+              const element = current[idx];
+              const valueToCheck =
+                remainingPath && typeof element === "object" && element !== null
+                  ? getValueByPath(element as Record<string, unknown>, remainingPath)
+                  : element;
+
+              if (this.valueMatchesCondition(valueToCheck, condition)) {
+                // Store the path to the array (without the remaining path)
+                matchedIndices.set(arrayPath, idx);
+                break;
+              }
+            }
+            break;
+          } else if (typeof current === "object") {
+            arrayPath = arrayPath ? `${arrayPath}.${part}` : part;
+            current = (current as Record<string, unknown>)[part];
+          } else {
+            break;
+          }
+        }
+      } else {
+        // Non-dotted path - check if value is an array with conditions
+        const value = getValueByPath(doc as Record<string, unknown>, key);
+
+        if (Array.isArray(value)) {
+          // Check for $elemMatch
+          if (
+            condition &&
+            typeof condition === "object" &&
+            "$elemMatch" in condition
+          ) {
+            const elemMatchCond = (condition as { $elemMatch: Record<string, unknown> }).$elemMatch;
+            for (let idx = 0; idx < value.length; idx++) {
+              const elem = value[idx];
+              // For primitive arrays, wrap element for matching
+              if (typeof elem !== "object" || elem === null) {
+                // Check if elemMatchCond is an operator object like { $gt: 10 }
+                if (this.valueMatchesCondition(elem, elemMatchCond)) {
+                  matchedIndices.set(key, idx);
+                  break;
+                }
+              } else if (matchesFilter(elem as Document, elemMatchCond)) {
+                matchedIndices.set(key, idx);
+                break;
+              }
+            }
+          } else {
+            // Direct array comparison with operators like $gt, $in, etc.
+            for (let idx = 0; idx < value.length; idx++) {
+              if (this.valueMatchesCondition(value[idx], condition)) {
+                matchedIndices.set(key, idx);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return matchedIndices.size > 0 ? matchedIndices : undefined;
+  }
+
+  /**
+   * Check if a single value matches a filter condition.
+   */
+  private valueMatchesCondition(value: unknown, condition: unknown): boolean {
+    if (condition === null || condition === undefined) {
+      return value === condition;
+    }
+
+    if (typeof condition === "object" && !Array.isArray(condition)) {
+      // Operator-based condition
+      const condObj = condition as Record<string, unknown>;
+      const keys = Object.keys(condObj);
+
+      // Check if it's an operator object
+      if (keys.some((k) => k.startsWith("$"))) {
+        return matchesFilter({ value } as Document, { value: condObj });
+      }
+    }
+
+    // Direct equality
+    if (value === condition) return true;
+
+    // Deep equality for objects/arrays
+    if (
+      typeof value === "object" &&
+      typeof condition === "object" &&
+      value !== null &&
+      condition !== null
+    ) {
+      return JSON.stringify(value) === JSON.stringify(condition);
+    }
+
+    return false;
+  }
+
   private async performUpdate(
     filter: Filter<T>,
     update: UpdateOperators,
@@ -843,12 +970,25 @@ export class MangoCollection<T extends Document = Document> {
     const modifiedDocs: T[] = [];
     const unchangedDocs: T[] = [];
 
+    // Create context for positional update operators
+    const baseContext: PositionalContext = {
+      arrayFilters: options.arrayFilters,
+    };
+
     for (const doc of documents) {
       const shouldMatch = limitOne ? matchedCount === 0 : true;
 
       if (shouldMatch && matchesFilter(doc, filter)) {
         matchedCount++;
-        const updatedDoc = applyUpdateOperators(doc, update);
+
+        // Track matched array indices for $ positional operator
+        const matchedArrayIndex = this.findMatchedArrayIndices(doc, filter);
+        const context: PositionalContext = {
+          ...baseContext,
+          matchedArrayIndex,
+        };
+
+        const updatedDoc = applyUpdateOperators(doc, update, context);
 
         if (!documentsEqual(doc, updatedDoc)) {
           modifiedCount++;
@@ -874,7 +1014,7 @@ export class MangoCollection<T extends Document = Document> {
         }
       }
 
-      const newDoc = applyUpdateOperators(baseDoc, update);
+      const newDoc = applyUpdateOperators(baseDoc, update, baseContext);
 
       if (!("_id" in newDoc)) {
         (newDoc as Record<string, unknown>)._id = new ObjectId();

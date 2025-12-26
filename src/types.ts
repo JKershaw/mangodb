@@ -185,11 +185,19 @@ export interface UpdateResult {
 }
 
 /**
+ * Array filter for positional update operators.
+ * Used with $[identifier] to specify which array elements to update.
+ */
+export type ArrayFilter = Record<string, unknown>;
+
+/**
  * Options for update operations (updateOne and updateMany).
  * @property upsert - When true, creates a new document if no document matches the filter
+ * @property arrayFilters - Array of filter documents for positional update operators ($[identifier])
  */
 export interface UpdateOptions {
   upsert?: boolean;
+  arrayFilters?: ArrayFilter[];
 }
 
 /**

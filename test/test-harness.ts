@@ -86,6 +86,7 @@ export interface UpdateResult {
 
 export interface UpdateOptions {
   upsert?: boolean;
+  arrayFilters?: Record<string, unknown>[];
 }
 
 export interface FindOptions {
