@@ -2576,4 +2576,195 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Boolean/Logical Operators ====================
+
+  describe("Boolean/Logical Operators", () => {
+    describe("$and", () => {
+      it("should return true when all expressions are truthy", async () => {
+        const collection = client.db(dbName).collection("and_all_true");
+        await collection.insertOne({ a: 1, b: "hello", c: true });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $and: ["$a", "$b", "$c"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false when any expression is falsy", async () => {
+        const collection = client.db(dbName).collection("and_one_false");
+        await collection.insertOne({ a: 1, b: 0, c: true });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $and: ["$a", "$b", "$c"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should return true for empty array", async () => {
+        const collection = client.db(dbName).collection("and_empty");
+        await collection.insertOne({ a: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $and: [] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should treat null as falsy", async () => {
+        const collection = client.db(dbName).collection("and_null");
+        await collection.insertOne({ a: 1, b: null });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $and: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should treat 0 as falsy", async () => {
+        const collection = client.db(dbName).collection("and_zero");
+        await collection.insertOne({ a: 1, b: 0 });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $and: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should treat empty string as truthy", async () => {
+        const collection = client.db(dbName).collection("and_empty_str");
+        await collection.insertOne({ a: 1, b: "" });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $and: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should treat empty array as truthy", async () => {
+        const collection = client.db(dbName).collection("and_empty_arr");
+        await collection.insertOne({ a: 1, b: [] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $and: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+    });
+
+    describe("$or", () => {
+      it("should return true when any expression is truthy", async () => {
+        const collection = client.db(dbName).collection("or_one_true");
+        await collection.insertOne({ a: 0, b: null, c: 1 });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $or: ["$a", "$b", "$c"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false when all expressions are falsy", async () => {
+        const collection = client.db(dbName).collection("or_all_false");
+        await collection.insertOne({ a: 0, b: null, c: false });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $or: ["$a", "$b", "$c"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should return false for empty array", async () => {
+        const collection = client.db(dbName).collection("or_empty");
+        await collection.insertOne({ a: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $or: [] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+    });
+
+    describe("$not", () => {
+      it("should return true for falsy value", async () => {
+        const collection = client.db(dbName).collection("not_false");
+        await collection.insertOne({ a: false });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $not: ["$a"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false for truthy value", async () => {
+        const collection = client.db(dbName).collection("not_true");
+        await collection.insertOne({ a: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $not: ["$a"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should return true for 0", async () => {
+        const collection = client.db(dbName).collection("not_zero");
+        await collection.insertOne({ a: 0 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $not: ["$a"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return true for null", async () => {
+        const collection = client.db(dbName).collection("not_null");
+        await collection.insertOne({ a: null });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $not: ["$a"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return true for missing field", async () => {
+        const collection = client.db(dbName).collection("not_missing");
+        await collection.insertOne({ b: 1 });
+
+        const results = await collection
+          .aggregate([{ $project: { result: { $not: ["$a"] }, _id: 0 } }])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+    });
+  });
 });

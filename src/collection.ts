@@ -1194,14 +1194,20 @@ export class MangoCollection<T extends Document = Document> {
     }
 
     // Convert _id to string for unique constraint check
-    const idString = originalId && typeof (originalId as ObjectId).toHexString === "function"
-      ? (originalId as ObjectId).toHexString()
-      : String(originalId);
+    // Use explicit undefined check to handle falsy _id values like 0 or ""
+    const getIdString = (id: unknown): string => {
+      if (id === undefined) return "";
+      if (typeof (id as ObjectId).toHexString === "function") {
+        return (id as ObjectId).toHexString();
+      }
+      return String(id);
+    };
+    const idString = getIdString(originalId);
 
     await this.indexManager.checkUniqueConstraints(
       [newDoc],
       documents,
-      originalId ? new Set([idString]) : new Set()
+      originalId !== undefined ? new Set([idString]) : new Set()
     );
 
     const idx = documents.findIndex((doc) => {

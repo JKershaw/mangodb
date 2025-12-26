@@ -1034,6 +1034,58 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 1);
       assert.strictEqual((results[0].activeItems as Document[]).length, 2);
     });
+
+    it("should support dotted variable paths in let", async () => {
+      const orders = client.db(dbName).collection("lookup_dotted_orders");
+      const products = client.db(dbName).collection("lookup_dotted_products");
+
+      await orders.insertOne({
+        _id: 1,
+        customer: { name: "Alice", tier: "gold" },
+        items: ["prod1", "prod2"],
+      });
+
+      await products.insertMany([
+        { sku: "prod1", name: "Widget", discount: { gold: 20, silver: 10 } },
+        { sku: "prod2", name: "Gadget", discount: { gold: 15, silver: 5 } },
+        { sku: "prod3", name: "Other", discount: { gold: 5, silver: 0 } },
+      ]);
+
+      const results = await orders
+        .aggregate([
+          {
+            $lookup: {
+              from: "lookup_dotted_products",
+              let: { customerTier: "$customer.tier" },
+              pipeline: [
+                {
+                  $project: {
+                    sku: 1,
+                    name: 1,
+                    applicableDiscount: {
+                      $cond: {
+                        if: { $eq: ["$$customerTier", "gold"] },
+                        then: "$discount.gold",
+                        else: "$discount.silver",
+                      },
+                    },
+                    _id: 0,
+                  },
+                },
+              ],
+              as: "productInfo",
+            },
+          },
+        ])
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      const products_result = results[0].productInfo as Document[];
+      assert.strictEqual(products_result.length, 3);
+      // Check that gold discounts were applied
+      const widget = products_result.find((p) => p.sku === "prod1");
+      assert.strictEqual(widget?.applicableDiscount, 20);
+    });
   });
 
   // ==================== $out Stage ====================
@@ -1452,6 +1504,89 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
         .toArray();
 
       assert.deepStrictEqual(results, []);
+    });
+
+    it("should fail when whenMatched is 'fail' and match exists", async () => {
+      const source = client.db(dbName).collection("merge_fail_source");
+      const target = client.db(dbName).collection("merge_fail_target");
+
+      await target.insertOne({ _id: 1, name: "Existing" });
+      await source.insertOne({ _id: 1, name: "New" });
+
+      await assert.rejects(
+        async () => {
+          await source
+            .aggregate([
+              {
+                $merge: {
+                  into: "merge_fail_target",
+                  whenMatched: "fail",
+                  whenNotMatched: "insert",
+                },
+              },
+            ])
+            .toArray();
+        },
+        /\$merge.*match/i // Matches both MangoDB and MongoDB error formats
+      );
+    });
+
+    it("should fail when whenNotMatched is 'fail' and no match exists", async () => {
+      const source = client.db(dbName).collection("merge_fail_source2");
+      const target = client.db(dbName).collection("merge_fail_target2");
+
+      // Empty target - no matches possible
+      await source.insertOne({ _id: 1, name: "New" });
+
+      await assert.rejects(
+        async () => {
+          await source
+            .aggregate([
+              {
+                $merge: {
+                  into: "merge_fail_target2",
+                  whenMatched: "replace",
+                  whenNotMatched: "fail",
+                },
+              },
+            ])
+            .toArray();
+        },
+        /\$merge.*match/i // Matches both MangoDB and MongoDB error formats
+      );
+    });
+
+    it("should use $$new in whenMatched pipeline", async () => {
+      const source = client.db(dbName).collection("merge_new_source");
+      const target = client.db(dbName).collection("merge_new_target");
+
+      await target.insertOne({ _id: 1, value: 10, originalValue: 10 });
+      await source.insertOne({ _id: 1, value: 25 });
+
+      await source
+        .aggregate([
+          {
+            $merge: {
+              into: "merge_new_target",
+              whenMatched: [
+                {
+                  $set: {
+                    value: "$$new.value",
+                    updated: true,
+                  },
+                },
+              ],
+              whenNotMatched: "insert",
+            },
+          },
+        ])
+        .toArray();
+
+      const doc = await target.findOne({ _id: 1 });
+      assert.ok(doc);
+      assert.strictEqual(doc.value, 25); // Updated from $$new
+      assert.strictEqual(doc.originalValue, 10); // Preserved
+      assert.strictEqual(doc.updated, true); // Added
     });
   });
 });

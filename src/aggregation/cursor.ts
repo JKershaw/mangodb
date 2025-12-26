@@ -785,7 +785,22 @@ export class AggregationCursor<T extends Document = Document> {
   }
 
   /**
+   * MongoDB system variables that should not be substituted.
+   */
+  private static readonly SYSTEM_VARIABLES = new Set([
+    "ROOT",
+    "CURRENT",
+    "NOW",
+    "CLUSTER_TIME",
+    "DESCEND",
+    "PRUNE",
+    "KEEP",
+    "REMOVE",
+  ]);
+
+  /**
    * Recursively substitute $$varName references with actual values.
+   * Supports dotted paths like $$varName.field.subfield.
    */
   private substituteLetVars(obj: unknown, vars: Record<string, unknown>): unknown {
     if (obj === null || obj === undefined) {
@@ -794,10 +809,24 @@ export class AggregationCursor<T extends Document = Document> {
 
     if (typeof obj === "string") {
       // Check for $$varName reference
-      if (obj.startsWith("$$") && !obj.startsWith("$$ROOT") && !obj.startsWith("$$CURRENT") && !obj.startsWith("$$NOW")) {
-        const varName = obj.slice(2);
+      if (obj.startsWith("$$")) {
+        const fullPath = obj.slice(2); // Remove $$
+        const dotIndex = fullPath.indexOf(".");
+        const varName = dotIndex === -1 ? fullPath : fullPath.slice(0, dotIndex);
+
+        // Don't substitute system variables
+        if (AggregationCursor.SYSTEM_VARIABLES.has(varName)) {
+          return obj;
+        }
+
         if (varName in vars) {
-          return vars[varName];
+          const value = vars[varName];
+          // If there's a dotted path, resolve it
+          if (dotIndex !== -1) {
+            const remainingPath = fullPath.slice(dotIndex + 1);
+            return getValueByPath(value as Record<string, unknown>, remainingPath);
+          }
+          return value;
         }
       }
       return obj;
@@ -2015,10 +2044,16 @@ export class AggregationCursor<T extends Document = Document> {
       throw new Error("$merge requires database context");
     }
 
-    // Get target collection name
-    const collectionName = typeof spec.into === "string"
-      ? spec.into
-      : spec.into.coll;
+    // Get target collection name - cross-database merge not supported
+    let collectionName: string;
+    if (typeof spec.into === "string") {
+      collectionName = spec.into;
+    } else {
+      if (spec.into.db) {
+        throw new Error("$merge into a different database is not supported");
+      }
+      collectionName = spec.into.coll;
+    }
 
     const targetCollection = this.dbContext.getCollection(collectionName);
 
@@ -2059,12 +2094,13 @@ export class AggregationCursor<T extends Document = Document> {
           case "fail":
             throw new Error(`$merge found matching document for ${JSON.stringify(filter)}`);
           default:
-            // If it's a pipeline, we'd need to execute it - simplified for now
+            // Pipeline form of whenMatched - execute pipeline with $$new available
             if (Array.isArray(whenMatched)) {
-              // Apply pipeline to existing doc - simplified implementation
+              // Substitute $$new references with the incoming document
+              const pipelineWithNew = this.substituteLetVars(whenMatched, { new: doc }) as PipelineStage[];
               const cursor = new AggregationCursor(
                 async () => [existingDoc],
-                whenMatched,
+                pipelineWithNew,
                 this.dbContext
               );
               const [updatedDoc] = await cursor.toArray();
