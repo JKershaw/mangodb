@@ -937,9 +937,10 @@ describe(`Phase 5 Infrastructure (${getTestModeName()})`, () => {
               { $documents: [{ a: 1 }] },
             ])
             .toArray(),
-        // MongoDB: "Pipeline can only have no collection if the first stage is $changeStream or $documents or $currentOp"
+        // MongoDB 8.0.x: "Pipeline can only have no collection if the first stage is $changeStream or $documents or $currentOp"
+        // MongoDB 8.2.x: "{aggregate: 1} is not valid for '$match'; a collection is required."
         // MangoDB: "$documents must be the first stage"
-        /first stage|\$documents/i
+        /first stage|\$documents|\$match.*collection.*required/i
       );
     });
 
