@@ -478,8 +478,9 @@ describe(`New Aggregation Stages (${getTestModeName()})`, () => {
       await collection.insertMany([{ a: 1 }, { a: 2 }]);
 
       // MongoDB behavior varies by version:
-      // - Some versions throw "size argument to $sample must be a positive integer"
-      // - Some versions return an empty array
+      // - MongoDB 8.2+: throws "size argument to $sample must be a positive integer"
+      // - MongoDB 8.0.x: returns an empty array (lenient)
+      // MongoDB docs state size should be >= 1, so 0 was never officially supported.
       // MangoDB follows the stricter behavior (throws error)
       try {
         const docs = await collection
