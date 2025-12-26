@@ -923,6 +923,191 @@ await collection.insertOne({ firstName: "John", lastName: "Doe" });  // Error!
 
 ---
 
+## Geospatial Queries
+
+### Index Types
+
+**2dsphere Index** (spherical geometry):
+```typescript
+await collection.createIndex({ location: "2dsphere" });
+```
+- Required for GeoJSON data (Point, LineString, Polygon, etc.)
+- Uses spherical calculations (great-circle distance)
+- Distances measured in meters
+
+**2d Index** (flat/planar geometry):
+```typescript
+await collection.createIndex({ location: "2d" });
+```
+- For legacy coordinate pairs `[x, y]`
+- Uses Euclidean (flat) calculations
+- Distances are unitless
+
+### Point Formats
+
+**GeoJSON Point** (preferred):
+```typescript
+{ type: "Point", coordinates: [longitude, latitude] }
+// Note: longitude first, then latitude!
+```
+
+**Legacy coordinate pair**:
+```typescript
+[longitude, latitude]  // or [x, y] for 2d
+```
+
+### Query Operators
+
+**$geoWithin** - Find documents within a shape:
+```typescript
+// With GeoJSON polygon
+await collection.find({
+  location: {
+    $geoWithin: {
+      $geometry: {
+        type: "Polygon",
+        coordinates: [[[-74, 40], [-73.9, 40], [-73.9, 40.1], [-74, 40.1], [-74, 40]]]
+      }
+    }
+  }
+}).toArray();
+
+// With $box (2d)
+await collection.find({
+  location: { $geoWithin: { $box: [[0, 0], [10, 10]] } }
+}).toArray();
+
+// With $center (flat circle, 2d)
+await collection.find({
+  location: { $geoWithin: { $center: [[0, 0], 5] } }  // center, radius
+}).toArray();
+
+// With $centerSphere (spherical circle)
+await collection.find({
+  location: { $geoWithin: { $centerSphere: [[-73.98, 40.75], 0.1] } }  // radius in radians
+}).toArray();
+
+// With $polygon (legacy polygon, 2d)
+await collection.find({
+  location: { $geoWithin: { $polygon: [[0, 0], [10, 0], [10, 10], [0, 10]] } }
+}).toArray();
+```
+
+**$geoIntersects** - Find geometries that intersect:
+```typescript
+await collection.find({
+  location: {
+    $geoIntersects: {
+      $geometry: {
+        type: "Polygon",
+        coordinates: [[[-74, 40], [-73.9, 40], [-73.9, 40.1], [-74, 40.1], [-74, 40]]]
+      }
+    }
+  }
+}).toArray();
+```
+
+**$near** - Find and sort by distance:
+```typescript
+await collection.find({
+  location: {
+    $near: {
+      $geometry: { type: "Point", coordinates: [-73.98, 40.75] },
+      $maxDistance: 5000,  // meters
+      $minDistance: 100    // meters (optional)
+    }
+  }
+}).toArray();
+```
+
+**$nearSphere** - Same as $near but always uses spherical geometry:
+```typescript
+await collection.find({
+  location: {
+    $nearSphere: {
+      $geometry: { type: "Point", coordinates: [-73.98, 40.75] },
+      $maxDistance: 5000
+    }
+  }
+}).toArray();
+
+// Legacy coordinate format also supported
+await collection.find({
+  location: { $nearSphere: [-73.98, 40.75] }
+}).toArray();
+```
+
+### $geoNear Aggregation Stage
+
+**Must be first stage in pipeline**:
+```typescript
+await collection.aggregate([
+  {
+    $geoNear: {
+      near: { type: "Point", coordinates: [-73.98, 40.75] },
+      distanceField: "distance",      // Required: field to store calculated distance
+      maxDistance: 5000,              // Optional: max distance in meters
+      minDistance: 100,               // Optional: min distance in meters
+      spherical: true,                // Optional: use spherical calculations
+      query: { category: "restaurant" }, // Optional: additional filter
+      distanceMultiplier: 0.001,      // Optional: multiply distance (e.g., meters to km)
+      includeLocs: "matchedLocation", // Optional: field to store matched location
+      key: "location"                 // Optional: specify geo field (for multiple geo indexes)
+    }
+  }
+]).toArray();
+```
+
+**Behaviors**:
+- Returns documents sorted by distance (closest first)
+- `distanceField` and `near` are required
+- Distance is in meters for 2dsphere, unitless for 2d
+- Throws error if not first stage in pipeline
+- Throws error if no geo index exists
+
+### Error Cases
+
+**Geo index required**:
+```typescript
+// Throws: "$near requires a 2d or 2dsphere index"
+await collection.find({
+  location: { $near: { $geometry: { type: "Point", coordinates: [0, 0] } } }
+}).toArray();  // No geo index!
+
+// Throws: "$geoNear requires a 2d or 2dsphere index"
+await collection.aggregate([
+  { $geoNear: { near: { type: "Point", coordinates: [0, 0] }, distanceField: "dist" } }
+]).toArray();  // No geo index!
+```
+
+**$geoNear not first stage**:
+```typescript
+// Throws: "$geoNear is only valid as the first stage in an aggregation pipeline"
+await collection.aggregate([
+  { $match: { active: true } },
+  { $geoNear: { near: { type: "Point", coordinates: [0, 0] }, distanceField: "dist" } }
+]).toArray();
+```
+
+### Coordinate Order
+
+**Important**: GeoJSON uses `[longitude, latitude]` order, not `[latitude, longitude]`:
+```typescript
+// Correct - New York City
+{ type: "Point", coordinates: [-74.006, 40.7128] }  // [lng, lat]
+
+// Wrong order will give incorrect results!
+{ type: "Point", coordinates: [40.7128, -74.006] }  // [lat, lng] - WRONG
+```
+
+### Distance Units
+
+- **2dsphere**: Distances in meters
+- **2d**: Distances are unitless (same units as coordinates)
+- **$centerSphere radius**: In radians (divide km by Earth radius ~6378.1)
+
+---
+
 ## Notes
 
 This document will be updated as more behaviors are discovered through testing. Each entry should include:

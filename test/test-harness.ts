@@ -190,13 +190,13 @@ export interface TestCollection<T extends Document = Document> {
   ): Promise<UpdateResult>;
   countDocuments(filter?: Partial<T>): Promise<number>;
   createIndex(
-    keySpec: Record<string, 1 | -1>,
+    keySpec: Record<string, 1 | -1 | "text" | "2d" | "2dsphere">,
     options?: CreateIndexOptions
   ): Promise<string>;
   createIndexes(
-    indexSpecs: Array<{ key: Record<string, 1 | -1 | "text"> } & CreateIndexOptions>
+    indexSpecs: Array<{ key: Record<string, 1 | -1 | "text" | "2d" | "2dsphere"> } & CreateIndexOptions>
   ): Promise<string[]>;
-  dropIndex(indexNameOrSpec: string | Record<string, 1 | -1>): Promise<void>;
+  dropIndex(indexNameOrSpec: string | Record<string, 1 | -1 | "text" | "2d" | "2dsphere">): Promise<void>;
   dropIndexes(indexNames?: "*" | string[]): Promise<void>;
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;

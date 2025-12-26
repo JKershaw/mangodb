@@ -73,12 +73,13 @@ After completing each phase:
 | 11 | Index Types & Options | ⬜ Not Started |
 | 12 | Collection Methods | ✅ Complete (replaceOne, createIndexes, dropIndexes) |
 | 13 | Final Polish | ⬜ Not Started |
+| 14 | Geospatial Support | ✅ Complete ($geoWithin, $geoIntersects, $near, $nearSphere, $geoNear, 2d/2dsphere indexes) |
 
 ---
 
 ## Phase 1: Query Operators Completion
 
-**Goal**: Complete all missing query operators except geospatial (out of scope).
+**Goal**: Complete all missing query operators.
 
 **Files to review**: `src/query-matcher.ts`, `test/queries.test.ts`
 
@@ -538,7 +539,6 @@ After completing each phase:
 
 The following are explicitly not planned for implementation:
 
-- **Geospatial** (`$geoNear`, `$geoWithin`, `$near`, 2d/2dsphere indexes)
 - **Atlas-specific** (`$search`, `$searchMeta`)
 - **Real-time** (`$changeStream`, `watch()`)
 - **Server features** (transactions, sessions, auth, replication, sharding)
@@ -560,4 +560,4 @@ Remember: Each subagent is stateless. Give complete context in the prompt.
 
 ---
 
-*Last updated: Phases 1-10, 12 Complete*
+*Last updated: Phases 1-10, 12, 14 Complete*

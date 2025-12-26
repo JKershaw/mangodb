@@ -6,7 +6,17 @@ import { dirname } from "node:path";
 import type { Document, IndexKeySpec, IndexInfo, CreateIndexOptions } from "./types.ts";
 import { getValueByPath } from "./document-utils.ts";
 import { DuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError, InvalidIndexOptionsError } from "./errors.ts";
+
 import { matchesFilter } from "./query-matcher.ts";
+
+/**
+ * Result of getGeoIndexInfo() describing a geo index.
+ */
+export interface GeoIndexInfo {
+  field: string;
+  type: "2d" | "2dsphere";
+  indexName: string;
+}
 
 /**
  * Default _id index that exists on all collections.
@@ -156,6 +166,28 @@ export class IndexManager {
       return existingBySpec.name;
     }
 
+    // Check for geo index types and validate
+    const geoFields = this.extractGeoFields(keySpec);
+    if (geoFields.length > 0) {
+      // Validate: cannot have multiple geo fields in one index
+      if (geoFields.length > 1) {
+        throw new InvalidIndexOptionsError(
+          "only one geo index type allowed per index"
+        );
+      }
+
+      // Validate: cannot have both 2d and 2dsphere on same field across indexes
+      const existingGeoIndexes = await this.getGeoIndexes();
+      for (const geoField of geoFields) {
+        const existingOnField = existingGeoIndexes.find((g) => g.field === geoField.field);
+        if (existingOnField && existingOnField.type !== geoField.type) {
+          throw new InvalidIndexOptionsError(
+            `can't have 2 geo indexes on the same field: already have ${existingOnField.type} index on '${geoField.field}'`
+          );
+        }
+      }
+    }
+
     const newIndex: IndexInfo = {
       v: 2,
       key: keySpec,
@@ -179,10 +211,39 @@ export class IndexManager {
       newIndex.partialFilterExpression = options.partialFilterExpression;
     }
 
+    // Add geo-specific metadata
+    if (geoFields.length > 0) {
+      const geoField = geoFields[0];
+      if (geoField.type === "2d") {
+        // 2d index bounds (default -180 to 180 for lat/lng)
+        newIndex.min = options.min ?? -180;
+        newIndex.max = options.max ?? 180;
+      } else if (geoField.type === "2dsphere") {
+        newIndex["2dsphereIndexVersion"] = 3;
+      }
+    }
+
     indexes.push(newIndex);
     await this.saveIndexes(indexes);
 
     return indexName;
+  }
+
+  /**
+   * Extract geo fields from a key specification.
+   * @param keySpec - Index key specification
+   * @returns Array of { field, type } for each geo field
+   */
+  private extractGeoFields(
+    keySpec: IndexKeySpec
+  ): Array<{ field: string; type: "2d" | "2dsphere" }> {
+    const result: Array<{ field: string; type: "2d" | "2dsphere" }> = [];
+    for (const [field, direction] of Object.entries(keySpec)) {
+      if (direction === "2d" || direction === "2dsphere") {
+        result.push({ field, type: direction });
+      }
+    }
+    return result;
   }
 
   /**
@@ -402,5 +463,67 @@ export class IndexManager {
         valueMap.set(keyStr, doc);
       }
     }
+  }
+
+  /**
+   * Get all geo indexes on this collection.
+   * @returns Array of geo index info objects
+   */
+  async getGeoIndexes(): Promise<GeoIndexInfo[]> {
+    const indexes = await this.loadIndexes();
+    const result: GeoIndexInfo[] = [];
+
+    for (const idx of indexes) {
+      for (const [field, direction] of Object.entries(idx.key)) {
+        if (direction === "2d" || direction === "2dsphere") {
+          result.push({
+            field,
+            type: direction,
+            indexName: idx.name,
+          });
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Check if a field has a geo index.
+   * @param field - Field name to check
+   * @returns The geo index type ("2d" or "2dsphere") or null if no geo index exists
+   */
+  async hasGeoIndex(field: string): Promise<"2d" | "2dsphere" | null> {
+    const geoIndexes = await this.getGeoIndexes();
+    const geoIndex = geoIndexes.find((g) => g.field === field);
+    return geoIndex?.type ?? null;
+  }
+
+  /**
+   * Get the first geo-indexed field in the collection.
+   * Used by $geoNear when 'key' is not specified.
+   * @returns The field name and type, or null if no geo index exists
+   */
+  async getDefaultGeoField(): Promise<GeoIndexInfo | null> {
+    const geoIndexes = await this.getGeoIndexes();
+    return geoIndexes.length > 0 ? geoIndexes[0] : null;
+  }
+
+  /**
+   * Validate that a geo index exists for a given field.
+   * Throws an error if no geo index is found.
+   * @param field - Field name to validate
+   * @param operator - Operator name for error message (e.g., "$near", "$geoNear")
+   * @throws Error if no geo index exists on the field
+   */
+  async requireGeoIndex(field: string, operator: string): Promise<"2d" | "2dsphere"> {
+    const indexType = await this.hasGeoIndex(field);
+    if (!indexType) {
+      throw new Error(
+        `error processing query: ns=${this.dbName}.${this.collectionName}: ` +
+          `${operator} requires a 2d or 2dsphere index on field '${field}'`
+      );
+    }
+    return indexType;
   }
 }

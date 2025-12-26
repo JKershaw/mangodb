@@ -25,6 +25,27 @@ import { traverseDocument, type TraversalAction } from "./traverse.ts";
 import { partitionDocuments, sortPartition } from "./partition.ts";
 import { addDateStep, type TimeUnit, isValidTimeUnit } from "./date-utils.ts";
 import { applyLocf, applyLinearFill } from "./gap-fill.ts";
+import {
+  extractPointFromDocument,
+  calculateDistance,
+  parseNearQuery,
+  GeoNearIndexRequiredError,
+} from "../geo/index.ts";
+
+/**
+ * Specification for $geoNear aggregation stage.
+ */
+interface GeoNearSpec {
+  near: unknown;
+  distanceField: string;
+  maxDistance?: number;
+  minDistance?: number;
+  spherical?: boolean;
+  query?: Filter<Document>;
+  distanceMultiplier?: number;
+  includeLocs?: string;
+  key?: string;
+}
 
 /**
  * AggregationCursor represents a cursor over aggregation pipeline results.
@@ -66,6 +87,9 @@ export class AggregationCursor<T extends Document = Document> {
       if ("$documents" in stage && i !== 0) {
         throw new Error("$documents must be the first stage in the pipeline");
       }
+      if ("$geoNear" in stage && i !== 0) {
+        throw new Error("$geoNear is only valid as the first stage in an aggregation pipeline");
+      }
     }
 
     let documents: Document[];
@@ -75,6 +99,17 @@ export class AggregationCursor<T extends Document = Document> {
       const firstStage = this.pipeline[0] as unknown as Record<string, unknown>;
       if ("$documents" in firstStage) {
         documents = this.execDocuments(firstStage.$documents);
+        // Process remaining stages
+        for (let i = 1; i < this.pipeline.length; i++) {
+          documents = await this.executeStage(this.pipeline[i], documents);
+        }
+        return documents;
+      }
+
+      // Handle $geoNear as first stage specially - it needs to sort results
+      if ("$geoNear" in firstStage) {
+        const sourceDocuments = await this.source();
+        documents = await this.execGeoNear(firstStage.$geoNear as GeoNearSpec, sourceDocuments);
         // Process remaining stages
         for (let i = 1; i < this.pipeline.length; i++) {
           documents = await this.executeStage(this.pipeline[i], documents);
@@ -2278,5 +2313,98 @@ export class AggregationCursor<T extends Document = Document> {
 
     // Combine documents
     return [...docs, ...foreignDocs];
+  }
+
+  /**
+   * Execute $geoNear stage.
+   * Returns documents sorted by distance from the specified point.
+   */
+  private async execGeoNear(
+    spec: GeoNearSpec,
+    docs: Document[]
+  ): Promise<Document[]> {
+    // Validate required fields
+    if (spec.near === undefined) {
+      throw new Error("$geoNear requires 'near' option");
+    }
+    if (!spec.distanceField) {
+      throw new Error("$geoNear requires 'distanceField' option");
+    }
+
+    // Parse the near point
+    const nearQuery = parseNearQuery(spec.near);
+    if (!nearQuery) {
+      throw new Error("$geoNear 'near' must be a valid point");
+    }
+
+    // Get geo indexes from context
+    if (!this.dbContext?.getGeoIndexes) {
+      throw new GeoNearIndexRequiredError();
+    }
+    const geoIndexes = await this.dbContext.getGeoIndexes();
+
+    // Determine the geo field - either specified by 'key' or find from index
+    let geoField: string;
+    let indexType: "2d" | "2dsphere" = "2dsphere"; // default to spherical
+
+    if (spec.key) {
+      geoField = spec.key;
+      // Look up the index type for the specified key
+      const matchingIndex = geoIndexes.find((idx) => idx.field === geoField);
+      if (matchingIndex) {
+        indexType = matchingIndex.type;
+      }
+    } else {
+      // Find the first geo-indexed field
+      if (geoIndexes.length === 0) {
+        throw new GeoNearIndexRequiredError();
+      }
+      const firstGeoIndex = geoIndexes[0];
+      geoField = firstGeoIndex.field;
+      indexType = firstGeoIndex.type;
+    }
+
+    // Use spherical if specified or if using 2dsphere index
+    const useSpherical = spec.spherical ?? (indexType === "2dsphere");
+    const multiplier = spec.distanceMultiplier ?? 1;
+
+    // Apply optional query filter first
+    let filtered = docs;
+    if (spec.query && Object.keys(spec.query).length > 0) {
+      filtered = docs.filter((doc) => matchesFilter(doc, spec.query!));
+    }
+
+    // Calculate distances and filter
+    const withDistances: Array<{ doc: Document; distance: number; location: unknown }> = [];
+
+    for (const doc of filtered) {
+      const docValue = getValueByPath(doc, geoField!);
+      if (docValue === undefined) continue;
+
+      const docPoint = extractPointFromDocument(docValue);
+      if (!docPoint) continue;
+
+      const rawDistance = calculateDistance(nearQuery.point, docPoint, useSpherical);
+
+      // Apply distance filters
+      if (spec.maxDistance !== undefined && rawDistance > spec.maxDistance) continue;
+      if (spec.minDistance !== undefined && rawDistance < spec.minDistance) continue;
+
+      const distance = rawDistance * multiplier;
+      withDistances.push({ doc, distance, location: docValue });
+    }
+
+    // Sort by distance ascending
+    withDistances.sort((a, b) => a.distance - b.distance);
+
+    // Build result documents with distance field (and optionally includeLocs)
+    return withDistances.map(({ doc, distance, location }) => {
+      const result = cloneDocument(doc);
+      setValueByPath(result, spec.distanceField, distance);
+      if (spec.includeLocs) {
+        setValueByPath(result, spec.includeLocs, location);
+      }
+      return result;
+    });
   }
 }

@@ -77,6 +77,14 @@ export class IndexCursor {
  *   .toArray();
  * ```
  */
+/**
+ * Options for MangoCursor constructor.
+ */
+export interface CursorOptions {
+  /** If true, documents are pre-sorted by geo distance and should not be re-sorted */
+  geoSorted?: boolean;
+}
+
 export class MangoCursor<T extends Document = Document> {
   private readonly fetchDocuments: () => Promise<T[]>;
   private sortSpec: SortSpec | null = null;
@@ -85,6 +93,7 @@ export class MangoCursor<T extends Document = Document> {
   private projectionSpec: ProjectionSpec | null = null;
   private hintSpec: HintSpec | null = null;
   private readonly hintValidator: HintValidator | null = null;
+  private readonly geoSorted: boolean = false;
 
   /**
    * Creates a new MangoCursor instance.
@@ -92,15 +101,18 @@ export class MangoCursor<T extends Document = Document> {
    * @param fetchDocuments - Function that returns a promise resolving to an array of documents
    * @param projection - Optional projection specification to apply to all results
    * @param hintValidator - Optional function to validate index hints
+   * @param options - Optional cursor options
    */
   constructor(
     fetchDocuments: () => Promise<T[]>,
     projection?: ProjectionSpec | null,
-    hintValidator?: HintValidator | null
+    hintValidator?: HintValidator | null,
+    options?: CursorOptions
   ) {
     this.fetchDocuments = fetchDocuments;
     this.projectionSpec = projection || null;
     this.hintValidator = hintValidator || null;
+    this.geoSorted = options?.geoSorted ?? false;
   }
 
   /**
@@ -269,7 +281,8 @@ export class MangoCursor<T extends Document = Document> {
       }
     }
 
-    // Apply sort
+    // Apply sort (skip if geoSorted and no explicit sort was requested)
+    // For geo queries, documents are pre-sorted by distance
     if (this.sortSpec) {
       const sortFields = Object.entries(this.sortSpec) as [
         string,
@@ -288,6 +301,7 @@ export class MangoCursor<T extends Document = Document> {
         return 0;
       });
     }
+    // Note: if geoSorted is true and no sortSpec, docs are already sorted by distance
 
     // Apply skip
     if (this.skipValue !== null && this.skipValue > 0) {

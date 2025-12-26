@@ -10,6 +10,7 @@ import {
   valuesEqual,
 } from "./document-utils.ts";
 import { evaluateExpression } from "./aggregation/index.ts";
+import { evaluateGeoWithin, evaluateGeoIntersects } from "./geo/index.ts";
 
 // BSON type name to numeric code mapping
 const BSON_TYPE_ALIASES: Record<string, number> = {
@@ -722,6 +723,27 @@ export function matchesOperators(
 
       case "$nor":
         throw new Error("unknown operator: $nor");
+
+      case "$geoWithin": {
+        // Note: Index validation happens at collection level, not here
+        // This just evaluates whether the document matches
+        if (!evaluateGeoWithin(docValue, opValue)) return false;
+        break;
+      }
+
+      case "$geoIntersects": {
+        // Note: Index validation happens at collection level, not here
+        if (!evaluateGeoIntersects(docValue, opValue)) return false;
+        break;
+      }
+
+      case "$near":
+      case "$nearSphere":
+        // $near and $nearSphere are handled at collection level because they
+        // require sorting by distance. Throw error if they reach here.
+        throw new Error(
+          `${op} is not allowed in this context. Use collection.find() with a geo index.`
+        );
 
       default:
         break;

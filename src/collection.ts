@@ -66,6 +66,14 @@ import {
   InvalidNamespaceError,
 } from "./errors.ts";
 
+import {
+  hasNearQuery,
+  extractNearQuery,
+  evaluateNear,
+  extractPointFromDocument,
+  GeoIndexRequiredError,
+} from "./geo/index.ts";
+
 // Re-export types for backward compatibility
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
 
@@ -577,6 +585,26 @@ export class MangoCollection<T extends Document = Document> {
       }
     };
 
+    // Check if this is a $near or $nearSphere query
+    const nearQuery = extractNearQuery(filter as Record<string, unknown>);
+
+    if (nearQuery) {
+      // Handle $near/$nearSphere query with special geo processing
+      return new MangoCursor<T>(
+        async () => {
+          return this.executeNearQuery(
+            nearQuery.geoField,
+            nearQuery.nearSpec,
+            nearQuery.spherical,
+            nearQuery.remainingFilter as Filter<T>
+          );
+        },
+        options.projection || null,
+        hintValidator,
+        { geoSorted: true }
+      );
+    }
+
     return new MangoCursor<T>(
       async () => {
         const documents = await this.readDocuments();
@@ -585,6 +613,52 @@ export class MangoCollection<T extends Document = Document> {
       options.projection || null,
       hintValidator
     );
+  }
+
+  /**
+   * Execute a $near or $nearSphere query.
+   * Requires a geo index on the field and returns documents sorted by distance.
+   */
+  private async executeNearQuery(
+    geoField: string,
+    nearSpec: unknown,
+    spherical: boolean,
+    remainingFilter: Filter<T>
+  ): Promise<T[]> {
+    // Verify geo index exists on the field
+    const indexType = await this.indexManager.hasGeoIndex(geoField);
+    if (!indexType) {
+      throw new GeoIndexRequiredError(spherical ? "$nearSphere" : "$near");
+    }
+
+    // Use spherical calculations for 2dsphere indexes regardless of operator
+    const useSpherical = indexType === "2dsphere" || spherical;
+
+    // Read all documents
+    const documents = await this.readDocuments();
+
+    // Apply remaining filter first
+    const filtered = Object.keys(remainingFilter).length > 0
+      ? await this.filterWithTextSupport(documents, remainingFilter)
+      : documents;
+
+    // Calculate distances and filter
+    const withDistances: Array<{ doc: T; distance: number }> = [];
+
+    for (const doc of filtered) {
+      const docValue = getValueByPath(doc, geoField);
+      if (docValue === undefined) continue;
+
+      const result = evaluateNear(docValue, nearSpec, useSpherical);
+      if (result.matches) {
+        withDistances.push({ doc, distance: result.distance });
+      }
+    }
+
+    // Sort by distance ascending
+    withDistances.sort((a, b) => a.distance - b.distance);
+
+    return withDistances.map((item) => item.doc);
   }
 
   /**
@@ -636,10 +710,13 @@ export class MangoCollection<T extends Document = Document> {
     pipeline: PipelineStage[],
     _options?: AggregateOptions
   ): AggregationCursor<T> {
-    // Create database context for $lookup and $out stages
+    // Create database context for $lookup, $out, and $geoNear stages
     const dbContext: AggregationDbContext = {
       getCollection: (name: string) => {
         return new MangoCollection(this.dataDir, this.dbName, name);
+      },
+      getGeoIndexes: async () => {
+        return this.indexManager.getGeoIndexes();
       },
     };
 

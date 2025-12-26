@@ -46,7 +46,71 @@ export interface QueryOperators {
   $options?: string;
   $type?: string | number | (string | number)[];
   $mod?: [number, number];
+  // Geospatial query operators
+  $geoWithin?: GeoWithinSpec;
+  $geoIntersects?: GeoIntersectsSpec;
+  $near?: GeoNearQuerySpec;
+  $nearSphere?: GeoNearQuerySpec;
 }
+
+/**
+ * GeoJSON geometry types for geospatial queries.
+ */
+export interface GeoJSONPoint {
+  type: "Point";
+  coordinates: [number, number];
+}
+
+export interface GeoJSONPolygon {
+  type: "Polygon";
+  coordinates: [number, number][][];
+}
+
+export interface GeoJSONLineString {
+  type: "LineString";
+  coordinates: [number, number][];
+}
+
+export type GeoJSONGeometry =
+  | GeoJSONPoint
+  | GeoJSONPolygon
+  | GeoJSONLineString
+  | { type: "MultiPoint"; coordinates: [number, number][] }
+  | { type: "MultiPolygon"; coordinates: [number, number][][][] }
+  | { type: "MultiLineString"; coordinates: [number, number][][] }
+  | { type: "GeometryCollection"; geometries: GeoJSONGeometry[] };
+
+/**
+ * Specification for $geoWithin query operator.
+ * Supports various shape specifiers.
+ */
+export interface GeoWithinSpec {
+  $geometry?: GeoJSONGeometry;
+  $box?: [[number, number], [number, number]];
+  $center?: [[number, number], number];
+  $centerSphere?: [[number, number], number];
+  $polygon?: [number, number][];
+}
+
+/**
+ * Specification for $geoIntersects query operator.
+ * Only supports $geometry.
+ */
+export interface GeoIntersectsSpec {
+  $geometry: GeoJSONGeometry;
+}
+
+/**
+ * Specification for $near and $nearSphere query operators.
+ */
+export type GeoNearQuerySpec =
+  | GeoJSONPoint
+  | [number, number]
+  | {
+      $geometry?: GeoJSONPoint;
+      $maxDistance?: number;
+      $minDistance?: number;
+    };
 
 /**
  * A filter value can be a direct value or an object with query operators.
@@ -280,9 +344,14 @@ export interface BulkWriteResult {
 /**
  * Index key specification for creating indexes.
  * Keys are field names (can use dot notation for nested fields).
- * Values are 1 for ascending, -1 for descending, or "text" for text indexes.
+ * Values are:
+ * - 1 for ascending
+ * - -1 for descending
+ * - "text" for text indexes
+ * - "2d" for 2d planar geospatial indexes
+ * - "2dsphere" for 2dsphere geospatial indexes
  */
-export type IndexKeySpec = Record<string, 1 | -1 | "text">;
+export type IndexKeySpec = Record<string, 1 | -1 | "text" | "2d" | "2dsphere">;
 
 /**
  * Options for creating an index.
@@ -292,6 +361,8 @@ export type IndexKeySpec = Record<string, 1 | -1 | "text">;
  * @property sparse - When true, the index only includes documents that contain the indexed field(s)
  * @property expireAfterSeconds - TTL index: documents expire after this many seconds from the date field value
  * @property partialFilterExpression - Only index documents matching this filter expression
+ * @property min - Minimum bound for 2d index coordinates (default: -180)
+ * @property max - Maximum bound for 2d index coordinates (default: 180)
  */
 export interface CreateIndexOptions {
   unique?: boolean;
@@ -299,6 +370,9 @@ export interface CreateIndexOptions {
   sparse?: boolean;
   expireAfterSeconds?: number;
   partialFilterExpression?: Record<string, unknown>;
+  // Geospatial index options (for 2d indexes)
+  min?: number;
+  max?: number;
 }
 
 /**
@@ -311,6 +385,9 @@ export interface CreateIndexOptions {
  * @property sparse - Whether this is a sparse index that only indexes documents containing the field(s)
  * @property expireAfterSeconds - TTL index expiration time in seconds
  * @property partialFilterExpression - Filter expression for partial indexes
+ * @property min - Minimum coordinate bound for 2d indexes
+ * @property max - Maximum coordinate bound for 2d indexes
+ * @property 2dsphereIndexVersion - Version of 2dsphere index (typically 3)
  */
 export interface IndexInfo {
   v: number;
@@ -320,6 +397,10 @@ export interface IndexInfo {
   sparse?: boolean;
   expireAfterSeconds?: number;
   partialFilterExpression?: Record<string, unknown>;
+  // Geospatial index metadata
+  min?: number;
+  max?: number;
+  "2dsphereIndexVersion"?: number;
 }
 
 /**
@@ -460,6 +541,33 @@ export interface OutStage {
 }
 
 /**
+ * $geoNear stage - returns documents sorted by proximity to a geospatial point.
+ * Must be the first stage in the pipeline.
+ */
+export interface GeoNearStage {
+  $geoNear: {
+    /** The point for which to find the closest documents. */
+    near: GeoJSONPoint | [number, number];
+    /** The output field that contains the calculated distance. */
+    distanceField: string;
+    /** The maximum distance from the center point (in meters for 2dsphere, coordinate units for 2d). */
+    maxDistance?: number;
+    /** The minimum distance from the center point. */
+    minDistance?: number;
+    /** If true, calculate distances using spherical geometry. */
+    spherical?: boolean;
+    /** Limits results to documents matching the query. */
+    query?: Filter<Document>;
+    /** The factor to multiply all distances by. */
+    distanceMultiplier?: number;
+    /** Output field to store the location used to calculate the distance. */
+    includeLocs?: string;
+    /** Specify which geospatial index to use. */
+    key?: string;
+  };
+}
+
+/**
  * Union type for all supported pipeline stages.
  */
 export type PipelineStage =
@@ -475,7 +583,8 @@ export type PipelineStage =
   | AddFieldsStage
   | SetStage
   | ReplaceRootStage
-  | OutStage;
+  | OutStage
+  | GeoNearStage;
 
 /**
  * Options for the aggregate() method.

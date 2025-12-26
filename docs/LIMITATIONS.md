@@ -17,11 +17,11 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| Query Operators | 28/39 (72%) | Missing geospatial, projection |
+| Query Operators | 32/39 (82%) | Missing projection operators |
 | Update Operators | 18/20 (90%) | Missing positional operators only |
-| Aggregation Stages | 27/34 (79%) | Core stages + window functions |
+| Aggregation Stages | 28/34 (82%) | Core stages + window functions + geospatial |
 | Expression Operators | 106/112 (95%) | Nearly complete coverage |
-| Index Types | 5/8 (63%) | Missing geospatial, hashed |
+| Index Types | 7/8 (88%) | Missing hashed only |
 | Core Features | Limited | No transactions, sessions, streams |
 
 ---
@@ -59,16 +59,22 @@ All array query operators are fully implemented:
 | `$where` | ⛔ | JavaScript evaluation - security concern |
 | `$jsonSchema` | ❌ | Schema validation not implemented |
 
-### Geospatial Operators ❌ Not Implemented
+### Geospatial Operators ✅ Complete
 
-None of these operators are supported:
-- `$geoIntersects`
-- `$geoWithin`
-- `$near`
-- `$nearSphere`
-- `$box`, `$center`, `$centerSphere`, `$geometry`, `$polygon`
+All geospatial query operators are fully implemented:
+- `$geoWithin` - Find documents within a shape
+- `$geoIntersects` - Find geometries that intersect
+- `$near` - Find and sort by distance (requires geo index)
+- `$nearSphere` - Find and sort by spherical distance (requires geo index)
 
-**Reason**: Would require GIS library integration and geospatial index support.
+Shape specifiers supported:
+- `$geometry` - GeoJSON geometry
+- `$box` - Rectangular box (2d)
+- `$center` - Circle with flat distance (2d)
+- `$centerSphere` - Circle with spherical distance
+- `$polygon` - Legacy polygon (2d)
+
+**Note**: All geometry calculations implemented from scratch (no external libraries).
 
 ### Bitwise Operators ✅ Complete
 
@@ -176,6 +182,7 @@ All field update operators are fully implemented:
 | `$densify` | Fill gaps in numeric/date sequences with partitioning |
 | `$fill` | Fill null values with `value`, `locf`, or `linear` methods |
 | `$setWindowFields` | Window functions (see below) |
+| `$geoNear` | Geospatial distance query (must be first stage) |
 
 ### $setWindowFields Operators
 
@@ -216,7 +223,6 @@ The `$setWindowFields` stage supports the following window operators:
 |-------|-------------|--------|
 | `$changeStream` | Real-time changes | Requires change streams |
 | `$collStats` | Collection statistics | Use `collection.stats()` instead |
-| `$geoNear` | Geospatial query | Requires geo indexes |
 | `$indexStats` | Index usage stats | Not implemented |
 | `$listSessions` | Active sessions | No session support |
 | `$merge` | Merge into collection | Not implemented |
@@ -301,13 +307,13 @@ All conditional expression operators are implemented:
 | Text | Basic tokenized search |
 | TTL | `expireAfterSeconds` (single field only) |
 | Partial | `partialFilterExpression` |
+| 2d | Flat/planar geospatial index |
+| 2dsphere | Spherical geospatial index |
 
 ### Not Implemented Index Types ❌
 
 | Type | Description |
 |------|-------------|
-| 2d | Flat geospatial index |
-| 2dsphere | Spherical geospatial index |
 | Hashed | Hash-based sharding index |
 | Wildcard | Dynamic field indexing |
 
@@ -450,7 +456,6 @@ MangoDB is NOT suitable for:
 - ❌ Multi-process access
 - ❌ High-throughput workloads
 - ❌ Applications requiring transactions
-- ❌ Geospatial queries
 
 ---
 
