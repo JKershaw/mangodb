@@ -11,6 +11,7 @@ import assert from "node:assert";
 import {
   createTestClient,
   getTestModeName,
+  isMongoDBMode,
   type TestClient,
 } from "./test-harness.ts";
 
@@ -245,14 +246,16 @@ describe(`Wildcard Index Tests (${getTestModeName()})`, () => {
   });
 
   describe("Wildcard Index Implicit Sparse", () => {
-    it("should set wildcard index as implicitly sparse", async () => {
+    it("should set wildcard index as implicitly sparse (MangoDB) or no sparse property (MongoDB)", async () => {
       const collection = client.db(dbName).collection("wildcard_sparse");
       await collection.createIndex({ "$**": 1 });
 
       const indexes = await collection.indexes();
       const idx = indexes.find((i) => i.name === "$**_1");
       assert(idx);
-      assert.strictEqual(idx.sparse, true);
+      // MangoDB sets sparse explicitly, MongoDB doesn't return sparse property for wildcard
+      // Both behaviors are correct - wildcard indexes are implicitly sparse
+      assert(idx.sparse === true || idx.sparse === undefined);
     });
   });
 });
@@ -449,11 +452,12 @@ describe(`Text Index Options Tests (${getTestModeName()})`, () => {
       const collection = client.db(dbName).collection("text_weights_basic");
       await collection.createIndex(
         { title: "text", body: "text" },
-        { weights: { title: 10, body: 1 } }
+        { weights: { title: 10, body: 1 }, name: "text_weight_idx" }
       );
 
       const indexes = await collection.indexes();
-      const idx = indexes.find((i) => i.key.title === "text");
+      // MongoDB stores text indexes with _fts/_ftsx keys, MangoDB uses original keys
+      const idx = indexes.find((i) => i.name === "text_weight_idx");
       assert(idx);
       assert(idx.weights);
       assert.strictEqual(idx.weights.title, 10);
@@ -464,11 +468,11 @@ describe(`Text Index Options Tests (${getTestModeName()})`, () => {
       const collection = client.db(dbName).collection("text_version");
       await collection.createIndex(
         { content: "text" },
-        { weights: { content: 5 } }
+        { weights: { content: 5 }, name: "text_version_idx" }
       );
 
       const indexes = await collection.indexes();
-      const idx = indexes.find((i) => i.key.content === "text");
+      const idx = indexes.find((i) => i.name === "text_version_idx");
       assert(idx);
       assert.strictEqual(idx.textIndexVersion, 3);
     });
@@ -526,22 +530,26 @@ describe(`Text Index Options Tests (${getTestModeName()})`, () => {
       );
     });
 
-    it("should reject non-integer weight", async () => {
-      const collection = client.db(dbName).collection("weights_float");
+    // MongoDB accepts non-integer weights (truncates to integer)
+    // MangoDB validates for integers - skip in MongoDB mode
+    if (!isMongoDBMode()) {
+      it("should reject non-integer weight", async () => {
+        const collection = client.db(dbName).collection("weights_float");
 
-      await assert.rejects(
-        async () => {
-          await collection.createIndex(
-            { content: "text" },
-            { weights: { content: 5.5 } }
-          );
-        },
-        (err: Error) => {
-          assert(err.message.includes("weight") || err.message.includes("integer"));
-          return true;
-        }
-      );
-    });
+        await assert.rejects(
+          async () => {
+            await collection.createIndex(
+              { content: "text" },
+              { weights: { content: 5.5 } }
+            );
+          },
+          (err: Error) => {
+            assert(err.message.includes("weight") || err.message.includes("integer"));
+            return true;
+          }
+        );
+      });
+    }
   });
 
   describe("default_language Option", () => {
@@ -549,31 +557,36 @@ describe(`Text Index Options Tests (${getTestModeName()})`, () => {
       const collection = client.db(dbName).collection("text_lang_basic");
       await collection.createIndex(
         { content: "text" },
-        { default_language: "spanish" }
+        { default_language: "spanish", name: "content_text_spanish" }
       );
 
       const indexes = await collection.indexes();
-      const idx = indexes.find((i) => i.key.content === "text");
+      // MongoDB uses _fts/_ftsx for text indexes, find by name
+      const idx = indexes.find((i) => i.name === "content_text_spanish");
       assert(idx);
       assert.strictEqual(idx.default_language, "spanish");
     });
 
-    it("should reject default_language without text index", async () => {
-      const collection = client.db(dbName).collection("lang_no_text");
+    // MongoDB ignores default_language on non-text indexes (no error)
+    // MangoDB validates this - skip in MongoDB mode
+    if (!isMongoDBMode()) {
+      it("should reject default_language without text index", async () => {
+        const collection = client.db(dbName).collection("lang_no_text");
 
-      await assert.rejects(
-        async () => {
-          await collection.createIndex(
-            { field: 1 },
-            { default_language: "french" }
-          );
-        },
-        (err: Error) => {
-          assert(err.message.includes("default_language") || err.message.includes("text"));
-          return true;
-        }
-      );
-    });
+        await assert.rejects(
+          async () => {
+            await collection.createIndex(
+              { field: 1 },
+              { default_language: "french" }
+            );
+          },
+          (err: Error) => {
+            assert(err.message.includes("default_language") || err.message.includes("text"));
+            return true;
+          }
+        );
+      });
+    }
 
     it("should combine weights and default_language", async () => {
       const collection = client.db(dbName).collection("text_combined");
@@ -582,11 +595,13 @@ describe(`Text Index Options Tests (${getTestModeName()})`, () => {
         {
           weights: { title: 10, body: 1 },
           default_language: "german",
+          name: "title_body_text_german",
         }
       );
 
       const indexes = await collection.indexes();
-      const idx = indexes.find((i) => i.key.title === "text");
+      // MongoDB uses _fts/_ftsx for text indexes, find by name
+      const idx = indexes.find((i) => i.name === "title_body_text_german");
       assert(idx);
       assert.strictEqual(idx.weights?.title, 10);
       assert.strictEqual(idx.default_language, "german");
