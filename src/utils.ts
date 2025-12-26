@@ -4,34 +4,18 @@ import {
   setValueByPath,
   cloneValue,
 } from "./document-utils.ts";
+import {
+  type ProjectionSpec,
+  type ProjectionSlice,
+  type ProjectionElemMatch,
+  type ProjectionMeta,
+} from "./types.ts";
+import { matchesFilter } from "./query-matcher.ts";
 
 type Document = Record<string, unknown>;
 
-/**
- * Projection specification type for MongoDB-style field projections.
- *
- * @description
- * Defines which fields to include (1) or exclude (0) from documents.
- * Supports dot notation for nested fields (e.g., "address.city").
- * Cannot mix inclusion and exclusion modes (except for _id field).
- *
- * @example
- * // Inclusion projection - only include specified fields
- * const proj1: ProjectionSpec = { name: 1, age: 1 };
- *
- * @example
- * // Exclusion projection - exclude specified fields
- * const proj2: ProjectionSpec = { password: 0, ssn: 0 };
- *
- * @example
- * // _id can be excluded in inclusion mode
- * const proj3: ProjectionSpec = { _id: 0, name: 1, age: 1 };
- *
- * @example
- * // Nested field projection with dot notation
- * const proj4: ProjectionSpec = { "address.city": 1, "address.country": 1 };
- */
-export type ProjectionSpec = Record<string, 0 | 1>;
+// Re-export ProjectionSpec for backward compatibility
+export type { ProjectionSpec };
 
 /**
  * Get a value from a document using dot notation path.
@@ -375,17 +359,112 @@ export function compareValuesForSort(
  * applyProjection(user, { name: 1, password: 0 });
  * // Throws: Error("Cannot mix inclusion and exclusion in projection")
  */
+/**
+ * Check if a projection value is $slice operator.
+ */
+function isSliceProjection(value: unknown): value is ProjectionSlice {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "$slice" in value &&
+    (typeof (value as ProjectionSlice).$slice === "number" ||
+      Array.isArray((value as ProjectionSlice).$slice))
+  );
+}
+
+/**
+ * Check if a projection value is $elemMatch operator.
+ */
+function isElemMatchProjection(value: unknown): value is ProjectionElemMatch {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "$elemMatch" in value &&
+    typeof (value as ProjectionElemMatch).$elemMatch === "object"
+  );
+}
+
+/**
+ * Check if a projection value is $meta operator.
+ */
+function isMetaProjection(value: unknown): value is ProjectionMeta {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "$meta" in value &&
+    typeof (value as ProjectionMeta).$meta === "string"
+  );
+}
+
+/**
+ * Check if a projection value is a projection operator (not 0 or 1).
+ */
+function isProjectionOperator(value: unknown): boolean {
+  return (
+    isSliceProjection(value) ||
+    isElemMatchProjection(value) ||
+    isMetaProjection(value)
+  );
+}
+
+/**
+ * Apply $slice projection to an array.
+ */
+function applySliceProjection(
+  arr: unknown[],
+  sliceSpec: number | [number, number]
+): unknown[] {
+  if (typeof sliceSpec === "number") {
+    if (sliceSpec >= 0) {
+      return arr.slice(0, sliceSpec);
+    } else {
+      return arr.slice(sliceSpec);
+    }
+  } else if (Array.isArray(sliceSpec) && sliceSpec.length === 2) {
+    const [skip, limit] = sliceSpec;
+    let startIdx = skip;
+    if (skip < 0) {
+      startIdx = Math.max(0, arr.length + skip);
+    }
+    return arr.slice(startIdx, startIdx + limit);
+  }
+  return arr;
+}
+
+/**
+ * Apply $elemMatch projection to an array.
+ */
+function applyElemMatchProjection(
+  arr: unknown[],
+  elemMatchQuery: Record<string, unknown>
+): unknown[] {
+  for (const elem of arr) {
+    if (
+      typeof elem === "object" &&
+      elem !== null &&
+      matchesFilter(elem as Document, elemMatchQuery)
+    ) {
+      return [elem];
+    }
+  }
+  return [];
+}
+
 export function applyProjection<T extends Document>(
   doc: T,
-  projection: ProjectionSpec
+  projection: ProjectionSpec,
+  metadata?: { textScore?: number }
 ): T {
   const keys = Object.keys(projection);
   if (keys.length === 0) return doc;
 
   // Determine if this is inclusion or exclusion mode
   // _id: 0 doesn't count for determining mode
+  // Projection operators ($slice, $elemMatch, $meta) are treated as inclusion
   const nonIdKeys = keys.filter((k) => k !== "_id");
-  const hasInclusion = nonIdKeys.some((k) => projection[k] === 1);
+  const hasInclusion = nonIdKeys.some(
+    (k) => projection[k] === 1 || isProjectionOperator(projection[k])
+  );
   const hasExclusion = nonIdKeys.some((k) => projection[k] === 0);
 
   // Can't mix inclusion and exclusion (except for _id)
@@ -403,7 +482,10 @@ export function applyProjection<T extends Document>(
     }
 
     for (const key of nonIdKeys) {
-      if (projection[key] === 1) {
+      const projValue = projection[key];
+
+      if (projValue === 1) {
+        // Simple inclusion
         const value = getValueByPath(doc, key);
         if (value !== undefined) {
           if (key.includes(".")) {
@@ -412,6 +494,29 @@ export function applyProjection<T extends Document>(
             result[key] = value;
           }
         }
+      } else if (isSliceProjection(projValue)) {
+        // $slice projection
+        const value = getValueByPath(doc, key);
+        if (Array.isArray(value)) {
+          result[key] = applySliceProjection(value, projValue.$slice);
+        } else if (value !== undefined) {
+          result[key] = value;
+        }
+      } else if (isElemMatchProjection(projValue)) {
+        // $elemMatch projection
+        const value = getValueByPath(doc, key);
+        if (Array.isArray(value)) {
+          const matched = applyElemMatchProjection(value, projValue.$elemMatch);
+          if (matched.length > 0) {
+            result[key] = matched;
+          }
+        }
+      } else if (isMetaProjection(projValue)) {
+        // $meta projection
+        if (projValue.$meta === "textScore" && metadata?.textScore !== undefined) {
+          result[key] = metadata.textScore;
+        }
+        // indexKey not implemented
       }
     }
   } else {

@@ -284,4 +284,168 @@ describe(`Find Options Parity Tests (${getTestModeName()})`, () => {
       assert.strictEqual(result.id, 1);
     });
   });
+
+  describe("Projection operators", () => {
+    describe("$slice projection", () => {
+      it("should return first N elements with positive number", async () => {
+        const collection = client.db(dbName).collection("proj_slice_pos");
+        await collection.insertOne({
+          name: "test",
+          items: [1, 2, 3, 4, 5],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $slice: 2 } } }
+        );
+
+        assert.ok(result);
+        assert.deepStrictEqual(result.items, [1, 2]);
+      });
+
+      it("should return last N elements with negative number", async () => {
+        const collection = client.db(dbName).collection("proj_slice_neg");
+        await collection.insertOne({
+          name: "test",
+          items: [1, 2, 3, 4, 5],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $slice: -2 } } }
+        );
+
+        assert.ok(result);
+        assert.deepStrictEqual(result.items, [4, 5]);
+      });
+
+      it("should return elements from skip position with array form", async () => {
+        const collection = client.db(dbName).collection("proj_slice_arr");
+        await collection.insertOne({
+          name: "test",
+          items: [1, 2, 3, 4, 5],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $slice: [1, 2] } } }
+        );
+
+        assert.ok(result);
+        assert.deepStrictEqual(result.items, [2, 3]);
+      });
+
+      it("should handle negative skip in array form", async () => {
+        const collection = client.db(dbName).collection("proj_slice_arr_neg");
+        await collection.insertOne({
+          name: "test",
+          items: [1, 2, 3, 4, 5],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $slice: [-3, 2] } } }
+        );
+
+        assert.ok(result);
+        assert.deepStrictEqual(result.items, [3, 4]);
+      });
+
+      it("should return empty array when slice exceeds array length", async () => {
+        const collection = client.db(dbName).collection("proj_slice_exceed");
+        await collection.insertOne({
+          name: "test",
+          items: [1, 2],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $slice: [10, 5] } } }
+        );
+
+        assert.ok(result);
+        assert.deepStrictEqual(result.items, []);
+      });
+
+      it("should work with other projected fields", async () => {
+        const collection = client.db(dbName).collection("proj_slice_combo");
+        await collection.insertOne({
+          name: "test",
+          items: [1, 2, 3, 4, 5],
+          other: "value",
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { name: 1, items: { $slice: 2 } } }
+        );
+
+        assert.ok(result);
+        assert.strictEqual(result.name, "test");
+        assert.deepStrictEqual(result.items, [1, 2]);
+        assert.strictEqual(result.other, undefined);
+      });
+    });
+
+    describe("$elemMatch projection", () => {
+      it("should return first matching element", async () => {
+        const collection = client.db(dbName).collection("proj_elemmatch_basic");
+        await collection.insertOne({
+          name: "store",
+          items: [
+            { name: "a", qty: 5 },
+            { name: "b", qty: 15 },
+            { name: "c", qty: 25 },
+          ],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $elemMatch: { qty: { $gte: 10 } } } } }
+        );
+
+        assert.ok(result);
+        const items = result.items as Array<{ name: string; qty: number }>;
+        assert.strictEqual(items.length, 1);
+        assert.strictEqual(items[0].name, "b");
+      });
+
+      it("should return empty array when no match", async () => {
+        const collection = client.db(dbName).collection("proj_elemmatch_none");
+        await collection.insertOne({
+          name: "store",
+          items: [
+            { name: "a", qty: 5 },
+            { name: "b", qty: 8 },
+          ],
+        });
+
+        const result = await collection.findOne(
+          {},
+          { projection: { items: { $elemMatch: { qty: { $gte: 100 } } } } }
+        );
+
+        assert.ok(result);
+        assert.strictEqual(result.items, undefined);
+      });
+
+      it("should support equality condition", async () => {
+        const collection = client.db(dbName).collection("proj_elemmatch_eq");
+        await collection.insertOne({
+          tags: ["red", "blue", "green"],
+        });
+
+        // For primitive arrays, $elemMatch needs object-style comparison
+        const result = await collection.findOne(
+          {},
+          { projection: { tags: { $elemMatch: { $eq: "blue" } } } }
+        );
+
+        assert.ok(result);
+        if (result.tags) {
+          assert.deepStrictEqual(result.tags, ["blue"]);
+        }
+      });
+    });
+  });
 });

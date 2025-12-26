@@ -205,12 +205,41 @@ export interface FindOptions {
 }
 
 /**
+ * Projection operator for $slice - array slicing in projection.
+ */
+export interface ProjectionSlice {
+  $slice: number | [number, number];
+}
+
+/**
+ * Projection operator for $elemMatch - project first matching array element.
+ */
+export interface ProjectionElemMatch {
+  $elemMatch: Record<string, unknown>;
+}
+
+/**
+ * Projection operator for $meta - metadata projection (text score, etc).
+ */
+export interface ProjectionMeta {
+  $meta: "textScore" | "indexKey";
+}
+
+/**
  * Projection specification type for controlling which fields are returned.
  * Keys are field names (can use dot notation for nested fields).
- * Values are 1 for inclusion or 0 for exclusion.
+ * Values can be:
+ * - 1 for inclusion
+ * - 0 for exclusion
+ * - { $slice: n } for array slicing
+ * - { $elemMatch: query } for projecting first matching array element
+ * - { $meta: "textScore" } for text search score
  * Note: Cannot mix inclusion and exclusion except for _id field.
  */
-export type ProjectionSpec = Record<string, 0 | 1>;
+export type ProjectionSpec = Record<
+  string,
+  0 | 1 | ProjectionSlice | ProjectionElemMatch | ProjectionMeta
+>;
 
 /**
  * Update operators supported by MangoDB for modifying documents.
