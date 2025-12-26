@@ -18,7 +18,7 @@ This document provides a comprehensive reference of MongoDB features that MangoD
 | Category | Coverage | Notes |
 |----------|----------|-------|
 | Query Operators | 32/39 (82%) | Missing projection operators |
-| Update Operators | 18/20 (90%) | Missing positional operators only |
+| Update Operators | 20/20 (100%) | All operators including positional |
 | Aggregation Stages | 28/34 (82%) | Core stages + window functions + geospatial |
 | Expression Operators | 106/112 (95%) | Nearly complete coverage |
 | Index Types | 9/9 (100%) | All types including hashed, wildcard |
@@ -121,9 +121,9 @@ All field update operators are fully implemented:
 | `$pop` | ✅ | Supports 1 (last) and -1 (first) |
 | `$pullAll` | ✅ | Remove all matching values |
 
-### Positional Update Operators ❌ Not Implemented
+### Positional Update Operators ✅ Complete
 
-**These are documented in [FUTURE_WORK.md](./FUTURE_WORK.md):**
+All positional update operators are fully implemented:
 
 | Operator | Description |
 |----------|-------------|
@@ -131,7 +131,7 @@ All field update operators are fully implemented:
 | `$[]` | Update all array elements |
 | `$[<identifier>]` | Update elements matching `arrayFilters` |
 
-**Workaround**: Read the document, modify the array in application code, then replace.
+Supports all update operators (`$set`, `$inc`, `$mul`, `$unset`, `$min`, `$max`) with positional paths.
 
 ### Array Update Modifiers ✅ Complete
 
@@ -390,7 +390,7 @@ These options are not supported on any method:
 
 | Option | Description |
 |--------|-------------|
-| `arrayFilters` | Positional array element updates |
+| ~~`arrayFilters`~~ | ✅ Now supported for positional updates |
 | `collation` | Locale-aware string operations |
 | `session` | Transaction session |
 | `hint` | Index hint (supported only on `find()` cursor) |
