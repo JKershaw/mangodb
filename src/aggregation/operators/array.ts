@@ -600,3 +600,309 @@ export function evalSortArray(
 
   return sorted;
 }
+
+/**
+ * Helper function to check if two values are equal for set operations.
+ * Uses compareValues for deep equality.
+ */
+function setContains(set: unknown[], value: unknown): boolean {
+  for (const item of set) {
+    if (compareValues(item, value) === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * $setUnion - Returns the union of all input arrays (unique values).
+ */
+export function evalSetUnion(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  const arrays = args.map((a) => evaluate(a, doc, vars));
+
+  // Check for null/undefined
+  for (const arr of arrays) {
+    if (arr === null || arr === undefined) {
+      return null;
+    }
+    if (!Array.isArray(arr)) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`All operands of $setUnion must be arrays, not ${typeName}`);
+    }
+  }
+
+  const result: unknown[] = [];
+  for (const arr of arrays as unknown[][]) {
+    for (const item of arr) {
+      if (!setContains(result, item)) {
+        result.push(item);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * $setIntersection - Returns elements common to all input arrays.
+ */
+export function evalSetIntersection(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  const arrays = args.map((a) => evaluate(a, doc, vars));
+
+  // Check for null/undefined
+  for (const arr of arrays) {
+    if (arr === null || arr === undefined) {
+      return null;
+    }
+    if (!Array.isArray(arr)) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`All operands of $setIntersection must be arrays, not ${typeName}`);
+    }
+  }
+
+  if (arrays.length === 0) {
+    return [];
+  }
+
+  // Start with unique elements from first array
+  const firstArray = arrays[0] as unknown[];
+  const uniqueFirst: unknown[] = [];
+  for (const item of firstArray) {
+    if (!setContains(uniqueFirst, item)) {
+      uniqueFirst.push(item);
+    }
+  }
+
+  // Filter to only elements that exist in ALL arrays
+  const result = uniqueFirst.filter((item) => {
+    for (let i = 1; i < arrays.length; i++) {
+      if (!setContains(arrays[i] as unknown[], item)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return result;
+}
+
+/**
+ * $setDifference - Returns elements in first array but not in second.
+ */
+export function evalSetDifference(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  if (args.length !== 2) {
+    throw new Error("$setDifference requires exactly 2 arguments");
+  }
+
+  const [firstExpr, secondExpr] = args;
+  const first = evaluate(firstExpr, doc, vars);
+  const second = evaluate(secondExpr, doc, vars);
+
+  if (first === null || first === undefined || second === null || second === undefined) {
+    return null;
+  }
+
+  if (!Array.isArray(first)) {
+    const typeName = getBSONTypeName(first);
+    throw new Error(`$setDifference requires arrays, not ${typeName}`);
+  }
+  if (!Array.isArray(second)) {
+    const typeName = getBSONTypeName(second);
+    throw new Error(`$setDifference requires arrays, not ${typeName}`);
+  }
+
+  // Get unique elements from first that are not in second
+  const result: unknown[] = [];
+  for (const item of first) {
+    if (!setContains(second, item) && !setContains(result, item)) {
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * $setEquals - Returns true if all input arrays have the same distinct elements.
+ */
+export function evalSetEquals(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): boolean {
+  const arrays = args.map((a) => evaluate(a, doc, vars));
+
+  if (arrays.length < 2) {
+    throw new Error("$setEquals requires at least 2 arguments");
+  }
+
+  // Check for null/undefined - MongoDB throws error for these
+  for (let i = 0; i < arrays.length; i++) {
+    const arr = arrays[i];
+    if (arr === null || arr === undefined) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`All operands of $setEquals must be arrays. ${i + 1}-th argument is of type: ${typeName}`);
+    }
+    if (!Array.isArray(arr)) {
+      const typeName = getBSONTypeName(arr);
+      throw new Error(`All operands of $setEquals must be arrays. ${i + 1}-th argument is of type: ${typeName}`);
+    }
+  }
+
+  // Get unique elements from first array
+  const firstSet: unknown[] = [];
+  for (const item of arrays[0] as unknown[]) {
+    if (!setContains(firstSet, item)) {
+      firstSet.push(item);
+    }
+  }
+
+  // Compare each array's unique elements with the first
+  for (let i = 1; i < arrays.length; i++) {
+    const currentSet: unknown[] = [];
+    for (const item of arrays[i] as unknown[]) {
+      if (!setContains(currentSet, item)) {
+        currentSet.push(item);
+      }
+    }
+
+    // Check same size
+    if (firstSet.length !== currentSet.length) {
+      return false;
+    }
+
+    // Check all elements in firstSet exist in currentSet
+    for (const item of firstSet) {
+      if (!setContains(currentSet, item)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * $setIsSubset - Returns true if first array is a subset of second.
+ */
+export function evalSetIsSubset(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): boolean {
+  if (args.length !== 2) {
+    throw new Error("$setIsSubset requires exactly 2 arguments");
+  }
+
+  const [firstExpr, secondExpr] = args;
+  const first = evaluate(firstExpr, doc, vars);
+  const second = evaluate(secondExpr, doc, vars);
+
+  // MongoDB throws errors for null/non-array inputs
+  if (first === null || first === undefined || !Array.isArray(first)) {
+    const typeName = getBSONTypeName(first);
+    throw new Error(`both operands of $setIsSubset must be arrays. First argument is of type: ${typeName}`);
+  }
+  if (second === null || second === undefined || !Array.isArray(second)) {
+    const typeName = getBSONTypeName(second);
+    throw new Error(`both operands of $setIsSubset must be arrays. Second argument is of type: ${typeName}`);
+  }
+
+  // Check if every element in first exists in second
+  for (const item of first) {
+    if (!setContains(second, item)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * $allElementsTrue - Returns true if all elements in the array are truthy.
+ */
+export function evalAllElementsTrue(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): boolean {
+  // $allElementsTrue takes an array with a single element that is the array to check
+  if (args.length !== 1) {
+    throw new Error("$allElementsTrue requires exactly 1 argument");
+  }
+
+  const arr = evaluate(args[0], doc, vars);
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$allElementsTrue requires an array, not ${typeName}`);
+  }
+
+  // Empty array returns true (vacuous truth)
+  if (arr.length === 0) {
+    return true;
+  }
+
+  for (const item of arr) {
+    // Falsy values in MongoDB: false, 0, null, undefined
+    if (item === false || item === 0 || item === null || item === undefined) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * $anyElementTrue - Returns true if any element in the array is truthy.
+ */
+export function evalAnyElementTrue(
+  args: unknown[],
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): boolean {
+  // $anyElementTrue takes an array with a single element that is the array to check
+  if (args.length !== 1) {
+    throw new Error("$anyElementTrue requires exactly 1 argument");
+  }
+
+  const arr = evaluate(args[0], doc, vars);
+
+  if (!Array.isArray(arr)) {
+    const typeName = getBSONTypeName(arr);
+    throw new Error(`$anyElementTrue requires an array, not ${typeName}`);
+  }
+
+  // Empty array returns false
+  if (arr.length === 0) {
+    return false;
+  }
+
+  for (const item of arr) {
+    // Truthy if not: false, 0, null, undefined
+    if (item !== false && item !== 0 && item !== null && item !== undefined) {
+      return true;
+    }
+  }
+
+  return false;
+}

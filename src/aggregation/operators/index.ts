@@ -89,6 +89,15 @@ export const operators = {
   $zip: array.evalZip,
   $sortArray: array.evalSortArray,
 
+  // Set operators
+  $setUnion: array.evalSetUnion,
+  $setIntersection: array.evalSetIntersection,
+  $setDifference: array.evalSetDifference,
+  $setEquals: array.evalSetEquals,
+  $setIsSubset: array.evalSetIsSubset,
+  $allElementsTrue: array.evalAllElementsTrue,
+  $anyElementTrue: array.evalAnyElementTrue,
+
   // Type conversion
   $toInt: typeConversion.evalToInt,
   $toDouble: typeConversion.evalToDouble,

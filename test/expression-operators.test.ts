@@ -2132,4 +2132,448 @@ describe(`Expression Operators (${getTestModeName()})`, () => {
       });
     });
   });
+
+  // ==================== Part 5: Set Operators ====================
+
+  describe("Set Operators", () => {
+    describe("$setUnion", () => {
+      it("should return union of two arrays", async () => {
+        const collection = client.db(dbName).collection("setunion_basic");
+        await collection.insertOne({ a: [1, 2, 3], b: [3, 4, 5] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setUnion: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        const result = results[0].result as number[];
+        assert.strictEqual(result.length, 5);
+        assert.ok([1, 2, 3, 4, 5].every((v) => result.includes(v)));
+      });
+
+      it("should handle duplicates within arrays", async () => {
+        const collection = client.db(dbName).collection("setunion_dupes");
+        await collection.insertOne({ a: [1, 1, 2], b: [2, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setUnion: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        const result = results[0].result as number[];
+        assert.strictEqual(result.length, 3);
+        assert.ok([1, 2, 3].every((v) => result.includes(v)));
+      });
+
+      it("should handle empty arrays", async () => {
+        const collection = client.db(dbName).collection("setunion_empty");
+        await collection.insertOne({ a: [], b: [1, 2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setUnion: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        const result = results[0].result as number[];
+        assert.deepStrictEqual(result.sort(), [1, 2]);
+      });
+
+      it("should return null if any array is null", async () => {
+        const collection = client.db(dbName).collection("setunion_null");
+        await collection.insertOne({ a: [1, 2], b: null });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setUnion: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should handle more than two arrays", async () => {
+        const collection = client.db(dbName).collection("setunion_multi");
+        await collection.insertOne({ a: [1], b: [2], c: [3] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setUnion: ["$a", "$b", "$c"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        const result = results[0].result as number[];
+        assert.strictEqual(result.length, 3);
+      });
+    });
+
+    describe("$setIntersection", () => {
+      it("should return common elements of two arrays", async () => {
+        const collection = client.db(dbName).collection("setintersect_basic");
+        await collection.insertOne({ a: [1, 2, 3], b: [2, 3, 4] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIntersection: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        const result = results[0].result as number[];
+        assert.strictEqual(result.length, 2);
+        assert.ok([2, 3].every((v) => result.includes(v)));
+      });
+
+      it("should return empty array when no common elements", async () => {
+        const collection = client.db(dbName).collection("setintersect_none");
+        await collection.insertOne({ a: [1, 2], b: [3, 4] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIntersection: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, []);
+      });
+
+      it("should return null if any array is null", async () => {
+        const collection = client.db(dbName).collection("setintersect_null");
+        await collection.insertOne({ a: null, b: [1, 2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIntersection: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should handle multiple arrays", async () => {
+        const collection = client.db(dbName).collection("setintersect_multi");
+        await collection.insertOne({ a: [1, 2, 3], b: [2, 3, 4], c: [3, 4, 5] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: {
+                result: { $setIntersection: ["$a", "$b", "$c"] },
+                _id: 0,
+              },
+            },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [3]);
+      });
+    });
+
+    describe("$setDifference", () => {
+      it("should return elements in first but not second array", async () => {
+        const collection = client.db(dbName).collection("setdiff_basic");
+        await collection.insertOne({ a: [1, 2, 3], b: [2, 3, 4] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setDifference: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, [1]);
+      });
+
+      it("should return empty array when all elements are in second", async () => {
+        const collection = client.db(dbName).collection("setdiff_all");
+        await collection.insertOne({ a: [1, 2], b: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setDifference: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.deepStrictEqual(results[0].result, []);
+      });
+
+      it("should return null if any array is null", async () => {
+        const collection = client.db(dbName).collection("setdiff_null");
+        await collection.insertOne({ a: [1, 2], b: null });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setDifference: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, null);
+      });
+
+      it("should handle duplicates", async () => {
+        const collection = client.db(dbName).collection("setdiff_dupes");
+        await collection.insertOne({ a: [1, 1, 2, 2, 3], b: [2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setDifference: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        const result = results[0].result as number[];
+        assert.strictEqual(result.length, 2);
+        assert.ok([1, 3].every((v) => result.includes(v)));
+      });
+    });
+
+    describe("$setEquals", () => {
+      it("should return true for equal sets", async () => {
+        const collection = client.db(dbName).collection("setequals_true");
+        await collection.insertOne({ a: [1, 2, 3], b: [3, 2, 1] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setEquals: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false for unequal sets", async () => {
+        const collection = client.db(dbName).collection("setequals_false");
+        await collection.insertOne({ a: [1, 2], b: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setEquals: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should handle duplicates", async () => {
+        const collection = client.db(dbName).collection("setequals_dupes");
+        await collection.insertOne({ a: [1, 1, 2], b: [1, 2, 2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setEquals: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should throw error if any array is null", async () => {
+        const collection = client.db(dbName).collection("setequals_null");
+        await collection.insertOne({ a: [1, 2], b: null });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([
+                { $project: { result: { $setEquals: ["$a", "$b"] }, _id: 0 } },
+              ])
+              .toArray();
+          },
+          /All operands of \$setEquals must be arrays/
+        );
+      });
+
+      it("should compare multiple arrays", async () => {
+        const collection = client.db(dbName).collection("setequals_multi");
+        await collection.insertOne({ a: [1, 2], b: [2, 1], c: [1, 2] });
+
+        const results = await collection
+          .aggregate([
+            {
+              $project: { result: { $setEquals: ["$a", "$b", "$c"] }, _id: 0 },
+            },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+    });
+
+    describe("$setIsSubset", () => {
+      it("should return true when first is subset of second", async () => {
+        const collection = client.db(dbName).collection("setsubset_true");
+        await collection.insertOne({ a: [1, 2], b: [1, 2, 3, 4] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIsSubset: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false when first is not subset of second", async () => {
+        const collection = client.db(dbName).collection("setsubset_false");
+        await collection.insertOne({ a: [1, 2, 5], b: [1, 2, 3] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIsSubset: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should return true for empty first array", async () => {
+        const collection = client.db(dbName).collection("setsubset_empty");
+        await collection.insertOne({ a: [], b: [1, 2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIsSubset: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should throw error if any array is null", async () => {
+        const collection = client.db(dbName).collection("setsubset_null");
+        await collection.insertOne({ a: null, b: [1, 2] });
+
+        await assert.rejects(
+          async () => {
+            await collection
+              .aggregate([
+                { $project: { result: { $setIsSubset: ["$a", "$b"] }, _id: 0 } },
+              ])
+              .toArray();
+          },
+          /both operands of \$setIsSubset must be arrays/
+        );
+      });
+
+      it("should return true when sets are equal", async () => {
+        const collection = client.db(dbName).collection("setsubset_equal");
+        await collection.insertOne({ a: [1, 2], b: [1, 2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $setIsSubset: ["$a", "$b"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+    });
+
+    describe("$allElementsTrue", () => {
+      it("should return true when all elements are truthy", async () => {
+        const collection = client.db(dbName).collection("allelements_true");
+        await collection.insertOne({ a: [1, "hello", true, [1]] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $allElementsTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false when any element is falsy", async () => {
+        const collection = client.db(dbName).collection("allelements_false");
+        await collection.insertOne({ a: [1, 0, true] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $allElementsTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should return true for empty array", async () => {
+        const collection = client.db(dbName).collection("allelements_empty");
+        await collection.insertOne({ a: [] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $allElementsTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should treat null as falsy", async () => {
+        const collection = client.db(dbName).collection("allelements_null");
+        await collection.insertOne({ a: [1, null, 2] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $allElementsTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+    });
+
+    describe("$anyElementTrue", () => {
+      it("should return true when any element is truthy", async () => {
+        const collection = client.db(dbName).collection("anyelement_true");
+        await collection.insertOne({ a: [0, false, 1] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $anyElementTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+
+      it("should return false when all elements are falsy", async () => {
+        const collection = client.db(dbName).collection("anyelement_false");
+        await collection.insertOne({ a: [0, false, null] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $anyElementTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should return false for empty array", async () => {
+        const collection = client.db(dbName).collection("anyelement_empty");
+        await collection.insertOne({ a: [] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $anyElementTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, false);
+      });
+
+      it("should treat non-zero numbers as truthy", async () => {
+        const collection = client.db(dbName).collection("anyelement_num");
+        await collection.insertOne({ a: [0, 0, -1] });
+
+        const results = await collection
+          .aggregate([
+            { $project: { result: { $anyElementTrue: ["$a"] }, _id: 0 } },
+          ])
+          .toArray();
+
+        assert.strictEqual(results[0].result, true);
+      });
+    });
+  });
 });
