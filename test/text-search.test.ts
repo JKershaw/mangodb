@@ -267,4 +267,112 @@ describe(`Text Search (${getTestModeName()})`, () => {
       );
     });
   });
+
+  describe("edge cases", () => {
+    it("should return empty for empty search string", async () => {
+      const collection = client.db(dbName).collection("text_empty_search");
+      await collection.createIndex({ content: "text" });
+
+      await collection.insertMany([
+        { _id: 1, content: "coffee shop" },
+        { _id: 2, content: "tea house" },
+      ]);
+
+      const results = await collection
+        .find({ $text: { $search: "" } })
+        .toArray();
+
+      assert.strictEqual(results.length, 0);
+    });
+
+    it("should handle phrase-only search", async () => {
+      const collection = client.db(dbName).collection("text_phrase_only");
+      await collection.createIndex({ content: "text" });
+
+      await collection.insertMany([
+        { _id: 1, content: "new york city" },
+        { _id: 2, content: "york new order" },
+      ]);
+
+      const results = await collection
+        .find({ $text: { $search: '"new york"' } })
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0]._id, 1);
+    });
+
+    it("should handle empty quoted phrase gracefully", async () => {
+      const collection = client.db(dbName).collection("text_empty_phrase");
+      await collection.createIndex({ content: "text" });
+
+      await collection.insertMany([
+        { _id: 1, content: "coffee shop" },
+        { _id: 2, content: "tea house" },
+      ]);
+
+      // Empty quotes should be ignored, "coffee" should still match
+      const results = await collection
+        .find({ $text: { $search: '"" coffee' } })
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0]._id, 1);
+    });
+
+    it("should handle negation-only search (no matches)", async () => {
+      const collection = client.db(dbName).collection("text_negation_only");
+      await collection.createIndex({ content: "text" });
+
+      await collection.insertMany([
+        { _id: 1, content: "coffee shop" },
+        { _id: 2, content: "tea house" },
+      ]);
+
+      // Negation-only search has no positive terms, so nothing matches
+      const results = await collection
+        .find({ $text: { $search: "-coffee" } })
+        .toArray();
+
+      assert.strictEqual(results.length, 0);
+    });
+
+    it("should handle documents with missing text fields", async () => {
+      const collection = client.db(dbName).collection("text_missing_field");
+      await collection.createIndex({ content: "text" });
+
+      await collection.insertMany([
+        { _id: 1, content: "coffee shop" },
+        { _id: 2, title: "no content field" },
+        { _id: 3, content: null },
+      ]);
+
+      const results = await collection
+        .find({ $text: { $search: "coffee" } })
+        .toArray();
+
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0]._id, 1);
+    });
+
+    it("should not mutate original documents", async () => {
+      const collection = client.db(dbName).collection("text_no_mutate");
+      await collection.createIndex({ content: "text" });
+
+      await collection.insertOne({ _id: 1, content: "coffee shop" });
+
+      // First query with $meta
+      await collection
+        .find(
+          { $text: { $search: "coffee" } },
+          { projection: { score: { $meta: "textScore" } } }
+        )
+        .toArray();
+
+      // Fetch document again without $text - should not have score attached
+      const doc = await collection.findOne({ _id: 1 });
+      assert.ok(doc);
+      assert.strictEqual((doc as Document).score, undefined);
+    });
+  });
 });

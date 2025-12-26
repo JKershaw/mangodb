@@ -169,12 +169,15 @@ export class MangoCollection<T extends Document = Document> {
     const phrases: string[] = [];
 
     // Extract phrases in quotes first
-    const phraseRegex = /"([^"]+)"/g;
+    const phraseRegex = /"([^"]*)"/g;
     let match;
     let remaining = searchString;
 
     while ((match = phraseRegex.exec(searchString)) !== null) {
-      phrases.push(match[1]);
+      // Only add non-empty phrases
+      if (match[1].trim().length > 0) {
+        phrases.push(match[1]);
+      }
       remaining = remaining.replace(match[0], " ");
     }
 
@@ -281,7 +284,9 @@ export class MangoCollection<T extends Document = Document> {
     // Add phrase matches to score
     for (const phrase of phrases) {
       const normalizedPhrase = caseSensitive ? phrase : phrase.toLowerCase();
-      const regex = new RegExp(normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      // Use 'g' flag only; case sensitivity is already handled by normalizing text
+      const regexFlags = caseSensitive ? "g" : "gi";
+      const regex = new RegExp(normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), regexFlags);
       const matches = (normalizedFullText.match(regex) || []).length;
       score += matches * 2; // Weight phrases higher
     }
@@ -297,15 +302,9 @@ export class MangoCollection<T extends Document = Document> {
 
   /**
    * Symbol for storing text scores on documents (internal use).
+   * Shared with cursor.ts via Symbol.for() for cross-module access.
    */
   private static readonly TEXT_SCORE_KEY = Symbol.for("mangodb.textScore");
-
-  /**
-   * Get text score from a document (internal use).
-   */
-  static getTextScore<D extends Document>(doc: D): number | undefined {
-    return (doc as Record<symbol, number>)[MangoCollection.TEXT_SCORE_KEY];
-  }
 
   /**
    * Filter documents with $text query support.
@@ -345,9 +344,15 @@ export class MangoCollection<T extends Document = Document> {
             Object.keys(remainingFilter).length === 0 ||
             matchesFilter(doc, remainingFilter as Filter<T>);
           if (matchesOther) {
-            // Attach score to document
-            (doc as Record<symbol, number>)[MangoCollection.TEXT_SCORE_KEY] = score;
-            results.push(doc);
+            // Create a shallow copy to avoid mutating the original document
+            // and attach score to the copy using Object.defineProperty
+            const docWithScore = { ...doc };
+            Object.defineProperty(docWithScore, MangoCollection.TEXT_SCORE_KEY, {
+              value: score,
+              enumerable: false,
+              writable: false,
+            });
+            results.push(docWithScore);
           }
         }
       }
