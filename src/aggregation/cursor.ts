@@ -20,8 +20,8 @@ import type { AggregationDbContext } from "./types.ts";
 import { evaluateExpression } from "./expression.ts";
 import { createAccumulator } from "./accumulators.ts";
 import { getBSONTypeName } from "./helpers.ts";
-import { createSystemVars, mergeVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from "./system-vars.ts";
-import { traverseDocument, type TraversalAction } from "./traverse.ts";
+import { createSystemVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from "./system-vars.ts";
+import { traverseDocument } from "./traverse.ts";
 import { partitionDocuments, sortPartition } from "./partition.ts";
 import { addDateStep, type TimeUnit, isValidTimeUnit } from "./date-utils.ts";
 import { applyLocf, applyLinearFill } from "./gap-fill.ts";
@@ -396,7 +396,7 @@ export class AggregationCursor<T extends Document = Document> {
     if (typeof spec === "string") {
       fields = [spec];
     } else if (Array.isArray(spec)) {
-      fields = spec.map((f, i) => {
+      fields = spec.map((f) => {
         if (typeof f !== "string") {
           throw new Error(
             "$unset specification must be a string or array of strings"
@@ -2086,11 +2086,12 @@ export class AggregationCursor<T extends Document = Document> {
           case "keepExisting":
             // Do nothing - keep the existing document
             break;
-          case "merge":
+          case "merge": {
             // Merge source doc fields into existing doc
             const mergedDoc = { ...existingDoc, ...doc };
             await targetCollection.replaceOne(filter, mergedDoc);
             break;
+          }
           case "fail":
             throw new Error(`$merge found matching document for ${JSON.stringify(filter)}`);
           default:

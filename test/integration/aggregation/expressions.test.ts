@@ -11,8 +11,6 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-  type TestCollection,
-  type Document,
 } from "../../test-harness.ts";
 
 describe(`Expression Operators (${getTestModeName()})`, () => {

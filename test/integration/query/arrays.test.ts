@@ -667,7 +667,7 @@ describe(`Array Update Tests (${getTestModeName()})`, () => {
       const collection = client.db(dbName).collection("pull_empty");
       await collection.insertOne({ tags: [] });
 
-      const result = await collection.updateOne({}, { $pull: { tags: "x" } });
+      await collection.updateOne({}, { $pull: { tags: "x" } });
 
       const doc = await collection.findOne({});
       assert.deepStrictEqual(doc?.tags, []);

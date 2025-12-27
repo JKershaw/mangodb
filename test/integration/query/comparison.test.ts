@@ -5,13 +5,12 @@
  * These tests run against both real MongoDB and MangoDB to ensure compatibility.
  */
 
-import { describe, it, before, after, beforeEach } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
 import {
   createTestClient,
   getTestModeName,
   type TestClient,
-  type TestCollection,
 } from "../../test-harness.ts";
 
 describe(`Basic Query Tests (${getTestModeName()})`, () => {

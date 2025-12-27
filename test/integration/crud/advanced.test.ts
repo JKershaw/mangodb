@@ -633,7 +633,7 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
           assert.fail("Should have thrown");
         } catch (error) {
           // Should have partial results
-          const err = error as Error & {
+          const _err = error as Error & {
             writeErrors?: unknown[];
             result?: { insertedCount: number };
           };

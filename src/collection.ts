@@ -68,10 +68,8 @@ import {
 } from "./errors.ts";
 
 import {
-  hasNearQuery,
   extractNearQuery,
   evaluateNear,
-  extractPointFromDocument,
   GeoIndexRequiredError,
 } from "./geo/index.ts";
 
@@ -215,7 +213,7 @@ export class MangoCollection<T extends Document = Document> {
    * Tokenize text into words for matching.
    */
   private tokenizeText(text: string): string[] {
-    return text.split(/[\s\-_.,;:!?'"()\[\]{}]+/).filter((t) => t.length > 0);
+    return text.split(/[\s\-_.,;:!?'"()[\]{}]+/).filter((t) => t.length > 0);
   }
 
   /**
@@ -285,7 +283,6 @@ export class MangoCollection<T extends Document = Document> {
 
     // Check include terms - at least one must match (OR logic)
     let score = 0;
-    const totalTerms = includeTerms.length + phrases.length;
 
     for (const term of includeTerms) {
       const normalizedTerm = caseSensitive ? term : term.toLowerCase();

@@ -375,7 +375,7 @@ export function getValueAtPath(doc: Record<string, unknown>, path: string): unkn
  * Get the BSON type order for cross-type comparisons.
  * MongoDB compares different types using this ordering.
  */
-function getBSONTypeOrder(value: unknown): number {
+function _getBSONTypeOrder(value: unknown): number {
   if (value === null || value === undefined) return 1; // Null/undefined
   if (typeof value === "number") return 2; // Numbers
   if (typeof value === "string") return 3; // String

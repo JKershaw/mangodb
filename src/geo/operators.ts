@@ -4,21 +4,17 @@
  */
 
 import type { Position, GeoJSONGeometry } from "./geometry.ts";
-import { extractCoordinates, isValidGeoJSON, normalizePoint } from "./geometry.ts";
+import { extractCoordinates, isValidGeoJSON } from "./geometry.ts";
 import {
   haversineDistance,
   euclideanDistance,
-  geometryContainsPoint,
   geometriesIntersect,
 } from "./calculations.ts";
 import {
-  parseGeoShape,
   parseNearQuery,
   pointWithinShape,
   validateGeoWithinShape,
   validateGeoIntersectsShape,
-  type GeoShape,
-  type NearQuery,
 } from "./shapes.ts";
 import { InvalidGeoJSONError } from "./errors.ts";
 

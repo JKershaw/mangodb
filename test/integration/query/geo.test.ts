@@ -16,7 +16,7 @@ import {
 import { ObjectId } from "bson";
 
 // Helper type for documents with geo data
-interface GeoDocument {
+interface _GeoDocument {
   _id?: ObjectId;
   name: string;
   location:

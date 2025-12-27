@@ -11,7 +11,6 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-  type TestCollection,
   type Document,
 } from "../../test-harness.ts";
 
@@ -1533,7 +1532,7 @@ describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
 
     it("should fail when whenNotMatched is 'fail' and no match exists", async () => {
       const source = client.db(dbName).collection("merge_fail_source2");
-      const target = client.db(dbName).collection("merge_fail_target2");
+      const _target = client.db(dbName).collection("merge_fail_target2");
 
       // Empty target - no matches possible
       await source.insertOne({ _id: 1, name: "New" });

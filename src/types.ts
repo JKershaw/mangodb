@@ -681,6 +681,7 @@ export type PipelineStage =
 /**
  * Options for the aggregate() method.
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface AggregateOptions {
   // Reserved for future options like allowDiskUse, batchSize, etc.
 }

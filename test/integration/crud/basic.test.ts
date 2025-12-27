@@ -11,7 +11,6 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-  type TestCollection,
 } from "../../test-harness.ts";
 import { ObjectId } from "bson";
 

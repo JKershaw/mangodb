@@ -302,7 +302,7 @@ export function evalIsoDayOfWeek(
 /**
  * Helper to get time unit in milliseconds.
  */
-function getTimeUnitMs(unit: string): number {
+function _getTimeUnitMs(unit: string): number {
   switch (unit) {
     case "year":
       return 365 * 24 * 60 * 60 * 1000; // Approximate
@@ -432,10 +432,11 @@ export function evalDateDiff(
   switch (unit) {
     case "year":
       return endDate.getUTCFullYear() - startDate.getUTCFullYear();
-    case "quarter":
+    case "quarter": {
       const startQ = startDate.getUTCFullYear() * 4 + Math.floor(startDate.getUTCMonth() / 3);
       const endQ = endDate.getUTCFullYear() * 4 + Math.floor(endDate.getUTCMonth() / 3);
       return endQ - startQ;
+    }
     case "month":
       return (
         (endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
