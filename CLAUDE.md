@@ -5,10 +5,14 @@ A file-based MongoDB drop-in replacement. See @README.md for overview.
 ## Commands
 
 - `npm test` - Run tests against MangoDB
-- `npm run test:mongodb` - Run tests against real MongoDB (needs MONGODB_URI)
+- `npm run test:mongodb` - Run tests against real MongoDB (reads from `.env.mongodb`)
 - `npm run typecheck` - TypeScript type checking
 - `npm run lint` - ESLint
 - `npm run format` - Prettier formatting
+
+## Environment
+
+- `.env.mongodb` - Contains `MONGODB_URI` for running tests against real MongoDB (not committed)
 
 ## Development Workflow
 
