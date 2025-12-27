@@ -217,6 +217,7 @@ await collection.stats();          // Collection statistics
 { value: { $mod: [divisor, remainder] } }
 { $text: { $search: 'keywords' } }
 { $expr: { $gt: ['$qty', '$minQty'] } }
+{ $jsonSchema: { required: ['name'], properties: { name: { bsonType: 'string' } } } }
 ```
 
 ### Geospatial
