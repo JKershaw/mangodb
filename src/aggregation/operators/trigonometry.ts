@@ -130,7 +130,11 @@ export function evalAsin(
     return NaN;
   }
 
-  // Math.asin returns NaN for values outside [-1, 1]
+  // MongoDB throws for values outside [-1, 1]
+  if (value < -1 || value > 1) {
+    throw new Error(`cannot apply $asin to ${value}, value must be in [-1,1]`);
+  }
+
   return Math.asin(value);
 }
 
@@ -154,7 +158,11 @@ export function evalAcos(
     return NaN;
   }
 
-  // Math.acos returns NaN for values outside [-1, 1]
+  // MongoDB throws for values outside [-1, 1]
+  if (value < -1 || value > 1) {
+    throw new Error(`cannot apply $acos to ${value}, value must be in [-1,1]`);
+  }
+
   return Math.acos(value);
 }
 
@@ -323,7 +331,11 @@ export function evalAcosh(
     return NaN;
   }
 
-  // Math.acosh returns NaN for values < 1
+  // MongoDB throws for values < 1
+  if (value < 1) {
+    throw new Error(`cannot apply $acosh to ${value}, value must be in [1,inf]`);
+  }
+
   return Math.acosh(value);
 }
 

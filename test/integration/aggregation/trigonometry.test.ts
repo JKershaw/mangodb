@@ -95,17 +95,14 @@ describe(`Trigonometry Operators (${getTestModeName()})`, () => {
       );
     });
 
-    // Note: MangoDB stores Infinity as null in JSON, so this tests null handling
-    // In real MongoDB, this would throw an error for Infinity
-    it('should return null when stored Infinity becomes null', async () => {
-      const collection = client.db(dbName).collection('sin_infinity');
-      await collection.insertOne({ value: Infinity });
+    it('should return null for missing field', async () => {
+      const collection = client.db(dbName).collection('sin_missing');
+      await collection.insertOne({ other: 123 });
 
       const results = (await collection
         .aggregate([{ $project: { result: { $sin: '$value' }, _id: 0 } }])
         .toArray()) as unknown as TrigResult[];
 
-      // MangoDB stores Infinity as null, so result is null
       assert.strictEqual(results[0].result, null);
     });
   });
@@ -216,15 +213,21 @@ describe(`Trigonometry Operators (${getTestModeName()})`, () => {
       assert.ok(Math.abs(results[0].result! - Math.PI / 2) < 1e-10);
     });
 
-    it('should return NaN for values outside [-1, 1]', async () => {
+    it('should throw for values outside [-1, 1]', async () => {
       const collection = client.db(dbName).collection('asin_outside');
       await collection.insertOne({ value: 2 });
 
-      const results = (await collection
-        .aggregate([{ $project: { result: { $asin: '$value' }, _id: 0 } }])
-        .toArray()) as unknown as TrigResult[];
-
-      assert.ok(Number.isNaN(results[0].result));
+      await assert.rejects(
+        async () => {
+          await collection
+            .aggregate([{ $project: { result: { $asin: '$value' }, _id: 0 } }])
+            .toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes('$asin') && err.message.includes('[-1,1]'));
+          return true;
+        }
+      );
     });
 
     it('should return null for null input', async () => {
@@ -262,15 +265,21 @@ describe(`Trigonometry Operators (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].result, 0);
     });
 
-    it('should return NaN for values outside [-1, 1]', async () => {
+    it('should throw for values outside [-1, 1]', async () => {
       const collection = client.db(dbName).collection('acos_outside');
       await collection.insertOne({ value: 2 });
 
-      const results = (await collection
-        .aggregate([{ $project: { result: { $acos: '$value' }, _id: 0 } }])
-        .toArray()) as unknown as TrigResult[];
-
-      assert.ok(Number.isNaN(results[0].result));
+      await assert.rejects(
+        async () => {
+          await collection
+            .aggregate([{ $project: { result: { $acos: '$value' }, _id: 0 } }])
+            .toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes('$acos') && err.message.includes('[-1,1]'));
+          return true;
+        }
+      );
     });
   });
 
@@ -297,17 +306,14 @@ describe(`Trigonometry Operators (${getTestModeName()})`, () => {
       assert.ok(Math.abs(results[0].result! - Math.PI / 4) < 1e-10);
     });
 
-    // Note: MangoDB stores Infinity as null in JSON
-    // In real MongoDB, atan(Infinity) returns PI/2
-    it('should return null when stored Infinity becomes null', async () => {
-      const collection = client.db(dbName).collection('atan_infinity');
-      await collection.insertOne({ value: Infinity });
+    it('should return null for null input', async () => {
+      const collection = client.db(dbName).collection('atan_null');
+      await collection.insertOne({ value: null });
 
       const results = (await collection
         .aggregate([{ $project: { result: { $atan: '$value' }, _id: 0 } }])
         .toArray()) as unknown as TrigResult[];
 
-      // MangoDB stores Infinity as null, so result is null
       assert.strictEqual(results[0].result, null);
     });
   });
@@ -492,15 +498,21 @@ describe(`Trigonometry Operators (${getTestModeName()})`, () => {
       assert.ok(Math.abs(results[0].result! - Math.acosh(2)) < 1e-10);
     });
 
-    it('should return NaN for values < 1', async () => {
+    it('should throw for values < 1', async () => {
       const collection = client.db(dbName).collection('acosh_invalid');
       await collection.insertOne({ value: 0.5 });
 
-      const results = (await collection
-        .aggregate([{ $project: { result: { $acosh: '$value' }, _id: 0 } }])
-        .toArray()) as unknown as TrigResult[];
-
-      assert.ok(Number.isNaN(results[0].result));
+      await assert.rejects(
+        async () => {
+          await collection
+            .aggregate([{ $project: { result: { $acosh: '$value' }, _id: 0 } }])
+            .toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes('$acosh') && err.message.includes('[1,inf]'));
+          return true;
+        }
+      );
     });
   });
 
