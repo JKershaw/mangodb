@@ -320,6 +320,7 @@ await collection.aggregate([
   { $unionWith: 'otherCollection' },
   { $graphLookup: { from: 'employees', startWith: '$reportsTo', connectFromField: 'reportsTo', connectToField: '_id', as: 'hierarchy' } },
   { $redact: { $cond: { if: { $eq: ['$level', 'public'] }, then: '$$DESCEND', else: '$$PRUNE' } } },
+  { $merge: { into: 'targetCollection', whenMatched: 'merge', whenNotMatched: 'insert' } },
   { $out: 'outputCollection' },
   { $geoNear: { near: { type: 'Point', coordinates: [lng, lat] }, distanceField: 'distance' } }
 ]).toArray();

@@ -8,7 +8,7 @@ MangoDB aims to be a drop-in replacement for MongoDB during development and test
 |----------|----------|-------|
 | Query Operators | 31/32 | Missing `$where` |
 | Update Operators | 20/20 | Full coverage including positional |
-| Aggregation Stages | 28/34 | Core stages + window functions |
+| Aggregation Stages | 29/34 | Core stages + window functions |
 | Expression Operators | 121/127 | Nearly complete |
 | Index Types | 9/9 | All types supported |
 | Collection Methods | 24/27 | Missing `watch`, bulk op builders |
@@ -148,6 +148,7 @@ MangoDB aims to be a drop-in replacement for MongoDB during development and test
 | `$limit` | |
 | `$lookup` | Basic form only |
 | `$match` | |
+| `$merge` | `whenMatched`, `whenNotMatched`, custom `on` fields, pipeline form |
 | `$out` | Must be final stage |
 | `$project` | |
 | `$redact` | `$$DESCEND`, `$$PRUNE`, `$$KEEP` |
@@ -171,7 +172,6 @@ MangoDB aims to be a drop-in replacement for MongoDB during development and test
 | `$collStats` | Use `collection.stats()` |
 | `$indexStats` | No query planner |
 | `$listSessions` | No session support |
-| `$merge` | Not implemented |
 | `$planCacheStats` | No query planner |
 | `$search` | Atlas-only feature |
 | `$searchMeta` | Atlas-only feature |
