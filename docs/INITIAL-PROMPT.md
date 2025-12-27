@@ -1,5 +1,7 @@
 # MangoDB: Project Initialization Prompt
 
+> This document is the original prompt used to bootstrap the MangoDB project with AI assistance. It's preserved as part of our "open source with AI" philosophy, demonstrating how the project was conceived and initially structured.
+
 ## Project Overview
 
 MangoDB is a file-based MongoDB drop-in replacement for TypeScript/Node.js. Think "SQLite is to SQL as MangoDB is to MongoDB." It allows applications to use MongoDB's API in environments with only local file access, then deploy to a real MongoDB server without code changes.
@@ -53,36 +55,6 @@ Implement a commonly-used subset of the MongoDB Node.js driver API. Users should
 - Use Node.js built-in filesystem APIs
 - The only acceptable external dependency is the MongoDB driver (for testing against real MongoDB and potentially for BSON/ObjectId utilities)
 - Avoid test frameworks, assertion libraries, build tools beyond TypeScript itself
-
-## Documentation Requirements
-
-Create and maintain these documents from day one:
-
-### README.md
-- Clear one-line description
-- What problem this solves (the "SQLite for MongoDB" pitch)
-- Current status/maturity warning
-- Basic usage example showing the swap between MangoDB and MongoDB
-- What's implemented vs what's not
-- How to run tests (including requirement for a MongoDB instance)
-- Contributing guidelines
-- License (suggest MIT)
-
-### ROADMAP.md
-- Implementation phases with rationale
-- Current phase clearly marked
-- Each phase should list specific MongoDB operations to implement
-- Keep it updated as you progress
-
-### PROGRESS.md or CHANGELOG.md
-- Track what's been implemented
-- Note any discovered MongoDB quirks/edge cases
-- Document any intentional deviations from MongoDB behavior (there should be almost none)
-
-### COMPATIBILITY.md
-- Document MongoDB behaviors discovered through testing
-- Especially note non-obvious behaviors: type coercion, null vs missing vs undefined, array matching semantics, sort order for mixed types
-- This becomes invaluable reference material
 
 ## Implementation Order
 
@@ -158,5 +130,3 @@ Configure GitHub Actions to:
 5. Set up GitHub Actions workflow
 
 Begin by creating the documentation and test infrastructure before writing implementation code. The test harness design is the foundation everything else builds on.
-
----
