@@ -131,21 +131,24 @@ describe(`$jsonSchema Query Operator Tests (${getTestModeName()})`, () => {
       assert.strictEqual(docs[0].name, 'Alice');
     });
 
-    it('should handle empty required array', async () => {
+    it('should reject empty required array', async () => {
       const collection = client.db(dbName).collection('schema_required_empty');
       await collection.insertMany([
         { name: 'Alice' },
         { age: 25 },
       ]);
 
-      const docs = await collection.find({
-        $jsonSchema: {
-          required: [],
+      // MongoDB rejects empty required arrays
+      await assert.rejects(
+        async () => {
+          await collection.find({
+            $jsonSchema: {
+              required: [],
+            },
+          }).toArray();
         },
-      }).toArray();
-
-      // Empty required means all documents match
-      assert.strictEqual(docs.length, 2);
+        /required.*cannot be an empty array|a collection is required/
+      );
     });
   });
 

@@ -196,6 +196,10 @@ function validateObjectConstraints(
 
   // required validation
   if (schema.required !== undefined) {
+    // MongoDB rejects empty required arrays
+    if (schema.required.length === 0) {
+      throw new Error("$jsonSchema keyword 'required' cannot be an empty array");
+    }
     for (const field of schema.required) {
       if (!(field in obj)) {
         return false;
