@@ -38,6 +38,9 @@ export function createSystemVars(
     // $$ROOT - The original root document
     ROOT: doc ?? {},
 
+    // $$CURRENT - Refers to the current document (alias for $$ROOT in most contexts)
+    CURRENT: doc ?? {},
+
     // $$DESCEND - String constant for $redact
     DESCEND: REDACT_DESCEND,
 

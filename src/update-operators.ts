@@ -437,6 +437,9 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $inc
   if (update.$inc) {
     for (const [path, increment] of Object.entries(update.$inc)) {
+      if (typeof increment !== "number") {
+        throw new Error(`Cannot increment with non-numeric argument: { ${path}: "${increment}" }`);
+      }
       const resolvedPaths = resolvePositionalPaths(result, path, context);
       for (const resolvedPath of resolvedPaths) {
         const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
@@ -608,6 +611,10 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $rename - rename fields
   if (update.$rename) {
     for (const [oldPath, newPath] of Object.entries(update.$rename)) {
+      // Validate newPath is a string
+      if (typeof newPath !== "string") {
+        throw new Error(`The 'to' field for $rename must be a string: ${oldPath}`);
+      }
       // MongoDB errors if source and destination are the same
       if (oldPath === newPath) {
         throw new Error(

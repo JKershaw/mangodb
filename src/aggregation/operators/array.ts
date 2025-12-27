@@ -906,3 +906,189 @@ export function evalAnyElementTrue(
 
   return false;
 }
+
+/**
+ * $firstN - Returns the first N elements from an array.
+ *
+ * Syntax:
+ *   { $firstN: { n: <expression>, input: <expression> } }
+ */
+export function evalFirstN(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    throw new Error("$firstN requires an object argument");
+  }
+
+  const spec = args as { n?: unknown; input?: unknown };
+  if (spec.n === undefined) {
+    throw new Error("$firstN requires 'n' to be specified");
+  }
+  if (spec.input === undefined) {
+    throw new Error("$firstN requires 'input' to be specified");
+  }
+
+  const n = evaluate(spec.n, doc, vars);
+  const input = evaluate(spec.input, doc, vars);
+
+  if (n === null || n === undefined) {
+    return null;
+  }
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+    throw new Error("$firstN 'n' must be a non-negative integer");
+  }
+
+  if (input === null || input === undefined) {
+    return null;
+  }
+  if (!Array.isArray(input)) {
+    throw new Error("$firstN 'input' must be an array");
+  }
+
+  return input.slice(0, n);
+}
+
+/**
+ * $lastN - Returns the last N elements from an array.
+ *
+ * Syntax:
+ *   { $lastN: { n: <expression>, input: <expression> } }
+ */
+export function evalLastN(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    throw new Error("$lastN requires an object argument");
+  }
+
+  const spec = args as { n?: unknown; input?: unknown };
+  if (spec.n === undefined) {
+    throw new Error("$lastN requires 'n' to be specified");
+  }
+  if (spec.input === undefined) {
+    throw new Error("$lastN requires 'input' to be specified");
+  }
+
+  const n = evaluate(spec.n, doc, vars);
+  const input = evaluate(spec.input, doc, vars);
+
+  if (n === null || n === undefined) {
+    return null;
+  }
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+    throw new Error("$lastN 'n' must be a non-negative integer");
+  }
+
+  if (input === null || input === undefined) {
+    return null;
+  }
+  if (!Array.isArray(input)) {
+    throw new Error("$lastN 'input' must be an array");
+  }
+
+  if (n === 0) {
+    return [];
+  }
+  if (n >= input.length) {
+    return [...input];
+  }
+  return input.slice(-n);
+}
+
+/**
+ * $minN - Returns the N smallest values from an array.
+ *
+ * Syntax:
+ *   { $minN: { n: <expression>, input: <expression> } }
+ */
+export function evalMinN(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    throw new Error("$minN requires an object argument");
+  }
+
+  const spec = args as { n?: unknown; input?: unknown };
+  if (spec.n === undefined) {
+    throw new Error("$minN requires 'n' to be specified");
+  }
+  if (spec.input === undefined) {
+    throw new Error("$minN requires 'input' to be specified");
+  }
+
+  const n = evaluate(spec.n, doc, vars);
+  const input = evaluate(spec.input, doc, vars);
+
+  if (n === null || n === undefined) {
+    return null;
+  }
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+    throw new Error("$minN 'n' must be a non-negative integer");
+  }
+
+  if (input === null || input === undefined) {
+    return null;
+  }
+  if (!Array.isArray(input)) {
+    throw new Error("$minN 'input' must be an array");
+  }
+
+  // Sort a copy and take first n
+  const sorted = [...input].sort((a, b) => compareValues(a, b));
+  return sorted.slice(0, n);
+}
+
+/**
+ * $maxN - Returns the N largest values from an array.
+ *
+ * Syntax:
+ *   { $maxN: { n: <expression>, input: <expression> } }
+ */
+export function evalMaxN(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown[] | null {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) {
+    throw new Error("$maxN requires an object argument");
+  }
+
+  const spec = args as { n?: unknown; input?: unknown };
+  if (spec.n === undefined) {
+    throw new Error("$maxN requires 'n' to be specified");
+  }
+  if (spec.input === undefined) {
+    throw new Error("$maxN requires 'input' to be specified");
+  }
+
+  const n = evaluate(spec.n, doc, vars);
+  const input = evaluate(spec.input, doc, vars);
+
+  if (n === null || n === undefined) {
+    return null;
+  }
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+    throw new Error("$maxN 'n' must be a non-negative integer");
+  }
+
+  if (input === null || input === undefined) {
+    return null;
+  }
+  if (!Array.isArray(input)) {
+    throw new Error("$maxN 'input' must be an array");
+  }
+
+  // Sort a copy in descending order and take first n
+  const sorted = [...input].sort((a, b) => compareValues(b, a));
+  return sorted.slice(0, n);
+}

@@ -9,7 +9,7 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 | Query Operators | 37 | ~95% |
 | Update Operators | 20 | 100% |
 | Aggregation Stages | 30 | ~88% |
-| Expression Operators | 90+ | ~95% |
+| Expression Operators | 110+ | ~98% |
 
 ## Query Operators
 
@@ -100,6 +100,7 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 ### Array (All Implemented)
 - `$arrayElemAt`, `$first`, `$last`, `$slice`
+- `$firstN`, `$lastN`, `$minN`, `$maxN`
 - `$size`, `$isArray`, `$in`
 - `$map`, `$filter`, `$reduce`
 - `$concatArrays`, `$reverseArray`, `$sortArray`
@@ -119,6 +120,9 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 ### Conditional (All Implemented)
 - `$cond`, `$ifNull`, `$switch`, `$let`
+
+### Object (All Implemented)
+- `$getField`, `$setField`, `$mergeObjects`
 
 ### Date (All Implemented)
 - `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$millisecond`
@@ -218,7 +222,10 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 MangoDB is tested against both its own implementation and real MongoDB to ensure compatibility:
 
-- **MangoDB tests**: 1458 passing (1 skipped - pipeline updates)
-- **MongoDB tests**: 1458 passing
+- **MangoDB tests**: 1512 passing (1 skipped - pipeline updates)
+- **MongoDB tests**: 1512 passing
 
-The test suite covers all implemented features with edge cases, including comprehensive operator composition tests.
+The test suite covers all implemented features with edge cases, including:
+- Comprehensive operator composition tests
+- Error message consistency tests
+- Edge case handling for all operators

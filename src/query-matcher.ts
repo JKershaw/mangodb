@@ -387,14 +387,18 @@ export function matchesOperators(
       }
 
       case "$in": {
-        const arr = opValue as unknown[];
-        if (!matchesIn(docValue, arr)) return false;
+        if (!Array.isArray(opValue)) {
+          throw new Error("$in needs an array");
+        }
+        if (!matchesIn(docValue, opValue)) return false;
         break;
       }
 
       case "$nin": {
-        const arr = opValue as unknown[];
-        if (matchesIn(docValue, arr)) return false;
+        if (!Array.isArray(opValue)) {
+          throw new Error("$nin needs an array");
+        }
+        if (matchesIn(docValue, opValue)) return false;
         break;
       }
 

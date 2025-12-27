@@ -8,6 +8,7 @@ import * as conditional from "./conditional.ts";
 import * as array from "./array.ts";
 import * as typeConversion from "./type-conversion.ts";
 import * as date from "./date.ts";
+import * as object from "./object.ts";
 
 /**
  * Registry of all expression operators.
@@ -94,6 +95,10 @@ export const operators = {
   $objectToArray: array.evalObjectToArray,
   $zip: array.evalZip,
   $sortArray: array.evalSortArray,
+  $firstN: array.evalFirstN,
+  $lastN: array.evalLastN,
+  $minN: array.evalMinN,
+  $maxN: array.evalMaxN,
 
   // Set operators
   $setUnion: array.evalSetUnion,
@@ -137,4 +142,9 @@ export const operators = {
   $dateFromParts: date.evalDateFromParts,
   $dateToParts: date.evalDateToParts,
   $dateFromString: date.evalDateFromString,
+
+  // Object
+  $getField: object.evalGetField,
+  $setField: object.evalSetField,
+  $mergeObjects: object.evalMergeObjects,
 };

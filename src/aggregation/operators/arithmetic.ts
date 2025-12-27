@@ -84,8 +84,9 @@ export function evalDivide(
     throw new Error("$divide only supports numeric types");
   }
 
+  // MongoDB returns Infinity for division by zero
   if (divisor === 0) {
-    return null;
+    return dividend >= 0 ? Infinity : -Infinity;
   }
 
   return dividend / divisor;
