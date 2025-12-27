@@ -1,17 +1,16 @@
-# MangoDB
+# MangoDB 🥭
 
-File-based MongoDB drop-in replacement for TypeScript/Node.js.
+A file-based MongoDB drop-in replacement for TypeScript/Node.js.
 
 **SQLite is to SQL as MangoDB is to MongoDB.**
 
+MangoDB stores your data as simple JSON files on disk while exposing the same API as the official MongoDB driver. Write your application once, develop locally without any database setup, then deploy to real MongoDB by changing a single environment variable.
+
 ## Why MangoDB?
 
-Developing with MongoDB typically requires:
-- Running a local MongoDB instance
-- Setting up Docker containers or cloud databases for CI
-- Managing connection strings and database state between test runs
+Working with MongoDB during development often means running local instances, configuring Docker containers, or connecting to cloud databases just to run your tests. MangoDB removes that friction entirely - your data lives in plain JSON files that you can inspect, version control, or simply delete between test runs.
 
-MangoDB lets you develop and test using only the filesystem, then deploy to real MongoDB without code changes. Just swap the connection string.
+The best part: when you're ready for production, your code doesn't change. Just point to a real MongoDB instance and everything works.
 
 ## Installation
 
