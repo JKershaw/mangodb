@@ -9,6 +9,7 @@ import * as array from './array.ts';
 import * as typeConversion from './type-conversion.ts';
 import * as date from './date.ts';
 import * as object from './object.ts';
+import * as trigonometry from './trigonometry.ts';
 
 /**
  * Registry of all expression operators.
@@ -147,4 +148,21 @@ export const operators = {
   $getField: object.evalGetField,
   $setField: object.evalSetField,
   $mergeObjects: object.evalMergeObjects,
+
+  // Trigonometry
+  $sin: trigonometry.evalSin,
+  $cos: trigonometry.evalCos,
+  $tan: trigonometry.evalTan,
+  $asin: trigonometry.evalAsin,
+  $acos: trigonometry.evalAcos,
+  $atan: trigonometry.evalAtan,
+  $atan2: trigonometry.evalAtan2,
+  $sinh: trigonometry.evalSinh,
+  $cosh: trigonometry.evalCosh,
+  $tanh: trigonometry.evalTanh,
+  $asinh: trigonometry.evalAsinh,
+  $acosh: trigonometry.evalAcosh,
+  $atanh: trigonometry.evalAtanh,
+  $degreesToRadians: trigonometry.evalDegreesToRadians,
+  $radiansToDegrees: trigonometry.evalRadiansToDegrees,
 };

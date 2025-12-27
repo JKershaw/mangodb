@@ -448,6 +448,26 @@ await collection.aggregate([
 { $cmp: ['$a', '$b'] }  // Returns -1, 0, or 1
 ```
 
+### Trigonometry
+
+```typescript
+{ $sin: '$radians' }           // Sine (radians input)
+{ $cos: '$radians' }           // Cosine (radians input)
+{ $tan: '$radians' }           // Tangent (radians input)
+{ $asin: '$value' }            // Arc sine, returns radians
+{ $acos: '$value' }            // Arc cosine, returns radians
+{ $atan: '$value' }            // Arc tangent, returns radians
+{ $atan2: ['$y', '$x'] }       // Arc tangent of y/x
+{ $sinh: '$value' }            // Hyperbolic sine
+{ $cosh: '$value' }            // Hyperbolic cosine
+{ $tanh: '$value' }            // Hyperbolic tangent
+{ $asinh: '$value' }           // Inverse hyperbolic sine
+{ $acosh: '$value' }           // Inverse hyperbolic cosine (input >= 1)
+{ $atanh: '$value' }           // Inverse hyperbolic tangent (input in -1..1)
+{ $degreesToRadians: '$deg' }  // Convert degrees to radians
+{ $radiansToDegrees: '$rad' }  // Convert radians to degrees
+```
+
 ### Accumulators (in $group)
 
 ```typescript

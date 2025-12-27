@@ -75,7 +75,7 @@ await client.connect();
 | Query Operators | 30/32 (94%) |
 | Update Operators | 20/20 (100%) |
 | Aggregation Stages | 28/34 (82%) |
-| Expression Operators | 106/112 (95%) |
+| Expression Operators | 121/127 (95%) |
 | Index Types | 9/9 (100%) |
 
 See [COMPATIBILITY.md](./docs/COMPATIBILITY.md) for details.

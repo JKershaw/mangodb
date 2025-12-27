@@ -9,7 +9,7 @@ MangoDB aims to be a drop-in replacement for MongoDB during development and test
 | Query Operators | 30/32 | Missing `$where`, `$jsonSchema` |
 | Update Operators | 20/20 | Full coverage including positional |
 | Aggregation Stages | 28/34 | Core stages + window functions |
-| Expression Operators | 106/112 | Nearly complete |
+| Expression Operators | 121/127 | Nearly complete |
 | Index Types | 9/9 | All types supported |
 | Collection Methods | 24/27 | Missing `watch`, bulk op builders |
 
@@ -187,6 +187,59 @@ Only basic form is supported:
 // NOT supported - pipeline form
 { $lookup: { from: "coll", let: { x: "$a" }, pipeline: [...], as: "results" } }
 ```
+
+---
+
+## Expression Operators
+
+Expression operators are used in aggregation pipelines. See [API.md](./API.md) for syntax examples.
+
+### Categories
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| Arithmetic | 17 | `$add`, `$subtract`, `$multiply`, `$divide`, `$mod`, `$abs`, `$ceil`, `$floor`, `$round`, `$trunc`, `$sqrt`, `$pow`, `$exp`, `$ln`, `$log`, `$log10`, `$rand` |
+| String | 19 | `$concat`, `$toLower`, `$toUpper`, `$trim`, `$split`, `$substrCP`, `$regexMatch`, etc. |
+| Array | 22 | `$arrayElemAt`, `$first`, `$last`, `$size`, `$filter`, `$map`, `$reduce`, etc. |
+| Set | 7 | `$setUnion`, `$setIntersection`, `$setDifference`, `$setEquals`, `$setIsSubset`, `$allElementsTrue`, `$anyElementTrue` |
+| Date | 19 | `$year`, `$month`, `$dayOfMonth`, `$dateAdd`, `$dateDiff`, `$dateToString`, etc. |
+| Comparison | 7 | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$cmp` |
+| Conditional | 4 | `$cond`, `$ifNull`, `$switch`, `$let` |
+| Type | 10 | `$type`, `$toBool`, `$toDate`, `$toDouble`, `$toInt`, `$convert`, etc. |
+| Boolean | 3 | `$and`, `$or`, `$not` |
+| Object | 3 | `$getField`, `$setField`, `$mergeObjects` |
+| Trigonometry | 15 | See below |
+
+### Trigonometry Operators
+
+| Operator | Supported | Notes |
+|----------|-----------|-------|
+| `$sin` | Yes | Sine (radians) |
+| `$cos` | Yes | Cosine (radians) |
+| `$tan` | Yes | Tangent (radians) |
+| `$asin` | Yes | Arc sine |
+| `$acos` | Yes | Arc cosine |
+| `$atan` | Yes | Arc tangent |
+| `$atan2` | Yes | Arc tangent of y/x (2 args) |
+| `$sinh` | Yes | Hyperbolic sine |
+| `$cosh` | Yes | Hyperbolic cosine |
+| `$tanh` | Yes | Hyperbolic tangent |
+| `$asinh` | Yes | Inverse hyperbolic sine |
+| `$acosh` | Yes | Inverse hyperbolic cosine |
+| `$atanh` | Yes | Inverse hyperbolic tangent |
+| `$degreesToRadians` | Yes | Degrees to radians |
+| `$radiansToDegrees` | Yes | Radians to degrees |
+
+### Not Supported
+
+| Operator | Reason |
+|----------|--------|
+| `$accumulator` | JavaScript execution |
+| `$function` | JavaScript execution |
+| `$getField` (with $$) | Limited variable support |
+| `$literal` | Not implemented |
+| `$meta` | No text search scoring |
+| `$sampleRate` | Not implemented |
 
 ---
 
