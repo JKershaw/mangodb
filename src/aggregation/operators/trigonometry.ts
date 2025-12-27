@@ -341,7 +341,7 @@ export function evalAcosh(
 
 /**
  * $atanh - Returns the inverse hyperbolic tangent.
- * Input must be in range (-1, 1).
+ * Input must be in range [-1, 1].
  */
 export function evalAtanh(
   args: unknown,
@@ -359,7 +359,11 @@ export function evalAtanh(
     return NaN;
   }
 
-  // Math.atanh returns NaN for |value| > 1, Infinity for |value| === 1
+  // MongoDB throws for values outside [-1, 1]
+  if (value < -1 || value > 1) {
+    throw new Error(`cannot apply $atanh to ${value}, value must be in [-1,1]`);
+  }
+
   return Math.atanh(value);
 }
 

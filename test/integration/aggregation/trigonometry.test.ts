@@ -550,15 +550,21 @@ describe(`Trigonometry Operators (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].result, Infinity);
     });
 
-    it('should return NaN for values outside (-1, 1)', async () => {
+    it('should throw for values outside [-1, 1]', async () => {
       const collection = client.db(dbName).collection('atanh_outside');
       await collection.insertOne({ value: 2 });
 
-      const results = (await collection
-        .aggregate([{ $project: { result: { $atanh: '$value' }, _id: 0 } }])
-        .toArray()) as unknown as TrigResult[];
-
-      assert.ok(Number.isNaN(results[0].result));
+      await assert.rejects(
+        async () => {
+          await collection
+            .aggregate([{ $project: { result: { $atanh: '$value' }, _id: 0 } }])
+            .toArray();
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes('$atanh') && err.message.includes('[-1,1]'));
+          return true;
+        }
+      );
     });
   });
 
