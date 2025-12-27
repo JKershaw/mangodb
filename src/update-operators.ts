@@ -1,7 +1,7 @@
 /**
  * Update operators for MongoDB-compatible document modifications.
  */
-import type { Document, UpdateOperators, Filter, QueryOperators, ArrayFilter } from "./types.ts";
+import type { Document, UpdateOperators, Filter, QueryOperators, ArrayFilter } from './types.ts';
 import {
   setValueByPath,
   deleteValueByPath,
@@ -9,8 +9,13 @@ import {
   cloneDocument,
   valuesEqual,
   compareValues,
-} from "./document-utils.ts";
-import { isOperatorObject, matchesOperators, matchesPullCondition, matchesFilter } from "./query-matcher.ts";
+} from './document-utils.ts';
+import {
+  isOperatorObject,
+  matchesOperators,
+  matchesPullCondition,
+  matchesFilter,
+} from './query-matcher.ts';
 
 /**
  * Context for positional update operators.
@@ -27,7 +32,7 @@ export interface PositionalContext {
  * Check if a path contains positional operators ($, $[], $[identifier]).
  */
 function hasPositionalOperator(path: string): boolean {
-  return path.includes(".$") || path.includes(".$[");
+  return path.includes('.$') || path.includes('.$[');
 }
 
 /**
@@ -40,32 +45,35 @@ function hasPositionalOperator(path: string): boolean {
  */
 function parsePathSegment(segment: string): { type: string; value: unknown } {
   if (/^\d+$/.test(segment)) {
-    return { type: "index", value: parseInt(segment, 10) };
+    return { type: 'index', value: parseInt(segment, 10) };
   }
-  if (segment === "$") {
-    return { type: "$", value: null };
+  if (segment === '$') {
+    return { type: '$', value: null };
   }
-  if (segment === "$[]") {
-    return { type: "$[]", value: null };
+  if (segment === '$[]') {
+    return { type: '$[]', value: null };
   }
   const identifierMatch = segment.match(/^\$\[(\w+)\]$/);
   if (identifierMatch) {
-    return { type: "$[identifier]", value: identifierMatch[1] };
+    return { type: '$[identifier]', value: identifierMatch[1] };
   }
-  return { type: "field", value: segment };
+  return { type: 'field', value: segment };
 }
 
 /**
  * Find the array filter that matches a given identifier.
  */
-function findArrayFilter(identifier: string, arrayFilters?: ArrayFilter[]): ArrayFilter | undefined {
+function findArrayFilter(
+  identifier: string,
+  arrayFilters?: ArrayFilter[]
+): ArrayFilter | undefined {
   if (!arrayFilters) return undefined;
 
   for (const filter of arrayFilters) {
     const keys = Object.keys(filter);
     // Array filter has keys like "elem.status" where "elem" is the identifier
     for (const key of keys) {
-      if (key === identifier || key.startsWith(identifier + ".")) {
+      if (key === identifier || key.startsWith(identifier + '.')) {
         return filter;
       }
     }
@@ -94,9 +102,9 @@ function elementMatchesArrayFilter(
     if (key === identifier) {
       // Direct match on element itself - { elem: value }
       // Check if value is an operator object like { $lt: 70 }
-      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
         const valueObj = value as Record<string, unknown>;
-        const hasOperators = Object.keys(valueObj).some(k => k.startsWith("$"));
+        const hasOperators = Object.keys(valueObj).some((k) => k.startsWith('$'));
         if (hasOperators) {
           // Value is operator object - apply directly to element
           return matchesFilter({ _elem: element }, { _elem: valueObj });
@@ -104,7 +112,7 @@ function elementMatchesArrayFilter(
       }
       // Direct equality check
       return matchesFilter({ _elem: element }, { _elem: value });
-    } else if (key.startsWith(identifier + ".")) {
+    } else if (key.startsWith(identifier + '.')) {
       // Strip the identifier prefix: "elem.qty" → "qty"
       const newKey = key.slice(identifier.length + 1);
       translatedFilter[newKey] = value;
@@ -112,7 +120,7 @@ function elementMatchesArrayFilter(
   }
 
   if (Object.keys(translatedFilter).length > 0) {
-    if (typeof element !== "object" || element === null) {
+    if (typeof element !== 'object' || element === null) {
       // Primitive element can't have nested fields
       return false;
     }
@@ -137,8 +145,8 @@ function resolvePositionalPaths(
     return [path];
   }
 
-  const segments = path.split(".");
-  return resolveSegments(doc, segments, 0, "", context);
+  const segments = path.split('.');
+  return resolveSegments(doc, segments, 0, '', context);
 }
 
 /**
@@ -158,9 +166,9 @@ function resolveSegments(
   const segment = segments[index];
   const parsed = parsePathSegment(segment);
 
-  if (parsed.type === "$") {
+  if (parsed.type === '$') {
     // $ operator - replace with matched index
-    const arrayPath = currentPath || segments.slice(0, index).join(".");
+    const arrayPath = currentPath || segments.slice(0, index).join('.');
     const matchedIndex = context?.matchedArrayIndex?.get(arrayPath);
 
     if (matchedIndex === undefined) {
@@ -173,9 +181,9 @@ function resolveSegments(
     return resolveSegments(doc, segments, index + 1, newPath, context);
   }
 
-  if (parsed.type === "$[]") {
+  if (parsed.type === '$[]') {
     // $[] operator - expand to all array indices
-    const arrayPath = currentPath || segments.slice(0, index).join(".");
+    const arrayPath = currentPath || segments.slice(0, index).join('.');
     const arr = getValueAtPath(doc as Record<string, unknown>, arrayPath);
 
     if (!Array.isArray(arr)) {
@@ -190,7 +198,7 @@ function resolveSegments(
     return results;
   }
 
-  if (parsed.type === "$[identifier]") {
+  if (parsed.type === '$[identifier]') {
     // $[identifier] operator - expand to indices matching array filter
     const identifier = parsed.value as string;
     const filter = findArrayFilter(identifier, context?.arrayFilters);
@@ -199,7 +207,7 @@ function resolveSegments(
       throw new Error(`No array filter found for identifier '${identifier}'`);
     }
 
-    const arrayPath = currentPath || segments.slice(0, index).join(".");
+    const arrayPath = currentPath || segments.slice(0, index).join('.');
     const arr = getValueAtPath(doc as Record<string, unknown>, arrayPath);
 
     if (!Array.isArray(arr)) {
@@ -247,9 +255,9 @@ interface PushModifiers {
 export function isPushEachModifier(value: unknown): value is PushModifiers {
   return (
     value !== null &&
-    typeof value === "object" &&
+    typeof value === 'object' &&
     !Array.isArray(value) &&
-    "$each" in value &&
+    '$each' in value &&
     Array.isArray((value as { $each: unknown }).$each)
   );
 }
@@ -288,18 +296,18 @@ function applyArrayPush(
   } else if (Array.isArray(currentValue)) {
     arr = currentValue;
   } else {
-    const fieldType = currentValue === null ? "null" : typeof currentValue;
-    throw new Error(
-      `The field '${path}' must be an array but is of type ${fieldType}`
-    );
+    const fieldType = currentValue === null ? 'null' : typeof currentValue;
+    throw new Error(`The field '${path}' must be an array but is of type ${fieldType}`);
   }
 
   // Add values (with uniqueness check if needed)
   const newValues: unknown[] = [];
   for (const v of valuesToAdd) {
     if (unique) {
-      if (!arr.some((existing) => valuesEqual(existing, v, true)) &&
-          !newValues.some((existing) => valuesEqual(existing, v, true))) {
+      if (
+        !arr.some((existing) => valuesEqual(existing, v, true)) &&
+        !newValues.some((existing) => valuesEqual(existing, v, true))
+      ) {
         newValues.push(v);
       }
     } else {
@@ -310,10 +318,11 @@ function applyArrayPush(
   // Apply $position - insert at specific index
   if (position !== undefined) {
     if (!Number.isInteger(position)) {
-      throw new Error("$position must be an integer");
+      throw new Error('$position must be an integer');
     }
     // Negative positions count from end
-    const insertAt = position < 0 ? Math.max(0, arr.length + position) : Math.min(position, arr.length);
+    const insertAt =
+      position < 0 ? Math.max(0, arr.length + position) : Math.min(position, arr.length);
     arr.splice(insertAt, 0, ...newValues);
   } else {
     // Default: append to end
@@ -322,16 +331,16 @@ function applyArrayPush(
 
   // Apply $sort - sort the array after adding
   if (sortSpec !== undefined) {
-    if (typeof sortSpec === "number") {
+    if (typeof sortSpec === 'number') {
       // Sort array of primitives
       if (sortSpec !== 1 && sortSpec !== -1) {
-        throw new Error("$sort must be 1 or -1 for primitive arrays");
+        throw new Error('$sort must be 1 or -1 for primitive arrays');
       }
       arr.sort((a, b) => {
         const cmp = compareValues(a, b);
         return sortSpec === 1 ? cmp : -cmp;
       });
-    } else if (typeof sortSpec === "object" && sortSpec !== null) {
+    } else if (typeof sortSpec === 'object' && sortSpec !== null) {
       // Sort array of objects by fields
       const sortFields = Object.entries(sortSpec);
       arr.sort((a, b) => {
@@ -351,7 +360,7 @@ function applyArrayPush(
   // Apply $slice - limit array size
   if (sliceValue !== undefined) {
     if (!Number.isInteger(sliceValue)) {
-      throw new Error("$slice must be an integer");
+      throw new Error('$slice must be an integer');
     }
     if (sliceValue === 0) {
       // Remove all elements
@@ -437,13 +446,13 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $inc
   if (update.$inc) {
     for (const [path, increment] of Object.entries(update.$inc)) {
-      if (typeof increment !== "number") {
+      if (typeof increment !== 'number') {
         throw new Error(`Cannot increment with non-numeric argument: { ${path}: "${increment}" }`);
       }
       const resolvedPaths = resolvePositionalPaths(result, path, context);
       for (const resolvedPath of resolvedPaths) {
         const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
-        const numericCurrent = typeof currentValue === "number" ? currentValue : 0;
+        const numericCurrent = typeof currentValue === 'number' ? currentValue : 0;
         setValueByPath(result as Record<string, unknown>, resolvedPath, numericCurrent + increment);
       }
     }
@@ -467,7 +476,7 @@ export function applyUpdateOperators<T extends Document>(
   if (update.$pop) {
     for (const [path, direction] of Object.entries(update.$pop)) {
       if (direction !== 1 && direction !== -1) {
-        throw new Error("$pop expects 1 or -1");
+        throw new Error('$pop expects 1 or -1');
       }
 
       const currentValue = getValueAtPath(result as Record<string, unknown>, path);
@@ -507,10 +516,10 @@ export function applyUpdateOperators<T extends Document>(
         if (isOperatorObject(condition)) {
           const condObj = condition as Record<string, unknown>;
           // Check if condition contains top-level logical operators
-          if ("$and" in condObj || "$or" in condObj || "$nor" in condObj) {
+          if ('$and' in condObj || '$or' in condObj || '$nor' in condObj) {
             // Use matchesFilter to handle top-level logical operators
             // Treat the element as a document for matching
-            if (elem !== null && typeof elem === "object" && !Array.isArray(elem)) {
+            if (elem !== null && typeof elem === 'object' && !Array.isArray(elem)) {
               return !matchesFilter(elem as Document, condObj as Filter<Document>);
             }
             // For primitives with logical operators, they can't match
@@ -519,7 +528,7 @@ export function applyUpdateOperators<T extends Document>(
           return !matchesOperators(elem, condition as QueryOperators);
         } else if (
           condition !== null &&
-          typeof condition === "object" &&
+          typeof condition === 'object' &&
           !Array.isArray(condition)
         ) {
           return !matchesPullCondition(elem, condition as Record<string, unknown>);
@@ -597,12 +606,16 @@ export function applyUpdateOperators<T extends Document>(
         const currentValue = getValueAtPath(result as Record<string, unknown>, resolvedPath);
         if (currentValue === undefined) {
           setValueByPath(result as Record<string, unknown>, resolvedPath, 0);
-        } else if (typeof currentValue !== "number") {
+        } else if (typeof currentValue !== 'number') {
           throw new Error(
             `Cannot apply $mul to a value of non-numeric type. Field '${resolvedPath}' has non-numeric type ${typeof currentValue}`
           );
         } else {
-          setValueByPath(result as Record<string, unknown>, resolvedPath, currentValue * multiplier);
+          setValueByPath(
+            result as Record<string, unknown>,
+            resolvedPath,
+            currentValue * multiplier
+          );
         }
       }
     }
@@ -612,14 +625,12 @@ export function applyUpdateOperators<T extends Document>(
   if (update.$rename) {
     for (const [oldPath, newPath] of Object.entries(update.$rename)) {
       // Validate newPath is a string
-      if (typeof newPath !== "string") {
+      if (typeof newPath !== 'string') {
         throw new Error(`The 'to' field for $rename must be a string: ${oldPath}`);
       }
       // MongoDB errors if source and destination are the same
       if (oldPath === newPath) {
-        throw new Error(
-          `The source and destination field for $rename must differ: ${oldPath}`
-        );
+        throw new Error(`The source and destination field for $rename must differ: ${oldPath}`);
       }
       const value = getValueAtPath(result as Record<string, unknown>, oldPath);
       if (value !== undefined) {
@@ -637,11 +648,11 @@ export function applyUpdateOperators<T extends Document>(
       if (spec === true || spec === false) {
         // MongoDB treats both true and false as "set to current date"
         setValueByPath(result as Record<string, unknown>, path, now);
-      } else if (typeof spec === "object" && spec !== null && "$type" in spec) {
+      } else if (typeof spec === 'object' && spec !== null && '$type' in spec) {
         const typeSpec = spec as { $type: string };
-        if (typeSpec.$type === "date") {
+        if (typeSpec.$type === 'date') {
           setValueByPath(result as Record<string, unknown>, path, now);
-        } else if (typeSpec.$type === "timestamp") {
+        } else if (typeSpec.$type === 'timestamp') {
           // For timestamp, use numeric milliseconds
           // (MongoDB uses a Timestamp object, but we use numeric for simplicity)
           setValueByPath(result as Record<string, unknown>, path, now.getTime());
@@ -653,9 +664,7 @@ export function applyUpdateOperators<T extends Document>(
         }
       } else {
         // Invalid spec format (not boolean, not an object with $type)
-        throw new Error(
-          `$currentDate: expected boolean or { $type: 'date' | 'timestamp' }`
-        );
+        throw new Error(`$currentDate: expected boolean or { $type: 'date' | 'timestamp' }`);
       }
     }
   }
@@ -663,7 +672,7 @@ export function applyUpdateOperators<T extends Document>(
   // Apply $bit - bitwise operations (and, or, xor)
   if (update.$bit) {
     for (const [path, operations] of Object.entries(update.$bit)) {
-      if (typeof operations !== "object" || operations === null) {
+      if (typeof operations !== 'object' || operations === null) {
         throw new Error(`$bit requires an object with and/or/xor operations`);
       }
 
@@ -674,30 +683,30 @@ export function applyUpdateOperators<T extends Document>(
         currentValue = 0;
       }
 
-      if (typeof currentValue !== "number" || !Number.isInteger(currentValue)) {
+      if (typeof currentValue !== 'number' || !Number.isInteger(currentValue)) {
         throw new Error(`Cannot apply $bit to a non-integer value`);
       }
 
       let intValue = currentValue;
 
       const ops = operations as Record<string, unknown>;
-      if ("and" in ops) {
+      if ('and' in ops) {
         const andValue = ops.and;
-        if (typeof andValue !== "number" || !Number.isInteger(andValue)) {
+        if (typeof andValue !== 'number' || !Number.isInteger(andValue)) {
           throw new Error(`$bit and value must be an integer`);
         }
         intValue = intValue & andValue;
       }
-      if ("or" in ops) {
+      if ('or' in ops) {
         const orValue = ops.or;
-        if (typeof orValue !== "number" || !Number.isInteger(orValue)) {
+        if (typeof orValue !== 'number' || !Number.isInteger(orValue)) {
           throw new Error(`$bit or value must be an integer`);
         }
         intValue = intValue | orValue;
       }
-      if ("xor" in ops) {
+      if ('xor' in ops) {
         const xorValue = ops.xor;
-        if (typeof xorValue !== "number" || !Number.isInteger(xorValue)) {
+        if (typeof xorValue !== 'number' || !Number.isInteger(xorValue)) {
           throw new Error(`$bit xor value must be an integer`);
         }
         intValue = intValue ^ xorValue;
@@ -740,26 +749,24 @@ export function applyUpdateOperators<T extends Document>(
  * createDocumentFromFilter({ age: { $gt: 18 }, name: "Alice" })
  * // Returns: { name: "Alice" }
  */
-export function createDocumentFromFilter<T extends Document>(
-  filter: Filter<T>
-): T {
+export function createDocumentFromFilter<T extends Document>(filter: Filter<T>): T {
   const doc: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(filter)) {
     if (!isOperatorObject(value)) {
-      if (key.includes(".")) {
+      if (key.includes('.')) {
         setValueByPath(doc, key, value);
       } else {
         doc[key] = value;
       }
     } else if (
       value &&
-      typeof value === "object" &&
-      "$eq" in value &&
+      typeof value === 'object' &&
+      '$eq' in value &&
       Object.keys(value).length === 1
     ) {
       const eqValue = (value as { $eq: unknown }).$eq;
-      if (key.includes(".")) {
+      if (key.includes('.')) {
         setValueByPath(doc, key, eqValue);
       } else {
         doc[key] = eqValue;
@@ -797,7 +804,7 @@ export function createDocumentFromFilter<T extends Document>(
  */
 export function validateReplacement<T extends Document>(replacement: T): void {
   for (const key of Object.keys(replacement)) {
-    if (key.startsWith("$")) {
+    if (key.startsWith('$')) {
       throw new Error(
         "Replacement document must not contain update operators (keys starting with '$')"
       );

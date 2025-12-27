@@ -3,12 +3,12 @@ import {
   getValueByPath,
   compareValuesForSort,
   type ProjectionSpec,
-} from "./utils.ts";
-import { BadHintError } from "./errors.ts";
-import type { IndexInfo } from "./types.ts";
+} from './utils.ts';
+import { BadHintError } from './errors.ts';
+import type { IndexInfo } from './types.ts';
 
 type Document = Record<string, unknown>;
-type MetaSort = { $meta: "textScore" };
+type MetaSort = { $meta: 'textScore' };
 type SortSpec = Record<string, 1 | -1 | MetaSort>;
 type HintSpec = string | Record<string, unknown>;
 
@@ -16,7 +16,7 @@ type HintSpec = string | Record<string, unknown>;
  * Symbol key for storing text search scores on documents.
  * This is shared with MangoCollection.
  */
-const TEXT_SCORE_KEY = Symbol.for("mangodb.textScore");
+const TEXT_SCORE_KEY = Symbol.for('mangodb.textScore');
 
 /**
  * Get text score from a document.
@@ -32,10 +32,10 @@ export function getTextScore<D extends Document>(doc: D): number | undefined {
  */
 function isMetaSort(value: unknown): value is MetaSort {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "$meta" in value &&
-    (value as MetaSort).$meta === "textScore"
+    '$meta' in value &&
+    (value as MetaSort).$meta === 'textScore'
   );
 }
 
@@ -218,7 +218,7 @@ export class MangoCursor<T extends Document = Document> {
    */
   skip(n: number): MangoCursor<T> {
     if (n < 0) {
-      throw new Error("Skip value must be non-negative");
+      throw new Error('Skip value must be non-negative');
     }
     this.skipValue = n;
     return this;
@@ -287,8 +287,7 @@ export class MangoCursor<T extends Document = Document> {
   async toArray(): Promise<T[]> {
     // Validate hint if specified (but not for $natural which is always valid)
     if (this.hintSpec) {
-      const isNaturalHint =
-        typeof this.hintSpec === "object" && "$natural" in this.hintSpec;
+      const isNaturalHint = typeof this.hintSpec === 'object' && '$natural' in this.hintSpec;
 
       if (!isNaturalHint && this.hintValidator) {
         const isValid = await this.hintValidator(this.hintSpec);
@@ -301,11 +300,7 @@ export class MangoCursor<T extends Document = Document> {
     let docs = await this.fetchDocuments();
 
     // Handle $natural hint for scan direction
-    if (
-      this.hintSpec &&
-      typeof this.hintSpec === "object" &&
-      "$natural" in this.hintSpec
-    ) {
+    if (this.hintSpec && typeof this.hintSpec === 'object' && '$natural' in this.hintSpec) {
       const direction = this.hintSpec.$natural;
       if (direction === -1) {
         docs = [...docs].reverse();
@@ -315,10 +310,7 @@ export class MangoCursor<T extends Document = Document> {
     // Apply sort (skip if geoSorted and no explicit sort was requested)
     // For geo queries, documents are pre-sorted by distance
     if (this.sortSpec) {
-      const sortFields = Object.entries(this.sortSpec) as [
-        string,
-        1 | -1 | MetaSort,
-      ][];
+      const sortFields = Object.entries(this.sortSpec) as [string, 1 | -1 | MetaSort][];
       docs = [...docs].sort((a, b) => {
         for (const [field, directionOrMeta] of sortFields) {
           // Handle $meta: "textScore" sort - sort by text score descending

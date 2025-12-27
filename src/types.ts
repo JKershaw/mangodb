@@ -1,7 +1,7 @@
 /**
  * Common types and interfaces for MangoDB.
  */
-import type { ObjectId } from "bson";
+import type { ObjectId } from 'bson';
 
 /**
  * Base document type used throughout MangoDB.
@@ -57,17 +57,17 @@ export interface QueryOperators {
  * GeoJSON geometry types for geospatial queries.
  */
 export interface GeoJSONPoint {
-  type: "Point";
+  type: 'Point';
   coordinates: [number, number];
 }
 
 export interface GeoJSONPolygon {
-  type: "Polygon";
+  type: 'Polygon';
   coordinates: [number, number][][];
 }
 
 export interface GeoJSONLineString {
-  type: "LineString";
+  type: 'LineString';
   coordinates: [number, number][];
 }
 
@@ -75,10 +75,10 @@ export type GeoJSONGeometry =
   | GeoJSONPoint
   | GeoJSONPolygon
   | GeoJSONLineString
-  | { type: "MultiPoint"; coordinates: [number, number][] }
-  | { type: "MultiPolygon"; coordinates: [number, number][][][] }
-  | { type: "MultiLineString"; coordinates: [number, number][][] }
-  | { type: "GeometryCollection"; geometries: GeoJSONGeometry[] };
+  | { type: 'MultiPoint'; coordinates: [number, number][] }
+  | { type: 'MultiPolygon'; coordinates: [number, number][][][] }
+  | { type: 'MultiLineString'; coordinates: [number, number][][] }
+  | { type: 'GeometryCollection'; geometries: GeoJSONGeometry[] };
 
 /**
  * Specification for $geoWithin query operator.
@@ -230,7 +230,7 @@ export interface ProjectionElemMatch {
  * Projection operator for $meta - metadata projection (text score, etc).
  */
 export interface ProjectionMeta {
-  $meta: "textScore" | "indexKey";
+  $meta: 'textScore' | 'indexKey';
 }
 
 /**
@@ -280,7 +280,7 @@ export interface UpdateOperators {
   $max?: Record<string, unknown>;
   $mul?: Record<string, number>;
   $rename?: Record<string, string>;
-  $currentDate?: Record<string, boolean | { $type: "date" | "timestamp" }>;
+  $currentDate?: Record<string, boolean | { $type: 'date' | 'timestamp' }>;
   $setOnInsert?: Record<string, unknown>;
   $bit?: Record<string, { and?: number; or?: number; xor?: number }>;
 }
@@ -308,7 +308,7 @@ export interface FindOneAndReplaceOptions {
   projection?: ProjectionSpec;
   sort?: Record<string, 1 | -1>;
   upsert?: boolean;
-  returnDocument?: "before" | "after";
+  returnDocument?: 'before' | 'after';
 }
 
 /**
@@ -323,7 +323,7 @@ export interface FindOneAndUpdateOptions {
   projection?: ProjectionSpec;
   sort?: Record<string, 1 | -1>;
   upsert?: boolean;
-  returnDocument?: "before" | "after";
+  returnDocument?: 'before' | 'after';
 }
 
 /**
@@ -389,10 +389,7 @@ export interface BulkWriteResult {
  * - "2dsphere" for 2dsphere geospatial indexes
  * - "hashed" for hashed indexes
  */
-export type IndexKeySpec = Record<
-  string,
-  1 | -1 | "text" | "2d" | "2dsphere" | "hashed"
->;
+export type IndexKeySpec = Record<string, 1 | -1 | 'text' | '2d' | '2dsphere' | 'hashed'>;
 
 /**
  * Collation options for locale-aware string comparison.
@@ -410,10 +407,10 @@ export interface CollationOptions {
   locale: string;
   strength?: 1 | 2 | 3 | 4 | 5;
   caseLevel?: boolean;
-  caseFirst?: "upper" | "lower" | "off";
+  caseFirst?: 'upper' | 'lower' | 'off';
   numericOrdering?: boolean;
-  alternate?: "non-ignorable" | "shifted";
-  maxVariable?: "punct" | "space";
+  alternate?: 'non-ignorable' | 'shifted';
+  maxVariable?: 'punct' | 'space';
   backwards?: boolean;
 }
 
@@ -483,7 +480,7 @@ export interface IndexInfo {
   // Geospatial index metadata
   min?: number;
   max?: number;
-  "2dsphereIndexVersion"?: number;
+  '2dsphereIndexVersion'?: number;
   // Phase 11: New index metadata
   hidden?: boolean;
   collation?: CollationOptions;
@@ -707,7 +704,7 @@ export interface ListCollectionsOptions {
  */
 export interface CollectionInfo {
   name: string;
-  type: "collection" | "view";
+  type: 'collection' | 'view';
   options?: Record<string, unknown>;
   info?: {
     readOnly: boolean;

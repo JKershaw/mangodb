@@ -1,8 +1,8 @@
 /**
  * Document utilities for serialization, path access, comparison, and cloning.
  */
-import { ObjectId } from "bson";
-import type { Document } from "./types.ts";
+import { ObjectId } from 'bson';
+import type { Document } from './types.ts';
 
 /**
  * Type guard for serialized ObjectId format.
@@ -17,10 +17,10 @@ import type { Document } from "./types.ts";
 export function isSerializedObjectId(value: unknown): value is { $oid: string } {
   return (
     value !== null &&
-    typeof value === "object" &&
+    typeof value === 'object' &&
     !Array.isArray(value) &&
-    "$oid" in value &&
-    typeof (value as { $oid: unknown }).$oid === "string"
+    '$oid' in value &&
+    typeof (value as { $oid: unknown }).$oid === 'string'
   );
 }
 
@@ -37,10 +37,10 @@ export function isSerializedObjectId(value: unknown): value is { $oid: string } 
 export function isSerializedDate(value: unknown): value is { $date: string } {
   return (
     value !== null &&
-    typeof value === "object" &&
+    typeof value === 'object' &&
     !Array.isArray(value) &&
-    "$date" in value &&
-    typeof (value as { $date: unknown }).$date === "string"
+    '$date' in value &&
+    typeof (value as { $date: unknown }).$date === 'string'
   );
 }
 
@@ -59,7 +59,7 @@ export function isSerializedDate(value: unknown): value is { $date: string } {
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
     value !== null &&
-    typeof value === "object" &&
+    typeof value === 'object' &&
     !Array.isArray(value) &&
     !(value instanceof ObjectId) &&
     !(value instanceof Date)
@@ -82,11 +82,8 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
  * transformValue({ $oid: "507f1f77bcf86cd799439011" }, "deserialize")
  * // ObjectId("507f1f77bcf86cd799439011")
  */
-export function transformValue(
-  value: unknown,
-  mode: "serialize" | "deserialize"
-): unknown {
-  if (mode === "serialize") {
+export function transformValue(value: unknown, mode: 'serialize' | 'deserialize'): unknown {
+  if (mode === 'serialize') {
     if (value instanceof ObjectId) {
       return { $oid: value.toHexString() };
     }
@@ -126,7 +123,7 @@ export function transformValue(
  */
 export function transformDocument(
   doc: Record<string, unknown>,
-  mode: "serialize" | "deserialize"
+  mode: 'serialize' | 'deserialize'
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(doc)) {
@@ -146,10 +143,8 @@ export function transformDocument(
  * serializeDocument(doc)
  * // { _id: { $oid: "507f1f77bcf86cd799439011" }, createdAt: { $date: "..." } }
  */
-export function serializeDocument<T extends Document>(
-  doc: T
-): Record<string, unknown> {
-  return transformDocument(doc, "serialize");
+export function serializeDocument<T extends Document>(doc: T): Record<string, unknown> {
+  return transformDocument(doc, 'serialize');
 }
 
 /**
@@ -163,10 +158,8 @@ export function serializeDocument<T extends Document>(
  * deserializeDocument(serialized)
  * // { _id: ObjectId("507f1f77bcf86cd799439011"), createdAt: Date(...) }
  */
-export function deserializeDocument<T extends Document>(
-  doc: Record<string, unknown>
-): T {
-  return transformDocument(doc, "deserialize") as T;
+export function deserializeDocument<T extends Document>(doc: Record<string, unknown>): T {
+  return transformDocument(doc, 'deserialize') as T;
 }
 
 /**
@@ -184,7 +177,7 @@ export function deserializeDocument<T extends Document>(
  * getValuesByPath(doc, "user.email") // [undefined]
  */
 export function getValuesByPath(doc: unknown, path: string): unknown[] {
-  const parts = path.split(".");
+  const parts = path.split('.');
   let currentValues: unknown[] = [doc];
 
   for (const part of parts) {
@@ -202,18 +195,18 @@ export function getValuesByPath(doc: unknown, path: string): unknown[] {
           nextValues.push(current[index]);
         } else {
           for (const elem of current) {
-            if (elem !== null && typeof elem === "object" && !Array.isArray(elem)) {
+            if (elem !== null && typeof elem === 'object' && !Array.isArray(elem)) {
               nextValues.push((elem as Record<string, unknown>)[part]);
             } else if (Array.isArray(elem)) {
               for (const nested of elem) {
-                if (nested !== null && typeof nested === "object") {
+                if (nested !== null && typeof nested === 'object') {
                   nextValues.push((nested as Record<string, unknown>)[part]);
                 }
               }
             }
           }
         }
-      } else if (typeof current === "object") {
+      } else if (typeof current === 'object') {
         nextValues.push((current as Record<string, unknown>)[part]);
       } else {
         nextValues.push(undefined);
@@ -260,12 +253,8 @@ export function getValueByPath(doc: unknown, path: string): unknown {
  * setValueByPath(doc, "items.0.price", 10);
  * // doc is now { user: { name: "John" }, items: [{ price: 10 }] }
  */
-export function setValueByPath(
-  doc: Record<string, unknown>,
-  path: string,
-  value: unknown
-): void {
-  const parts = path.split(".");
+export function setValueByPath(doc: Record<string, unknown>, path: string, value: unknown): void {
+  const parts = path.split('.');
   let current: Record<string, unknown> = doc;
 
   for (let i = 0; i < parts.length - 1; i++) {
@@ -300,7 +289,7 @@ export function setValueByPath(
  * // doc unchanged, no error thrown
  */
 export function deleteValueByPath(doc: Record<string, unknown>, path: string): void {
-  const parts = path.split(".");
+  const parts = path.split('.');
   let current: Record<string, unknown> = doc;
 
   for (let i = 0; i < parts.length - 1; i++) {
@@ -308,7 +297,7 @@ export function deleteValueByPath(doc: Record<string, unknown>, path: string): v
     if (
       current[part] === undefined ||
       current[part] === null ||
-      typeof current[part] !== "object"
+      typeof current[part] !== 'object'
     ) {
       return;
     }
@@ -334,7 +323,7 @@ export function deleteValueByPath(doc: Record<string, unknown>, path: string): v
  * getValueAtPath(doc, "items.5") // undefined (index out of bounds)
  */
 export function getValueAtPath(doc: Record<string, unknown>, path: string): unknown {
-  const parts = path.split(".");
+  const parts = path.split('.');
   let current: unknown = doc;
 
   for (const part of parts) {
@@ -348,7 +337,7 @@ export function getValueAtPath(doc: Record<string, unknown>, path: string): unkn
       } else {
         return undefined;
       }
-    } else if (typeof current === "object") {
+    } else if (typeof current === 'object') {
       current = (current as Record<string, unknown>)[part];
     } else {
       return undefined;
@@ -377,12 +366,19 @@ export function getValueAtPath(doc: Record<string, unknown>, path: string): unkn
  */
 function _getBSONTypeOrder(value: unknown): number {
   if (value === null || value === undefined) return 1; // Null/undefined
-  if (typeof value === "number") return 2; // Numbers
-  if (typeof value === "string") return 3; // String
-  if (typeof value === "object" && !Array.isArray(value) && !(value instanceof Date) && !(value instanceof RegExp) && !(value instanceof ObjectId)) return 4; // Object
+  if (typeof value === 'number') return 2; // Numbers
+  if (typeof value === 'string') return 3; // String
+  if (
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    !(value instanceof Date) &&
+    !(value instanceof RegExp) &&
+    !(value instanceof ObjectId)
+  )
+    return 4; // Object
   if (Array.isArray(value)) return 5; // Array
   if (value instanceof ObjectId) return 7; // ObjectId
-  if (typeof value === "boolean") return 8; // Boolean
+  if (typeof value === 'boolean') return 8; // Boolean
   if (value instanceof Date) return 9; // Date
   if (value instanceof RegExp) return 11; // RegExp
   return 100; // Unknown types go last
@@ -395,7 +391,7 @@ export function compareValues(a: unknown, b: unknown): number {
 
   if (aIsNullish && bIsNullish) return 0;
   if (aIsNullish) return -1; // null/undefined is less than everything
-  if (bIsNullish) return 1;  // everything is greater than null/undefined
+  if (bIsNullish) return 1; // everything is greater than null/undefined
 
   if (a instanceof ObjectId && b instanceof ObjectId) {
     const aHex = a.toHexString();
@@ -410,16 +406,16 @@ export function compareValues(a: unknown, b: unknown): number {
   }
 
   if (typeof a === typeof b) {
-    if (typeof a === "number" && typeof b === "number") {
+    if (typeof a === 'number' && typeof b === 'number') {
       return a - b;
     }
-    if (typeof a === "string" && typeof b === "string") {
+    if (typeof a === 'string' && typeof b === 'string') {
       // MongoDB uses binary comparison by default (not locale-aware)
       if (a < b) return -1;
       if (a > b) return 1;
       return 0;
     }
-    if (typeof a === "boolean" && typeof b === "boolean") {
+    if (typeof a === 'boolean' && typeof b === 'boolean') {
       if (a === b) return 0;
       return a ? 1 : -1;
     }
@@ -466,8 +462,8 @@ export function valuesEqual(a: unknown, b: unknown, strictKeyOrder = false): boo
   if (
     a !== null &&
     b !== null &&
-    typeof a === "object" &&
-    typeof b === "object" &&
+    typeof a === 'object' &&
+    typeof b === 'object' &&
     !Array.isArray(a) &&
     !Array.isArray(b)
   ) {
@@ -526,7 +522,7 @@ export function cloneValue(value: unknown): unknown {
     return new Date(value.getTime());
   } else if (Array.isArray(value)) {
     return value.map((item) => cloneValue(item));
-  } else if (value && typeof value === "object") {
+  } else if (value && typeof value === 'object') {
     return cloneDocument(value as Document);
   }
   return value;

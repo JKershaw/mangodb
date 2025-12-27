@@ -3,15 +3,15 @@
  * Handles $box, $center, $centerSphere, $polygon, $geometry.
  */
 
-import type { Position, GeoJSONGeometry, GeoJSONPolygon, LinearRing } from "./geometry.ts";
-import { isValidGeoJSON, extractCoordinates } from "./geometry.ts";
+import type { Position, GeoJSONGeometry, GeoJSONPolygon, LinearRing } from './geometry.ts';
+import { isValidGeoJSON, extractCoordinates } from './geometry.ts';
 import {
   pointInCircle,
   pointInSphericalCircle,
   pointInPolygon,
   pointInBbox,
   geometryContainsPoint,
-} from "./calculations.ts";
+} from './calculations.ts';
 
 // Shape specifier types
 export interface BoxShape {
@@ -34,13 +34,18 @@ export interface GeometryShape {
   $geometry: GeoJSONGeometry;
 }
 
-export type GeoShape = BoxShape | CenterShape | CenterSphereShape | LegacyPolygonShape | GeometryShape;
+export type GeoShape =
+  | BoxShape
+  | CenterShape
+  | CenterSphereShape
+  | LegacyPolygonShape
+  | GeometryShape;
 
 /**
  * Check if value is a $box shape specifier.
  */
 export function isBoxShape(value: unknown): value is BoxShape {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
 
   if (!Array.isArray(obj.$box) || obj.$box.length !== 2) return false;
@@ -49,12 +54,12 @@ export function isBoxShape(value: unknown): value is BoxShape {
   return (
     Array.isArray(bottomLeft) &&
     bottomLeft.length >= 2 &&
-    typeof bottomLeft[0] === "number" &&
-    typeof bottomLeft[1] === "number" &&
+    typeof bottomLeft[0] === 'number' &&
+    typeof bottomLeft[1] === 'number' &&
     Array.isArray(topRight) &&
     topRight.length >= 2 &&
-    typeof topRight[0] === "number" &&
-    typeof topRight[1] === "number"
+    typeof topRight[0] === 'number' &&
+    typeof topRight[1] === 'number'
   );
 }
 
@@ -62,7 +67,7 @@ export function isBoxShape(value: unknown): value is BoxShape {
  * Check if value is a $center shape specifier.
  */
 export function isCenterShape(value: unknown): value is CenterShape {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
 
   if (!Array.isArray(obj.$center) || obj.$center.length !== 2) return false;
@@ -71,9 +76,9 @@ export function isCenterShape(value: unknown): value is CenterShape {
   return (
     Array.isArray(center) &&
     center.length >= 2 &&
-    typeof center[0] === "number" &&
-    typeof center[1] === "number" &&
-    typeof radius === "number" &&
+    typeof center[0] === 'number' &&
+    typeof center[1] === 'number' &&
+    typeof radius === 'number' &&
     radius >= 0
   );
 }
@@ -82,7 +87,7 @@ export function isCenterShape(value: unknown): value is CenterShape {
  * Check if value is a $centerSphere shape specifier.
  */
 export function isCenterSphereShape(value: unknown): value is CenterSphereShape {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
 
   if (!Array.isArray(obj.$centerSphere) || obj.$centerSphere.length !== 2) return false;
@@ -91,9 +96,9 @@ export function isCenterSphereShape(value: unknown): value is CenterSphereShape 
   return (
     Array.isArray(center) &&
     center.length >= 2 &&
-    typeof center[0] === "number" &&
-    typeof center[1] === "number" &&
-    typeof radius === "number" &&
+    typeof center[0] === 'number' &&
+    typeof center[1] === 'number' &&
+    typeof radius === 'number' &&
     radius >= 0
   );
 }
@@ -102,17 +107,13 @@ export function isCenterSphereShape(value: unknown): value is CenterSphereShape 
  * Check if value is a $polygon shape specifier.
  */
 export function isLegacyPolygonShape(value: unknown): value is LegacyPolygonShape {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
 
   if (!Array.isArray(obj.$polygon) || obj.$polygon.length < 3) return false;
 
   return obj.$polygon.every(
-    (p) =>
-      Array.isArray(p) &&
-      p.length >= 2 &&
-      typeof p[0] === "number" &&
-      typeof p[1] === "number"
+    (p) => Array.isArray(p) && p.length >= 2 && typeof p[0] === 'number' && typeof p[1] === 'number'
   );
 }
 
@@ -120,7 +121,7 @@ export function isLegacyPolygonShape(value: unknown): value is LegacyPolygonShap
  * Check if value is a $geometry shape specifier.
  */
 export function isGeometryShape(value: unknown): value is GeometryShape {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
 
   return isValidGeoJSON(obj.$geometry);
@@ -130,7 +131,7 @@ export function isGeometryShape(value: unknown): value is GeometryShape {
  * Parse a geo shape specifier and return a normalized form.
  */
 export function parseGeoShape(spec: unknown): GeoShape | null {
-  if (!spec || typeof spec !== "object") return null;
+  if (!spec || typeof spec !== 'object') return null;
 
   if (isGeometryShape(spec)) return spec;
   if (isBoxShape(spec)) return spec;
@@ -169,7 +170,11 @@ export function pointInCenterCircle(point: Position, center: Position, radius: n
  * Check if a point is within a $centerSphere (spherical circle).
  * $centerSphere: [[lng, lat], radiusInRadians]
  */
-export function pointInCenterSphere(point: Position, center: Position, radiusRadians: number): boolean {
+export function pointInCenterSphere(
+  point: Position,
+  center: Position,
+  radiusRadians: number
+): boolean {
   return pointInSphericalCircle(point, center, radiusRadians);
 }
 
@@ -189,7 +194,7 @@ export function pointInLegacyPolygon(point: Position, vertices: Position[]): boo
 
   // Convert to GeoJSON Polygon format
   const polygon: GeoJSONPolygon = {
-    type: "Polygon",
+    type: 'Polygon',
     coordinates: [ring],
   };
 
@@ -207,25 +212,25 @@ export function pointInGeometry(point: Position, geometry: GeoJSONGeometry): boo
  * Check if a point is within any of the supported shape specifiers.
  */
 export function pointWithinShape(point: Position, shape: GeoShape): boolean {
-  if ("$geometry" in shape) {
+  if ('$geometry' in shape) {
     return pointInGeometry(point, shape.$geometry);
   }
 
-  if ("$box" in shape) {
+  if ('$box' in shape) {
     return pointInBox(point, shape.$box);
   }
 
-  if ("$center" in shape) {
+  if ('$center' in shape) {
     const [center, radius] = shape.$center;
     return pointInCenterCircle(point, center as Position, radius);
   }
 
-  if ("$centerSphere" in shape) {
+  if ('$centerSphere' in shape) {
     const [center, radiusRadians] = shape.$centerSphere;
     return pointInCenterSphere(point, center as Position, radiusRadians);
   }
 
-  if ("$polygon" in shape) {
+  if ('$polygon' in shape) {
     return pointInLegacyPolygon(point, shape.$polygon as Position[]);
   }
 
@@ -236,14 +241,14 @@ export function pointWithinShape(point: Position, shape: GeoShape): boolean {
  * Get the shape specifier type for error messages.
  */
 export function getShapeType(spec: unknown): string | null {
-  if (!spec || typeof spec !== "object") return null;
+  if (!spec || typeof spec !== 'object') return null;
   const obj = spec as Record<string, unknown>;
 
-  if ("$geometry" in obj) return "$geometry";
-  if ("$box" in obj) return "$box";
-  if ("$center" in obj) return "$center";
-  if ("$centerSphere" in obj) return "$centerSphere";
-  if ("$polygon" in obj) return "$polygon";
+  if ('$geometry' in obj) return '$geometry';
+  if ('$box' in obj) return '$box';
+  if ('$center' in obj) return '$center';
+  if ('$centerSphere' in obj) return '$centerSphere';
+  if ('$polygon' in obj) return '$polygon';
 
   return null;
 }
@@ -257,7 +262,7 @@ export function validateGeoWithinShape(spec: unknown): GeoShape {
 
   if (!shape) {
     throw new Error(
-      "$geoWithin not supported with provided geometry: requires a $geometry, $box, $polygon, $center, or $centerSphere"
+      '$geoWithin not supported with provided geometry: requires a $geometry, $box, $polygon, $center, or $centerSphere'
     );
   }
 
@@ -270,18 +275,18 @@ export function validateGeoWithinShape(spec: unknown): GeoShape {
  * Throws an error if invalid.
  */
 export function validateGeoIntersectsShape(spec: unknown): GeometryShape {
-  if (!spec || typeof spec !== "object") {
-    throw new Error("$geoIntersects requires a $geometry argument");
+  if (!spec || typeof spec !== 'object') {
+    throw new Error('$geoIntersects requires a $geometry argument');
   }
 
   const obj = spec as Record<string, unknown>;
 
-  if (!("$geometry" in obj)) {
-    throw new Error("$geoIntersects requires a $geometry argument");
+  if (!('$geometry' in obj)) {
+    throw new Error('$geoIntersects requires a $geometry argument');
   }
 
   if (!isGeometryShape(spec)) {
-    throw new Error("$geoIntersects requires a valid GeoJSON geometry");
+    throw new Error('$geoIntersects requires a valid GeoJSON geometry');
   }
 
   return spec;
@@ -301,9 +306,9 @@ export function parseNearQuery(spec: unknown): NearQuery | null {
 
   // Direct GeoJSON Point
   if (
-    typeof spec === "object" &&
+    typeof spec === 'object' &&
     !Array.isArray(spec) &&
-    (spec as Record<string, unknown>).type === "Point"
+    (spec as Record<string, unknown>).type === 'Point'
   ) {
     const coords = extractCoordinates(spec);
     if (coords) {
@@ -320,7 +325,7 @@ export function parseNearQuery(spec: unknown): NearQuery | null {
   }
 
   // Object with $geometry and optional $maxDistance/$minDistance
-  if (typeof spec === "object" && !Array.isArray(spec)) {
+  if (typeof spec === 'object' && !Array.isArray(spec)) {
     const obj = spec as Record<string, unknown>;
 
     if (obj.$geometry) {
@@ -328,8 +333,8 @@ export function parseNearQuery(spec: unknown): NearQuery | null {
       if (coords) {
         return {
           point: coords,
-          maxDistance: typeof obj.$maxDistance === "number" ? obj.$maxDistance : undefined,
-          minDistance: typeof obj.$minDistance === "number" ? obj.$minDistance : undefined,
+          maxDistance: typeof obj.$maxDistance === 'number' ? obj.$maxDistance : undefined,
+          minDistance: typeof obj.$minDistance === 'number' ? obj.$minDistance : undefined,
         };
       }
     }

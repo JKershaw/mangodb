@@ -1,9 +1,9 @@
 /**
  * String expression operators.
  */
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
-import { getBSONTypeName } from "../helpers.ts";
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
+import { getBSONTypeName } from '../helpers.ts';
 
 export function evalConcat(
   args: unknown[],
@@ -18,13 +18,13 @@ export function evalConcat(
   }
 
   for (const v of values) {
-    if (typeof v !== "string") {
+    if (typeof v !== 'string') {
       const typeName = getBSONTypeName(v);
       throw new Error(`$concat only supports strings, not ${typeName}`);
     }
   }
 
-  return values.join("");
+  return values.join('');
 }
 
 export function evalToUpper(
@@ -36,11 +36,11 @@ export function evalToUpper(
   const value = evaluate(args, doc);
 
   if (value === null || value === undefined) {
-    return "";
+    return '';
   }
 
-  if (typeof value !== "string") {
-    throw new Error("$toUpper requires a string argument");
+  if (typeof value !== 'string') {
+    throw new Error('$toUpper requires a string argument');
   }
 
   return value.toUpperCase();
@@ -55,11 +55,11 @@ export function evalToLower(
   const value = evaluate(args, doc);
 
   if (value === null || value === undefined) {
-    return "";
+    return '';
   }
 
-  if (typeof value !== "string") {
-    throw new Error("$toLower requires a string argument");
+  if (typeof value !== 'string') {
+    throw new Error('$toLower requires a string argument');
   }
 
   return value.toLowerCase();
@@ -77,10 +77,10 @@ export function evalSubstrCP(
   const count = evaluate(countExpr, doc) as number;
 
   if (str === null || str === undefined) {
-    return "";
+    return '';
   }
 
-  if (typeof str !== "string") {
+  if (typeof str !== 'string') {
     const typeName = getBSONTypeName(str);
     throw new Error(`$substrCP requires a string argument, found: ${typeName}`);
   }
@@ -97,11 +97,11 @@ export function evalStrLenCP(
   const value = evaluate(args, doc);
 
   if (value === null || value === undefined) {
-    const typeName = value === null ? "null" : "missing";
+    const typeName = value === null ? 'null' : 'missing';
     throw new Error(`$strLenCP requires a string argument, found: ${typeName}`);
   }
 
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$strLenCP requires a string argument, found: ${typeName}`);
   }
@@ -123,16 +123,16 @@ export function evalSplit(
     return null;
   }
 
-  if (typeof str !== "string") {
+  if (typeof str !== 'string') {
     const typeName = getBSONTypeName(str);
     throw new Error(`$split requires a string as the first argument, found: ${typeName}`);
   }
 
   if (delim === null || delim === undefined) {
-    throw new Error("$split requires a string as the second argument, found: null");
+    throw new Error('$split requires a string as the second argument, found: null');
   }
 
-  if (typeof delim !== "string") {
+  if (typeof delim !== 'string') {
     const typeName = getBSONTypeName(delim);
     throw new Error(`$split requires a string as the second argument, found: ${typeName}`);
   }
@@ -150,13 +150,13 @@ export function evalTrim(
   const input = evaluate(spec.input, doc);
   const chars = spec.chars ? (evaluate(spec.chars, doc) as string) : undefined;
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$trim requires its input to be a string, got ${typeName}`);
   }
 
   if (chars) {
-    const charSet = new Set(chars.split(""));
+    const charSet = new Set(chars.split(''));
     let start = 0;
     let end = input.length;
     while (start < end && charSet.has(input[start])) start++;
@@ -177,13 +177,13 @@ export function evalLTrim(
   const input = evaluate(spec.input, doc);
   const chars = spec.chars ? (evaluate(spec.chars, doc) as string) : undefined;
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$ltrim requires its input to be a string, got ${typeName}`);
   }
 
   if (chars) {
-    const charSet = new Set(chars.split(""));
+    const charSet = new Set(chars.split(''));
     let start = 0;
     while (start < input.length && charSet.has(input[start])) start++;
     return input.substring(start);
@@ -202,13 +202,13 @@ export function evalRTrim(
   const input = evaluate(spec.input, doc);
   const chars = spec.chars ? (evaluate(spec.chars, doc) as string) : undefined;
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$rtrim requires its input to be a string, got ${typeName}`);
   }
 
   if (chars) {
-    const charSet = new Set(chars.split(""));
+    const charSet = new Set(chars.split(''));
     let end = input.length;
     while (end > 0 && charSet.has(input[end - 1])) end--;
     return input.substring(0, end);
@@ -229,15 +229,15 @@ export function evalToString(
     return null;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return value;
   }
 
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return String(value);
   }
 
@@ -245,7 +245,7 @@ export function evalToString(
     return value.toISOString();
   }
 
-  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === 'function') {
     return (value as { toHexString: () => string }).toHexString();
   }
 
@@ -270,15 +270,15 @@ export function evalIndexOfCP(
   }
 
   if (substr === null || substr === undefined) {
-    throw new Error("$indexOfCP requires a string as the second argument, found: null");
+    throw new Error('$indexOfCP requires a string as the second argument, found: null');
   }
 
-  if (typeof str !== "string") {
+  if (typeof str !== 'string') {
     const typeName = getBSONTypeName(str);
     throw new Error(`$indexOfCP requires a string as the first argument, found: ${typeName}`);
   }
 
-  if (typeof substr !== "string") {
+  if (typeof substr !== 'string') {
     const typeName = getBSONTypeName(substr);
     throw new Error(`$indexOfCP requires a string as the second argument, found: ${typeName}`);
   }
@@ -299,13 +299,13 @@ export function evalRegexFind(
   const spec = args as { input: unknown; regex: unknown; options?: unknown };
   const input = evaluate(spec.input, doc, vars);
   const regex = evaluate(spec.regex, doc, vars);
-  const options = spec.options ? (evaluate(spec.options, doc, vars) as string) : "";
+  const options = spec.options ? (evaluate(spec.options, doc, vars) as string) : '';
 
   if (input === null || input === undefined) {
     return null;
   }
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$regexFind requires a string input, not ${typeName}`);
   }
@@ -316,13 +316,13 @@ export function evalRegexFind(
   if (regex instanceof RegExp) {
     regexStr = regex.source;
     regexOptions = regex.flags + options;
-  } else if (typeof regex === "string") {
+  } else if (typeof regex === 'string') {
     regexStr = regex;
   } else {
-    throw new Error("$regexFind requires regex as string or RegExp");
+    throw new Error('$regexFind requires regex as string or RegExp');
   }
 
-  const re = new RegExp(regexStr, regexOptions.replace("g", ""));
+  const re = new RegExp(regexStr, regexOptions.replace('g', ''));
   const match = re.exec(input);
 
   if (!match) {
@@ -348,13 +348,13 @@ export function evalRegexFindAll(
   const spec = args as { input: unknown; regex: unknown; options?: unknown };
   const input = evaluate(spec.input, doc, vars);
   const regex = evaluate(spec.regex, doc, vars);
-  const options = spec.options ? (evaluate(spec.options, doc, vars) as string) : "";
+  const options = spec.options ? (evaluate(spec.options, doc, vars) as string) : '';
 
   if (input === null || input === undefined) {
     return [];
   }
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$regexFindAll requires a string input, not ${typeName}`);
   }
@@ -365,15 +365,15 @@ export function evalRegexFindAll(
   if (regex instanceof RegExp) {
     regexStr = regex.source;
     regexOptions = regex.flags + options;
-  } else if (typeof regex === "string") {
+  } else if (typeof regex === 'string') {
     regexStr = regex;
   } else {
-    throw new Error("$regexFindAll requires regex as string or RegExp");
+    throw new Error('$regexFindAll requires regex as string or RegExp');
   }
 
   // Always use global flag for findAll
-  if (!regexOptions.includes("g")) {
-    regexOptions += "g";
+  if (!regexOptions.includes('g')) {
+    regexOptions += 'g';
   }
 
   const re = new RegExp(regexStr, regexOptions);
@@ -403,13 +403,13 @@ export function evalRegexMatch(
   const spec = args as { input: unknown; regex: unknown; options?: unknown };
   const input = evaluate(spec.input, doc, vars);
   const regex = evaluate(spec.regex, doc, vars);
-  const options = spec.options ? (evaluate(spec.options, doc, vars) as string) : "";
+  const options = spec.options ? (evaluate(spec.options, doc, vars) as string) : '';
 
   if (input === null || input === undefined) {
     return false;
   }
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$regexMatch requires a string input, not ${typeName}`);
   }
@@ -420,10 +420,10 @@ export function evalRegexMatch(
   if (regex instanceof RegExp) {
     regexStr = regex.source;
     regexOptions = regex.flags + options;
-  } else if (typeof regex === "string") {
+  } else if (typeof regex === 'string') {
     regexStr = regex;
   } else {
-    throw new Error("$regexMatch requires regex as string or RegExp");
+    throw new Error('$regexMatch requires regex as string or RegExp');
   }
 
   const re = new RegExp(regexStr, regexOptions);
@@ -448,7 +448,7 @@ export function evalReplaceOne(
     return null;
   }
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$replaceOne requires a string input, not ${typeName}`);
   }
@@ -457,7 +457,7 @@ export function evalReplaceOne(
     throw new Error("$replaceOne requires a 'find' string");
   }
 
-  if (typeof find !== "string") {
+  if (typeof find !== 'string') {
     const typeName = getBSONTypeName(find);
     throw new Error(`$replaceOne requires a string for 'find', not ${typeName}`);
   }
@@ -466,7 +466,7 @@ export function evalReplaceOne(
     throw new Error("$replaceOne requires a 'replacement' string");
   }
 
-  if (typeof replacement !== "string") {
+  if (typeof replacement !== 'string') {
     const typeName = getBSONTypeName(replacement);
     throw new Error(`$replaceOne requires a string for 'replacement', not ${typeName}`);
   }
@@ -492,7 +492,7 @@ export function evalReplaceAll(
     return null;
   }
 
-  if (typeof input !== "string") {
+  if (typeof input !== 'string') {
     const typeName = getBSONTypeName(input);
     throw new Error(`$replaceAll requires a string input, not ${typeName}`);
   }
@@ -501,7 +501,7 @@ export function evalReplaceAll(
     throw new Error("$replaceAll requires a 'find' string");
   }
 
-  if (typeof find !== "string") {
+  if (typeof find !== 'string') {
     const typeName = getBSONTypeName(find);
     throw new Error(`$replaceAll requires a string for 'find', not ${typeName}`);
   }
@@ -510,7 +510,7 @@ export function evalReplaceAll(
     throw new Error("$replaceAll requires a 'replacement' string");
   }
 
-  if (typeof replacement !== "string") {
+  if (typeof replacement !== 'string') {
     const typeName = getBSONTypeName(replacement);
     throw new Error(`$replaceAll requires a string for 'replacement', not ${typeName}`);
   }
@@ -532,8 +532,8 @@ export function evalStrcasecmp(
   const str1 = evaluate(str1Expr, doc, vars);
   const str2 = evaluate(str2Expr, doc, vars);
 
-  const s1 = str1 === null || str1 === undefined ? "" : String(str1);
-  const s2 = str2 === null || str2 === undefined ? "" : String(str2);
+  const s1 = str1 === null || str1 === undefined ? '' : String(str1);
+  const s2 = str2 === null || str2 === undefined ? '' : String(str2);
 
   const lower1 = s1.toLowerCase();
   const lower2 = s2.toLowerCase();
@@ -555,11 +555,11 @@ export function evalStrLenBytes(
   const value = evaluate(args, doc);
 
   if (value === null || value === undefined) {
-    const typeName = value === null ? "null" : "missing";
+    const typeName = value === null ? 'null' : 'missing';
     throw new Error(`$strLenBytes requires a string argument, found: ${typeName}`);
   }
 
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$strLenBytes requires a string argument, found: ${typeName}`);
   }
@@ -587,8 +587,8 @@ export function evalIndexOfBytes(
     return null;
   }
 
-  if (typeof str !== "string" || typeof substr !== "string") {
-    throw new Error("$indexOfBytes requires string arguments");
+  if (typeof str !== 'string' || typeof substr !== 'string') {
+    throw new Error('$indexOfBytes requires string arguments');
   }
 
   // Convert to bytes
@@ -628,10 +628,10 @@ export function evalSubstrBytes(
   const count = evaluate(countExpr, doc) as number;
 
   if (str === null || str === undefined) {
-    return "";
+    return '';
   }
 
-  if (typeof str !== "string") {
+  if (typeof str !== 'string') {
     const typeName = getBSONTypeName(str);
     throw new Error(`$substrBytes requires a string argument, found: ${typeName}`);
   }

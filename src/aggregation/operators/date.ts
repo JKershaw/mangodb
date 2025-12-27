@@ -1,9 +1,9 @@
 /**
  * Date expression operators.
  */
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
-import { getBSONTypeName } from "../helpers.ts";
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
+import { getBSONTypeName } from '../helpers.ts';
 
 /**
  * Helper to extract and validate a date value for date operators.
@@ -39,7 +39,7 @@ export function evalYear(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$year", evaluate);
+  const value = extractDateValue(args, doc, vars, '$year', evaluate);
   if (value === null) return null;
   return value.getUTCFullYear();
 }
@@ -50,7 +50,7 @@ export function evalMonth(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$month", evaluate);
+  const value = extractDateValue(args, doc, vars, '$month', evaluate);
   if (value === null) return null;
   return value.getUTCMonth() + 1;
 }
@@ -61,7 +61,7 @@ export function evalDayOfMonth(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$dayOfMonth", evaluate);
+  const value = extractDateValue(args, doc, vars, '$dayOfMonth', evaluate);
   if (value === null) return null;
   return value.getUTCDate();
 }
@@ -72,7 +72,7 @@ export function evalHour(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$hour", evaluate);
+  const value = extractDateValue(args, doc, vars, '$hour', evaluate);
   if (value === null) return null;
   return value.getUTCHours();
 }
@@ -83,7 +83,7 @@ export function evalMinute(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$minute", evaluate);
+  const value = extractDateValue(args, doc, vars, '$minute', evaluate);
   if (value === null) return null;
   return value.getUTCMinutes();
 }
@@ -94,7 +94,7 @@ export function evalSecond(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$second", evaluate);
+  const value = extractDateValue(args, doc, vars, '$second', evaluate);
   if (value === null) return null;
   return value.getUTCSeconds();
 }
@@ -105,7 +105,7 @@ export function evalDayOfWeek(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$dayOfWeek", evaluate);
+  const value = extractDateValue(args, doc, vars, '$dayOfWeek', evaluate);
   if (value === null) return null;
   return value.getUTCDay() + 1;
 }
@@ -114,9 +114,9 @@ export function evalDayOfWeek(
  * Format a date according to MongoDB's format specifiers.
  */
 function formatDate(date: Date, format: string): string {
-  const pad2 = (n: number) => n.toString().padStart(2, "0");
-  const pad3 = (n: number) => n.toString().padStart(3, "0");
-  const pad4 = (n: number) => n.toString().padStart(4, "0");
+  const pad2 = (n: number) => n.toString().padStart(2, '0');
+  const pad3 = (n: number) => n.toString().padStart(3, '0');
+  const pad4 = (n: number) => n.toString().padStart(4, '0');
 
   const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 1);
   const dayOfYear = Math.floor((date.getTime() - startOfYear) / (24 * 60 * 60 * 1000)) + 1;
@@ -129,7 +129,9 @@ function formatDate(date: Date, format: string): string {
   const jan4 = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
   const jan4DayOfWeek = jan4.getUTCDay() || 7;
   const startOfISOWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 24 * 60 * 60 * 1000);
-  const daysSinceISOWeek1 = Math.floor((date.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000));
+  const daysSinceISOWeek1 = Math.floor(
+    (date.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000)
+  );
   let isoWeek = Math.floor(daysSinceISOWeek1 / 7) + 1;
   if (isoWeek < 1) isoWeek = 52;
   if (isoWeek > 52) isoWeek = 1;
@@ -177,7 +179,7 @@ export function evalDateToString(
     throw new Error(`$dateToString requires a valid date`);
   }
 
-  const format = spec.format || "%Y-%m-%dT%H:%M:%S.%LZ";
+  const format = spec.format || '%Y-%m-%dT%H:%M:%S.%LZ';
   return formatDate(dateValue, format);
 }
 
@@ -190,7 +192,7 @@ export function evalMillisecond(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$millisecond", evaluate);
+  const value = extractDateValue(args, doc, vars, '$millisecond', evaluate);
   if (value === null) return null;
   return value.getUTCMilliseconds();
 }
@@ -204,7 +206,7 @@ export function evalDayOfYear(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$dayOfYear", evaluate);
+  const value = extractDateValue(args, doc, vars, '$dayOfYear', evaluate);
   if (value === null) return null;
   const startOfYear = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
   return Math.floor((value.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000)) + 1;
@@ -219,12 +221,13 @@ export function evalWeek(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$week", evaluate);
+  const value = extractDateValue(args, doc, vars, '$week', evaluate);
   if (value === null) return null;
 
   const startOfYear = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
   const startDayOfWeek = startOfYear.getUTCDay();
-  const dayOfYear = Math.floor((value.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const dayOfYear =
+    Math.floor((value.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000)) + 1;
   return Math.floor((dayOfYear - 1 + startDayOfWeek) / 7);
 }
 
@@ -237,13 +240,15 @@ export function evalIsoWeek(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$isoWeek", evaluate);
+  const value = extractDateValue(args, doc, vars, '$isoWeek', evaluate);
   if (value === null) return null;
 
   const jan4 = new Date(Date.UTC(value.getUTCFullYear(), 0, 4));
   const jan4DayOfWeek = jan4.getUTCDay() || 7;
   const startOfISOWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 24 * 60 * 60 * 1000);
-  const daysSinceISOWeek1 = Math.floor((value.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000));
+  const daysSinceISOWeek1 = Math.floor(
+    (value.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000)
+  );
   let isoWeek = Math.floor(daysSinceISOWeek1 / 7) + 1;
 
   if (isoWeek < 1) isoWeek = 52;
@@ -261,7 +266,7 @@ export function evalIsoWeekYear(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$isoWeekYear", evaluate);
+  const value = extractDateValue(args, doc, vars, '$isoWeekYear', evaluate);
   if (value === null) return null;
 
   const jan4 = new Date(Date.UTC(value.getUTCFullYear(), 0, 4));
@@ -275,7 +280,9 @@ export function evalIsoWeekYear(
   // Check if we're in the last week of the year
   const nextJan4 = new Date(Date.UTC(value.getUTCFullYear() + 1, 0, 4));
   const nextJan4DayOfWeek = nextJan4.getUTCDay() || 7;
-  const startOfNextISOWeek1 = new Date(nextJan4.getTime() - (nextJan4DayOfWeek - 1) * 24 * 60 * 60 * 1000);
+  const startOfNextISOWeek1 = new Date(
+    nextJan4.getTime() - (nextJan4DayOfWeek - 1) * 24 * 60 * 60 * 1000
+  );
 
   if (value.getTime() >= startOfNextISOWeek1.getTime()) {
     return value.getUTCFullYear() + 1;
@@ -293,7 +300,7 @@ export function evalIsoDayOfWeek(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): number | null {
-  const value = extractDateValue(args, doc, vars, "$isoDayOfWeek", evaluate);
+  const value = extractDateValue(args, doc, vars, '$isoDayOfWeek', evaluate);
   if (value === null) return null;
   const day = value.getUTCDay();
   return day === 0 ? 7 : day;
@@ -304,23 +311,23 @@ export function evalIsoDayOfWeek(
  */
 function _getTimeUnitMs(unit: string): number {
   switch (unit) {
-    case "year":
+    case 'year':
       return 365 * 24 * 60 * 60 * 1000; // Approximate
-    case "quarter":
+    case 'quarter':
       return 91 * 24 * 60 * 60 * 1000; // Approximate
-    case "month":
+    case 'month':
       return 30 * 24 * 60 * 60 * 1000; // Approximate
-    case "week":
+    case 'week':
       return 7 * 24 * 60 * 60 * 1000;
-    case "day":
+    case 'day':
       return 24 * 60 * 60 * 1000;
-    case "hour":
+    case 'hour':
       return 60 * 60 * 1000;
-    case "minute":
+    case 'minute':
       return 60 * 1000;
-    case "second":
+    case 'second':
       return 1000;
-    case "millisecond":
+    case 'millisecond':
       return 1;
     default:
       throw new Error(`Invalid time unit: ${unit}`);
@@ -353,31 +360,31 @@ export function evalDateAdd(
   const date = new Date(startDate.getTime());
 
   switch (unit) {
-    case "year":
+    case 'year':
       date.setUTCFullYear(date.getUTCFullYear() + amount);
       break;
-    case "quarter":
+    case 'quarter':
       date.setUTCMonth(date.getUTCMonth() + amount * 3);
       break;
-    case "month":
+    case 'month':
       date.setUTCMonth(date.getUTCMonth() + amount);
       break;
-    case "week":
+    case 'week':
       date.setUTCDate(date.getUTCDate() + amount * 7);
       break;
-    case "day":
+    case 'day':
       date.setUTCDate(date.getUTCDate() + amount);
       break;
-    case "hour":
+    case 'hour':
       date.setUTCHours(date.getUTCHours() + amount);
       break;
-    case "minute":
+    case 'minute':
       date.setUTCMinutes(date.getUTCMinutes() + amount);
       break;
-    case "second":
+    case 'second':
       date.setUTCSeconds(date.getUTCSeconds() + amount);
       break;
-    case "millisecond":
+    case 'millisecond':
       date.setUTCMilliseconds(date.getUTCMilliseconds() + amount);
       break;
     default:
@@ -423,36 +430,36 @@ export function evalDateDiff(
   }
 
   if (!(startDate instanceof Date) || !(endDate instanceof Date)) {
-    throw new Error("$dateDiff requires date arguments");
+    throw new Error('$dateDiff requires date arguments');
   }
 
   const diffMs = endDate.getTime() - startDate.getTime();
   const unit = spec.unit.toLowerCase();
 
   switch (unit) {
-    case "year":
+    case 'year':
       return endDate.getUTCFullYear() - startDate.getUTCFullYear();
-    case "quarter": {
+    case 'quarter': {
       const startQ = startDate.getUTCFullYear() * 4 + Math.floor(startDate.getUTCMonth() / 3);
       const endQ = endDate.getUTCFullYear() * 4 + Math.floor(endDate.getUTCMonth() / 3);
       return endQ - startQ;
     }
-    case "month":
+    case 'month':
       return (
         (endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
         (endDate.getUTCMonth() - startDate.getUTCMonth())
       );
-    case "week":
+    case 'week':
       return Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
-    case "day":
+    case 'day':
       return Math.floor(diffMs / (24 * 60 * 60 * 1000));
-    case "hour":
+    case 'hour':
       return Math.floor(diffMs / (60 * 60 * 1000));
-    case "minute":
+    case 'minute':
       return Math.floor(diffMs / (60 * 1000));
-    case "second":
+    case 'second':
       return Math.floor(diffMs / 1000);
-    case "millisecond":
+    case 'millisecond':
       return diffMs;
     default:
       throw new Error(`Invalid time unit: ${unit}`);
@@ -481,11 +488,12 @@ export function evalDateFromParts(
     isoDayOfWeek?: unknown;
   };
 
-  if ("isoWeekYear" in spec) {
+  if ('isoWeekYear' in spec) {
     // ISO week date format
     const isoWeekYear = evaluate(spec.isoWeekYear, doc, vars) as number;
     const isoWeek = spec.isoWeek !== undefined ? (evaluate(spec.isoWeek, doc, vars) as number) : 1;
-    const isoDayOfWeek = spec.isoDayOfWeek !== undefined ? (evaluate(spec.isoDayOfWeek, doc, vars) as number) : 1;
+    const isoDayOfWeek =
+      spec.isoDayOfWeek !== undefined ? (evaluate(spec.isoDayOfWeek, doc, vars) as number) : 1;
 
     if (isoWeekYear === null) return null;
 
@@ -497,8 +505,8 @@ export function evalDateFromParts(
     // Add weeks and days
     const targetDate = new Date(
       startOfISOWeek1.getTime() +
-      (isoWeek - 1) * 7 * 24 * 60 * 60 * 1000 +
-      (isoDayOfWeek - 1) * 24 * 60 * 60 * 1000
+        (isoWeek - 1) * 7 * 24 * 60 * 60 * 1000 +
+        (isoDayOfWeek - 1) * 24 * 60 * 60 * 1000
     );
 
     return targetDate;
@@ -510,7 +518,8 @@ export function evalDateFromParts(
     const hour = spec.hour !== undefined ? (evaluate(spec.hour, doc, vars) as number) : 0;
     const minute = spec.minute !== undefined ? (evaluate(spec.minute, doc, vars) as number) : 0;
     const second = spec.second !== undefined ? (evaluate(spec.second, doc, vars) as number) : 0;
-    const millisecond = spec.millisecond !== undefined ? (evaluate(spec.millisecond, doc, vars) as number) : 0;
+    const millisecond =
+      spec.millisecond !== undefined ? (evaluate(spec.millisecond, doc, vars) as number) : 0;
 
     if (year === null) return null;
 
@@ -547,7 +556,9 @@ export function evalDateToParts(
     const jan4 = new Date(Date.UTC(dateValue.getUTCFullYear(), 0, 4));
     const jan4DayOfWeek = jan4.getUTCDay() || 7;
     const startOfISOWeek1 = new Date(jan4.getTime() - (jan4DayOfWeek - 1) * 24 * 60 * 60 * 1000);
-    const daysSinceISOWeek1 = Math.floor((dateValue.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000));
+    const daysSinceISOWeek1 = Math.floor(
+      (dateValue.getTime() - startOfISOWeek1.getTime()) / (24 * 60 * 60 * 1000)
+    );
     let isoWeek = Math.floor(daysSinceISOWeek1 / 7) + 1;
     let isoWeekYear = dateValue.getUTCFullYear();
 
@@ -591,7 +602,12 @@ export function evalDateFromString(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): Date | null {
-  const spec = args as { dateString: unknown; format?: string; onNull?: unknown; onError?: unknown };
+  const spec = args as {
+    dateString: unknown;
+    format?: string;
+    onNull?: unknown;
+    onError?: unknown;
+  };
   const dateString = evaluate(spec.dateString, doc, vars);
 
   if (dateString === null || dateString === undefined) {
@@ -601,11 +617,11 @@ export function evalDateFromString(
     return null;
   }
 
-  if (typeof dateString !== "string") {
+  if (typeof dateString !== 'string') {
     if (spec.onError !== undefined) {
       return evaluate(spec.onError, doc, vars) as Date | null;
     }
-    throw new Error("$dateFromString requires a string");
+    throw new Error('$dateFromString requires a string');
   }
 
   // Try to parse ISO format by default

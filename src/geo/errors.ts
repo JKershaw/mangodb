@@ -9,14 +9,11 @@
  */
 export class GeoIndexRequiredError extends Error {
   readonly code = 291;
-  readonly codeName = "IndexNotFound";
+  readonly codeName = 'IndexNotFound';
 
   constructor(operator: string) {
-    super(
-      `error processing query: ns=unknown: ` +
-        `${operator} requires a 2d or 2dsphere index`
-    );
-    this.name = "GeoIndexRequiredError";
+    super(`error processing query: ns=unknown: ` + `${operator} requires a 2d or 2dsphere index`);
+    this.name = 'GeoIndexRequiredError';
   }
 }
 
@@ -25,13 +22,11 @@ export class GeoIndexRequiredError extends Error {
  */
 export class GeoNearIndexRequiredError extends Error {
   readonly code = 291;
-  readonly codeName = "IndexNotFound";
+  readonly codeName = 'IndexNotFound';
 
   constructor() {
-    super(
-      "unable to find index for $geoNear query"
-    );
-    this.name = "GeoNearIndexRequiredError";
+    super('unable to find index for $geoNear query');
+    this.name = 'GeoNearIndexRequiredError';
   }
 }
 
@@ -40,11 +35,11 @@ export class GeoNearIndexRequiredError extends Error {
  */
 export class InvalidGeoJSONError extends Error {
   readonly code = 16755;
-  readonly codeName = "Location16755";
+  readonly codeName = 'Location16755';
 
   constructor(message: string) {
     super(`Can't extract geo keys: ${message}`);
-    this.name = "InvalidGeoJSONError";
+    this.name = 'InvalidGeoJSONError';
   }
 }
 
@@ -53,11 +48,11 @@ export class InvalidGeoJSONError extends Error {
  */
 export class GeoNearNotFirstError extends Error {
   readonly code = 40602;
-  readonly codeName = "Location40602";
+  readonly codeName = 'Location40602';
 
   constructor() {
-    super("$geoNear is only valid as the first stage in an aggregation pipeline");
-    this.name = "GeoNearNotFirstError";
+    super('$geoNear is only valid as the first stage in an aggregation pipeline');
+    this.name = 'GeoNearNotFirstError';
   }
 }
 
@@ -66,11 +61,11 @@ export class GeoNearNotFirstError extends Error {
  */
 export class GeoNearMissingFieldError extends Error {
   readonly code = 40412;
-  readonly codeName = "Location40412";
+  readonly codeName = 'Location40412';
 
   constructor(field: string) {
     super(`$geoNear requires a '${field}' option`);
-    this.name = "GeoNearMissingFieldError";
+    this.name = 'GeoNearMissingFieldError';
   }
 }
 
@@ -79,14 +74,14 @@ export class GeoNearMissingFieldError extends Error {
  */
 export class InvalidGeoWithinError extends Error {
   readonly code = 2;
-  readonly codeName = "BadValue";
+  readonly codeName = 'BadValue';
 
   constructor() {
     super(
-      "$geoWithin not supported with provided geometry: " +
-        "requires a $geometry, $box, $polygon, $center, or $centerSphere"
+      '$geoWithin not supported with provided geometry: ' +
+        'requires a $geometry, $box, $polygon, $center, or $centerSphere'
     );
-    this.name = "InvalidGeoWithinError";
+    this.name = 'InvalidGeoWithinError';
   }
 }
 
@@ -95,11 +90,11 @@ export class InvalidGeoWithinError extends Error {
  */
 export class InvalidGeoIntersectsError extends Error {
   readonly code = 2;
-  readonly codeName = "BadValue";
+  readonly codeName = 'BadValue';
 
   constructor() {
-    super("$geoIntersects requires a $geometry argument");
-    this.name = "InvalidGeoIntersectsError";
+    super('$geoIntersects requires a $geometry argument');
+    this.name = 'InvalidGeoIntersectsError';
   }
 }
 
@@ -108,11 +103,11 @@ export class InvalidGeoIntersectsError extends Error {
  */
 export class DuplicateGeoIndexError extends Error {
   readonly code = 16800;
-  readonly codeName = "Location16800";
+  readonly codeName = 'Location16800';
 
   constructor(field: string) {
     super(`can't have 2 geo indexes on a single collection: already have ${field}`);
-    this.name = "DuplicateGeoIndexError";
+    this.name = 'DuplicateGeoIndexError';
   }
 }
 
@@ -121,10 +116,10 @@ export class DuplicateGeoIndexError extends Error {
  */
 export class CoordinateOutOfBoundsError extends Error {
   readonly code = 16755;
-  readonly codeName = "Location16755";
+  readonly codeName = 'Location16755';
 
-  constructor(type: "longitude" | "latitude", value: number) {
+  constructor(type: 'longitude' | 'latitude', value: number) {
     super(`Can't extract geo keys: ${type}/latitude is out of bounds, ${type}: ${value}`);
-    this.name = "CoordinateOutOfBoundsError";
+    this.name = 'CoordinateOutOfBoundsError';
   }
 }

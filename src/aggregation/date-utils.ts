@@ -9,15 +9,15 @@
  * Valid time units for date operations.
  */
 export type TimeUnit =
-  | "year"
-  | "quarter"
-  | "month"
-  | "week"
-  | "day"
-  | "hour"
-  | "minute"
-  | "second"
-  | "millisecond";
+  | 'year'
+  | 'quarter'
+  | 'month'
+  | 'week'
+  | 'day'
+  | 'hour'
+  | 'minute'
+  | 'second'
+  | 'millisecond';
 
 /**
  * Add a step amount to a date by a given time unit.
@@ -32,31 +32,31 @@ export function addDateStep(date: Date, step: number, unit: TimeUnit): Date {
   const result = new Date(date.getTime());
 
   switch (unit) {
-    case "year":
+    case 'year':
       result.setUTCFullYear(result.getUTCFullYear() + step);
       break;
-    case "quarter":
+    case 'quarter':
       result.setUTCMonth(result.getUTCMonth() + step * 3);
       break;
-    case "month":
+    case 'month':
       result.setUTCMonth(result.getUTCMonth() + step);
       break;
-    case "week":
+    case 'week':
       result.setUTCDate(result.getUTCDate() + step * 7);
       break;
-    case "day":
+    case 'day':
       result.setUTCDate(result.getUTCDate() + step);
       break;
-    case "hour":
+    case 'hour':
       result.setUTCHours(result.getUTCHours() + step);
       break;
-    case "minute":
+    case 'minute':
       result.setUTCMinutes(result.getUTCMinutes() + step);
       break;
-    case "second":
+    case 'second':
       result.setUTCSeconds(result.getUTCSeconds() + step);
       break;
-    case "millisecond":
+    case 'millisecond':
       result.setUTCMilliseconds(result.getUTCMilliseconds() + step);
       break;
     default:
@@ -74,40 +74,33 @@ export function addDateStep(date: Date, step: number, unit: TimeUnit): Date {
  * @param unit - The time unit
  * @returns The difference in the specified unit
  */
-export function dateDiff(
-  startDate: Date,
-  endDate: Date,
-  unit: TimeUnit
-): number {
+export function dateDiff(startDate: Date, endDate: Date, unit: TimeUnit): number {
   const diffMs = endDate.getTime() - startDate.getTime();
 
   switch (unit) {
-    case "year":
+    case 'year':
       return endDate.getUTCFullYear() - startDate.getUTCFullYear();
-    case "quarter": {
-      const startQ =
-        startDate.getUTCFullYear() * 4 +
-        Math.floor(startDate.getUTCMonth() / 3);
-      const endQ =
-        endDate.getUTCFullYear() * 4 + Math.floor(endDate.getUTCMonth() / 3);
+    case 'quarter': {
+      const startQ = startDate.getUTCFullYear() * 4 + Math.floor(startDate.getUTCMonth() / 3);
+      const endQ = endDate.getUTCFullYear() * 4 + Math.floor(endDate.getUTCMonth() / 3);
       return endQ - startQ;
     }
-    case "month":
+    case 'month':
       return (
         (endDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
         (endDate.getUTCMonth() - startDate.getUTCMonth())
       );
-    case "week":
+    case 'week':
       return Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
-    case "day":
+    case 'day':
       return Math.floor(diffMs / (24 * 60 * 60 * 1000));
-    case "hour":
+    case 'hour':
       return Math.floor(diffMs / (60 * 60 * 1000));
-    case "minute":
+    case 'minute':
       return Math.floor(diffMs / (60 * 1000));
-    case "second":
+    case 'second':
       return Math.floor(diffMs / 1000);
-    case "millisecond":
+    case 'millisecond':
       return diffMs;
     default:
       throw new Error(`Invalid time unit: ${unit}`);
@@ -119,15 +112,15 @@ export function dateDiff(
  */
 export function isValidTimeUnit(unit: string): unit is TimeUnit {
   return [
-    "year",
-    "quarter",
-    "month",
-    "week",
-    "day",
-    "hour",
-    "minute",
-    "second",
-    "millisecond",
+    'year',
+    'quarter',
+    'month',
+    'week',
+    'day',
+    'hour',
+    'minute',
+    'second',
+    'millisecond',
   ].includes(unit.toLowerCase());
 }
 
@@ -151,12 +144,7 @@ export function normalizeTimeUnit(unit: string): TimeUnit {
  * @param unit - Time unit for stepping
  * @returns Array of dates from start to just before end
  */
-export function generateDateSequence(
-  start: Date,
-  end: Date,
-  step: number,
-  unit: TimeUnit
-): Date[] {
+export function generateDateSequence(start: Date, end: Date, step: number, unit: TimeUnit): Date[] {
   const result: Date[] = [];
   let current = new Date(start.getTime());
 

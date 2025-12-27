@@ -8,12 +8,20 @@
  * - update-operators.ts: Update operations
  * - index-manager.ts: Index management
  */
-import { ObjectId } from "bson";
-import { MangoCursor, IndexCursor } from "./cursor.ts";
-import { AggregationCursor, type AggregationDbContext } from "./aggregation/index.ts";
-import { applyProjection, compareValuesForSort } from "./utils.ts";
-import { readFile, writeFile, mkdir, unlink, rename as renameFile, access, stat } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { ObjectId } from 'bson';
+import { MangoCursor, IndexCursor } from './cursor.ts';
+import { AggregationCursor, type AggregationDbContext } from './aggregation/index.ts';
+import { applyProjection, compareValuesForSort } from './utils.ts';
+import {
+  readFile,
+  writeFile,
+  mkdir,
+  unlink,
+  rename as renameFile,
+  access,
+  stat,
+} from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 
 import type {
   Document,
@@ -38,7 +46,7 @@ import type {
   AggregateOptions,
   RenameOptions,
   CollectionStats,
-} from "./types.ts";
+} from './types.ts';
 
 import {
   serializeDocument,
@@ -46,18 +54,18 @@ import {
   getValueByPath,
   setValueByPath,
   documentsEqual,
-} from "./document-utils.ts";
+} from './document-utils.ts';
 
-import { matchesFilter } from "./query-matcher.ts";
+import { matchesFilter } from './query-matcher.ts';
 
 import {
   applyUpdateOperators,
   createDocumentFromFilter,
   validateReplacement,
   type PositionalContext,
-} from "./update-operators.ts";
+} from './update-operators.ts';
 
-import { IndexManager } from "./index-manager.ts";
+import { IndexManager } from './index-manager.ts';
 
 import {
   TextIndexRequiredError,
@@ -65,13 +73,9 @@ import {
   TargetNamespaceExistsError,
   IllegalOperationError,
   InvalidNamespaceError,
-} from "./errors.ts";
+} from './errors.ts';
 
-import {
-  extractNearQuery,
-  evaluateNear,
-  GeoIndexRequiredError,
-} from "./geo/index.ts";
+import { extractNearQuery, evaluateNear, GeoIndexRequiredError } from './geo/index.ts';
 
 // Re-export types for backward compatibility
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
@@ -84,8 +88,8 @@ function idsEqual(id1: unknown, id2: unknown): boolean {
   if (id1 === undefined || id2 === undefined) return false;
   // Use .equals() if both are ObjectIds
   if (
-    typeof (id1 as ObjectId).equals === "function" &&
-    typeof (id2 as ObjectId).equals === "function"
+    typeof (id1 as ObjectId).equals === 'function' &&
+    typeof (id2 as ObjectId).equals === 'function'
   ) {
     return (id1 as ObjectId).equals(id2 as ObjectId);
   }
@@ -139,11 +143,11 @@ export class MangoCollection<T extends Document = Document> {
 
   private async readDocuments(): Promise<T[]> {
     try {
-      const content = await readFile(this.filePath, "utf-8");
+      const content = await readFile(this.filePath, 'utf-8');
       const parsed = JSON.parse(content);
       return parsed.map((doc: Record<string, unknown>) => deserializeDocument<T>(doc));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return [];
       }
       throw error;
@@ -193,15 +197,15 @@ export class MangoCollection<T extends Document = Document> {
       if (match[1].trim().length > 0) {
         phrases.push(match[1]);
       }
-      remaining = remaining.replace(match[0], " ");
+      remaining = remaining.replace(match[0], ' ');
     }
 
     // Process remaining terms
     const tokens = remaining.split(/\s+/).filter((t) => t.length > 0);
     for (const token of tokens) {
-      if (token.startsWith("-") && token.length > 1) {
+      if (token.startsWith('-') && token.length > 1) {
         excludeTerms.push(token.slice(1));
-      } else if (!token.startsWith("-")) {
+      } else if (!token.startsWith('-')) {
         includeTerms.push(token);
       }
     }
@@ -237,7 +241,7 @@ export class MangoCollection<T extends Document = Document> {
     caseSensitive: boolean = false
   ): number {
     // Empty search string matches nothing
-    if (!searchString || searchString.trim() === "") {
+    if (!searchString || searchString.trim() === '') {
       return 0;
     }
 
@@ -252,7 +256,7 @@ export class MangoCollection<T extends Document = Document> {
     const allTextContent: string[] = [];
     for (const field of textFields) {
       const value = getValueByPath(doc, field);
-      if (typeof value === "string") {
+      if (typeof value === 'string') {
         allTextContent.push(value);
       }
     }
@@ -261,7 +265,7 @@ export class MangoCollection<T extends Document = Document> {
       return 0;
     }
 
-    const fullText = allTextContent.join(" ");
+    const fullText = allTextContent.join(' ');
     const normalizedFullText = caseSensitive ? fullText : fullText.toLowerCase();
     const textTokens = this.tokenizeText(normalizedFullText);
 
@@ -299,8 +303,8 @@ export class MangoCollection<T extends Document = Document> {
     for (const phrase of phrases) {
       const normalizedPhrase = caseSensitive ? phrase : phrase.toLowerCase();
       // Use 'g' flag only; case sensitivity is already handled by normalizing text
-      const regexFlags = caseSensitive ? "g" : "gi";
-      const regex = new RegExp(normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), regexFlags);
+      const regexFlags = caseSensitive ? 'g' : 'gi';
+      const regex = new RegExp(normalizedPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), regexFlags);
       const matches = (normalizedFullText.match(regex) || []).length;
       score += matches * 2; // Weight phrases higher
     }
@@ -318,7 +322,7 @@ export class MangoCollection<T extends Document = Document> {
    * Symbol for storing text scores on documents (internal use).
    * Shared with cursor.ts via Symbol.for() for cross-module access.
    */
-  private static readonly TEXT_SCORE_KEY = Symbol.for("mangodb.textScore");
+  private static readonly TEXT_SCORE_KEY = Symbol.for('mangodb.textScore');
 
   /**
    * Filter documents with $text query support.
@@ -342,7 +346,7 @@ export class MangoCollection<T extends Document = Document> {
         throw new TextIndexRequiredError();
       }
 
-      const searchString = textQuery.$search || "";
+      const searchString = textQuery.$search || '';
       const caseSensitive = textQuery.$caseSensitive || false;
 
       // Create a filter without $text for additional conditions
@@ -401,10 +405,7 @@ export class MangoCollection<T extends Document = Document> {
    * await collection.createIndex({ lastName: 1, firstName: 1 });
    * ```
    */
-  async createIndex(
-    keySpec: IndexKeySpec,
-    options: CreateIndexOptions = {}
-  ): Promise<string> {
+  async createIndex(keySpec: IndexKeySpec, options: CreateIndexOptions = {}): Promise<string> {
     return this.indexManager.createIndex(keySpec, options);
   }
 
@@ -475,13 +476,13 @@ export class MangoCollection<T extends Document = Document> {
    * await collection.dropIndexes(["email_1", "name_1"]);
    * ```
    */
-  async dropIndexes(indexNames?: "*" | string[]): Promise<void> {
+  async dropIndexes(indexNames?: '*' | string[]): Promise<void> {
     const indexes = await this.indexManager.indexes();
 
-    if (indexNames === "*" || indexNames === undefined) {
+    if (indexNames === '*' || indexNames === undefined) {
       // Drop all non-_id indexes
       for (const idx of indexes) {
-        if (idx.name !== "_id_") {
+        if (idx.name !== '_id_') {
           await this.indexManager.dropIndex(idx.name);
         }
       }
@@ -548,7 +549,7 @@ export class MangoCollection<T extends Document = Document> {
     const documents = await this.readDocuments();
 
     const docWithId = { ...doc };
-    if (!("_id" in docWithId)) {
+    if (!('_id' in docWithId)) {
       (docWithId as Record<string, unknown>)._id = new ObjectId();
     }
 
@@ -590,7 +591,7 @@ export class MangoCollection<T extends Document = Document> {
 
     for (let i = 0; i < docs.length; i++) {
       const docWithId = { ...docs[i] };
-      if (!("_id" in docWithId)) {
+      if (!('_id' in docWithId)) {
         (docWithId as Record<string, unknown>)._id = new ObjectId();
       }
       docsWithIds.push(docWithId);
@@ -717,13 +718,13 @@ export class MangoCollection<T extends Document = Document> {
     const hintValidator = async (hint: string | Record<string, unknown>): Promise<boolean> => {
       const indexes = await this.indexManager.indexes();
 
-      if (typeof hint === "string") {
+      if (typeof hint === 'string') {
         // Hint by index name
         return indexes.some((idx) => idx.name === hint);
       } else {
         // Hint by key pattern - generate name and check
         const hintName = this.indexManager.generateIndexName(
-          hint as Record<string, 1 | -1 | "text">
+          hint as Record<string, 1 | -1 | 'text'>
         );
         return indexes.some((idx) => idx.name === hintName);
       }
@@ -772,19 +773,20 @@ export class MangoCollection<T extends Document = Document> {
     // Verify geo index exists on the field
     const indexType = await this.indexManager.hasGeoIndex(geoField);
     if (!indexType) {
-      throw new GeoIndexRequiredError(spherical ? "$nearSphere" : "$near");
+      throw new GeoIndexRequiredError(spherical ? '$nearSphere' : '$near');
     }
 
     // Use spherical calculations for 2dsphere indexes regardless of operator
-    const useSpherical = indexType === "2dsphere" || spherical;
+    const useSpherical = indexType === '2dsphere' || spherical;
 
     // Read all documents
     const documents = await this.readDocuments();
 
     // Apply remaining filter first
-    const filtered = Object.keys(remainingFilter).length > 0
-      ? await this.filterWithTextSupport(documents, remainingFilter)
-      : documents;
+    const filtered =
+      Object.keys(remainingFilter).length > 0
+        ? await this.filterWithTextSupport(documents, remainingFilter)
+        : documents;
 
     // Calculate distances and filter
     const withDistances: Array<{ doc: T; distance: number }> = [];
@@ -850,10 +852,7 @@ export class MangoCollection<T extends Document = Document> {
    * ]).toArray();
    * ```
    */
-  aggregate(
-    pipeline: PipelineStage[],
-    _options?: AggregateOptions
-  ): AggregationCursor<T> {
+  aggregate(pipeline: PipelineStage[], _options?: AggregateOptions): AggregationCursor<T> {
     // Create database context for $lookup, $out, and $geoNear stages
     const dbContext: AggregationDbContext = {
       getCollection: (name: string) => {
@@ -864,11 +863,7 @@ export class MangoCollection<T extends Document = Document> {
       },
     };
 
-    return new AggregationCursor<T>(
-      () => this.readDocuments(),
-      pipeline,
-      dbContext
-    );
+    return new AggregationCursor<T>(() => this.readDocuments(), pipeline, dbContext);
   }
 
   /**
@@ -975,21 +970,18 @@ export class MangoCollection<T extends Document = Document> {
    * Find matched array indices for positional $ operator.
    * Analyzes the filter to determine which array element indices matched.
    */
-  private findMatchedArrayIndices(
-    doc: T,
-    filter: Filter<T>
-  ): Map<string, number> | undefined {
+  private findMatchedArrayIndices(doc: T, filter: Filter<T>): Map<string, number> | undefined {
     const matchedIndices = new Map<string, number>();
 
     for (const [key, condition] of Object.entries(filter)) {
       // Skip _id and logical operators
-      if (key === "_id" || key.startsWith("$")) continue;
+      if (key === '_id' || key.startsWith('$')) continue;
 
       // Check for dot notation indicating array element query (e.g., "items.status")
-      if (key.includes(".")) {
-        const parts = key.split(".");
+      if (key.includes('.')) {
+        const parts = key.split('.');
         let current: unknown = doc;
-        let arrayPath = "";
+        let arrayPath = '';
 
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i];
@@ -998,11 +990,11 @@ export class MangoCollection<T extends Document = Document> {
 
           if (Array.isArray(current)) {
             // Found array - check for matching index
-            const remainingPath = parts.slice(i).join(".");
+            const remainingPath = parts.slice(i).join('.');
             for (let idx = 0; idx < current.length; idx++) {
               const element = current[idx];
               const valueToCheck =
-                remainingPath && typeof element === "object" && element !== null
+                remainingPath && typeof element === 'object' && element !== null
                   ? getValueByPath(element as Record<string, unknown>, remainingPath)
                   : element;
 
@@ -1013,7 +1005,7 @@ export class MangoCollection<T extends Document = Document> {
               }
             }
             break;
-          } else if (typeof current === "object") {
+          } else if (typeof current === 'object') {
             arrayPath = arrayPath ? `${arrayPath}.${part}` : part;
             current = (current as Record<string, unknown>)[part];
           } else {
@@ -1026,16 +1018,12 @@ export class MangoCollection<T extends Document = Document> {
 
         if (Array.isArray(value)) {
           // Check for $elemMatch
-          if (
-            condition &&
-            typeof condition === "object" &&
-            "$elemMatch" in condition
-          ) {
+          if (condition && typeof condition === 'object' && '$elemMatch' in condition) {
             const elemMatchCond = (condition as { $elemMatch: Record<string, unknown> }).$elemMatch;
             for (let idx = 0; idx < value.length; idx++) {
               const elem = value[idx];
               // For primitive arrays, wrap element for matching
-              if (typeof elem !== "object" || elem === null) {
+              if (typeof elem !== 'object' || elem === null) {
                 // Check if elemMatchCond is an operator object like { $gt: 10 }
                 if (this.valueMatchesCondition(elem, elemMatchCond)) {
                   matchedIndices.set(key, idx);
@@ -1070,13 +1058,13 @@ export class MangoCollection<T extends Document = Document> {
       return value === condition;
     }
 
-    if (typeof condition === "object" && !Array.isArray(condition)) {
+    if (typeof condition === 'object' && !Array.isArray(condition)) {
       // Operator-based condition
       const condObj = condition as Record<string, unknown>;
       const keys = Object.keys(condObj);
 
       // Check if it's an operator object
-      if (keys.some((k) => k.startsWith("$"))) {
+      if (keys.some((k) => k.startsWith('$'))) {
         return matchesFilter({ value } as Document, { value: condObj });
       }
     }
@@ -1086,8 +1074,8 @@ export class MangoCollection<T extends Document = Document> {
 
     // Deep equality for objects/arrays
     if (
-      typeof value === "object" &&
-      typeof condition === "object" &&
+      typeof value === 'object' &&
+      typeof condition === 'object' &&
       value !== null &&
       condition !== null
     ) {
@@ -1159,7 +1147,7 @@ export class MangoCollection<T extends Document = Document> {
 
       const newDoc = applyUpdateOperators(baseDoc, update, baseContext);
 
-      if (!("_id" in newDoc)) {
+      if (!('_id' in newDoc)) {
         (newDoc as Record<string, unknown>)._id = new ObjectId();
       }
 
@@ -1305,7 +1293,7 @@ export class MangoCollection<T extends Document = Document> {
     if (matches.length === 0) {
       if (options.upsert) {
         const newDoc = { ...replacement } as T;
-        if (!("_id" in newDoc)) {
+        if (!('_id' in newDoc)) {
           (newDoc as Record<string, unknown>)._id = new ObjectId();
         }
         await this.indexManager.checkUniqueConstraints([newDoc], documents);
@@ -1339,8 +1327,8 @@ export class MangoCollection<T extends Document = Document> {
     // Convert _id to string for unique constraint check
     // Use explicit undefined check to handle falsy _id values like 0 or ""
     const getIdString = (id: unknown): string => {
-      if (id === undefined) return "";
-      if (typeof (id as ObjectId).toHexString === "function") {
+      if (id === undefined) return '';
+      if (typeof (id as ObjectId).toHexString === 'function') {
         return (id as ObjectId).toHexString();
       }
       return String(id);
@@ -1425,7 +1413,7 @@ export class MangoCollection<T extends Document = Document> {
     const docId = (docToDelete as { _id?: ObjectId })._id;
 
     if (!docId) {
-      throw new Error("Cannot delete document without _id");
+      throw new Error('Cannot delete document without _id');
     }
 
     const remaining = documents.filter((doc) => {
@@ -1488,14 +1476,14 @@ export class MangoCollection<T extends Document = Document> {
     validateReplacement(replacement);
 
     const documents = await this.readDocuments();
-    const returnAfter = options.returnDocument === "after";
+    const returnAfter = options.returnDocument === 'after';
 
     let matches = documents.filter((doc) => matchesFilter(doc, filter));
 
     if (matches.length === 0) {
       if (options.upsert) {
         const newDoc = { ...replacement } as T;
-        if (!("_id" in newDoc)) {
+        if (!('_id' in newDoc)) {
           (newDoc as Record<string, unknown>)._id = new ObjectId();
         }
 
@@ -1505,9 +1493,7 @@ export class MangoCollection<T extends Document = Document> {
         await this.writeDocuments(documents);
 
         if (returnAfter) {
-          return options.projection
-            ? applyProjection(newDoc, options.projection)
-            : newDoc;
+          return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
         }
         return null;
       }
@@ -1602,7 +1588,7 @@ export class MangoCollection<T extends Document = Document> {
     options: FindOneAndUpdateOptions = {}
   ): Promise<T | null> {
     const documents = await this.readDocuments();
-    const returnAfter = options.returnDocument === "after";
+    const returnAfter = options.returnDocument === 'after';
 
     let matches = documents.filter((doc) => matchesFilter(doc, filter));
 
@@ -1619,7 +1605,7 @@ export class MangoCollection<T extends Document = Document> {
 
         const newDoc = applyUpdateOperators(baseDoc, update);
 
-        if (!("_id" in newDoc)) {
+        if (!('_id' in newDoc)) {
           (newDoc as Record<string, unknown>)._id = new ObjectId();
         }
 
@@ -1629,9 +1615,7 @@ export class MangoCollection<T extends Document = Document> {
         await this.writeDocuments(documents);
 
         if (returnAfter) {
-          return options.projection
-            ? applyProjection(newDoc, options.projection)
-            : newDoc;
+          return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
         }
         return null;
       }
@@ -1759,11 +1743,9 @@ export class MangoCollection<T extends Document = Document> {
           result.insertedCount++;
           result.insertedIds[i] = insertResult.insertedId;
         } else if (op.updateOne) {
-          const updateResult = await this.updateOne(
-            op.updateOne.filter,
-            op.updateOne.update,
-            { upsert: op.updateOne.upsert }
-          );
+          const updateResult = await this.updateOne(op.updateOne.filter, op.updateOne.update, {
+            upsert: op.updateOne.upsert,
+          });
           result.matchedCount += updateResult.matchedCount;
           result.modifiedCount += updateResult.modifiedCount;
           if (updateResult.upsertedId) {
@@ -1771,11 +1753,9 @@ export class MangoCollection<T extends Document = Document> {
             result.upsertedIds[i] = updateResult.upsertedId;
           }
         } else if (op.updateMany) {
-          const updateResult = await this.updateMany(
-            op.updateMany.filter,
-            op.updateMany.update,
-            { upsert: op.updateMany.upsert }
-          );
+          const updateResult = await this.updateMany(op.updateMany.filter, op.updateMany.update, {
+            upsert: op.updateMany.upsert,
+          });
           result.matchedCount += updateResult.matchedCount;
           result.modifiedCount += updateResult.modifiedCount;
           if (updateResult.upsertedId) {
@@ -1792,13 +1772,11 @@ export class MangoCollection<T extends Document = Document> {
           validateReplacement(op.replaceOne.replacement);
 
           const documents = await this.readDocuments();
-          const matches = documents.filter((doc) =>
-            matchesFilter(doc, op.replaceOne!.filter)
-          );
+          const matches = documents.filter((doc) => matchesFilter(doc, op.replaceOne!.filter));
 
           if (matches.length === 0 && op.replaceOne.upsert) {
             const newDoc = { ...op.replaceOne.replacement } as T;
-            if (!("_id" in newDoc)) {
+            if (!('_id' in newDoc)) {
               (newDoc as Record<string, unknown>)._id = new ObjectId();
             }
             await this.indexManager.checkUniqueConstraints([newDoc], documents);
@@ -1845,9 +1823,10 @@ export class MangoCollection<T extends Document = Document> {
     }
 
     if (!ordered && errors.length > 0) {
-      const bulkError = new Error(
-        `BulkWrite had ${errors.length} error(s)`
-      ) as Error & { writeErrors: typeof errors; result: BulkWriteResult };
+      const bulkError = new Error(`BulkWrite had ${errors.length} error(s)`) as Error & {
+        writeErrors: typeof errors;
+        result: BulkWriteResult;
+      };
       bulkError.writeErrors = errors;
       bulkError.result = result;
       throw bulkError;
@@ -1963,17 +1942,17 @@ export class MangoCollection<T extends Document = Document> {
     try {
       await unlink(this.filePath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
     }
 
     // Delete index file
-    const indexFilePath = this.filePath.replace(".json", ".indexes.json");
+    const indexFilePath = this.filePath.replace('.json', '.indexes.json');
     try {
       await unlink(indexFilePath);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
     }
@@ -2013,7 +1992,7 @@ export class MangoCollection<T extends Document = Document> {
       // File doesn't exist, size is 0
     }
 
-    const indexFilePath = this.filePath.replace(".json", ".indexes.json");
+    const indexFilePath = this.filePath.replace('.json', '.indexes.json');
     try {
       const indexStat = await stat(indexFilePath);
       indexSize = indexStat.size;
@@ -2029,7 +2008,7 @@ export class MangoCollection<T extends Document = Document> {
     }
 
     // Extract collection name from file path
-    const collectionName = this.filePath.split("/").pop()?.replace(".json", "") || "";
+    const collectionName = this.filePath.split('/').pop()?.replace('.json', '') || '';
 
     return {
       ns: `${this.dbName}.${collectionName}`,
@@ -2071,19 +2050,19 @@ export class MangoCollection<T extends Document = Document> {
   async rename(newName: string, options: RenameOptions = {}): Promise<MangoCollection<T>> {
     // Validate new name
     if (!newName || newName.length === 0) {
-      throw new InvalidNamespaceError("collection names cannot be empty");
+      throw new InvalidNamespaceError('collection names cannot be empty');
     }
-    if (newName.startsWith(".") || newName.endsWith(".")) {
+    if (newName.startsWith('.') || newName.endsWith('.')) {
       throw new InvalidNamespaceError("collection names must not start or end with '.'");
     }
-    if (newName.includes("$")) {
+    if (newName.includes('$')) {
       throw new InvalidNamespaceError("collection names cannot contain '$'");
     }
 
     // Get current collection name
-    const currentName = this.filePath.split("/").pop()?.replace(".json", "") || "";
+    const currentName = this.filePath.split('/').pop()?.replace('.json', '') || '';
     if (currentName === newName) {
-      throw new IllegalOperationError("cannot rename collection to itself");
+      throw new IllegalOperationError('cannot rename collection to itself');
     }
 
     // Check source exists
@@ -2096,7 +2075,7 @@ export class MangoCollection<T extends Document = Document> {
     const dbDir = dirname(this.filePath);
     const newFilePath = join(dbDir, `${newName}.json`);
     const newIndexPath = join(dbDir, `${newName}.indexes.json`);
-    const currentIndexPath = this.filePath.replace(".json", ".indexes.json");
+    const currentIndexPath = this.filePath.replace('.json', '.indexes.json');
 
     // Check if target exists
     let targetExists = false;

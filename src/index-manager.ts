@@ -1,27 +1,32 @@
 /**
  * Index management for MangoDB collections.
  */
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
-import type { Document, IndexKeySpec, IndexInfo, CreateIndexOptions } from "./types.ts";
-import { getValueByPath } from "./document-utils.ts";
-import { DuplicateKeyError, IndexNotFoundError, CannotDropIdIndexError, InvalidIndexOptionsError } from "./errors.ts";
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import type { Document, IndexKeySpec, IndexInfo, CreateIndexOptions } from './types.ts';
+import { getValueByPath } from './document-utils.ts';
+import {
+  DuplicateKeyError,
+  IndexNotFoundError,
+  CannotDropIdIndexError,
+  InvalidIndexOptionsError,
+} from './errors.ts';
 
-import { matchesFilter } from "./query-matcher.ts";
+import { matchesFilter } from './query-matcher.ts';
 
 /**
  * Result of getGeoIndexInfo() describing a geo index.
  */
 export interface GeoIndexInfo {
   field: string;
-  type: "2d" | "2dsphere";
+  type: '2d' | '2dsphere';
   indexName: string;
 }
 
 /**
  * Default _id index that exists on all collections.
  */
-const DEFAULT_ID_INDEX: IndexInfo = { v: 2, key: { _id: 1 }, name: "_id_" };
+const DEFAULT_ID_INDEX: IndexInfo = { v: 2, key: { _id: 1 }, name: '_id_' };
 
 /**
  * IndexManager handles index operations for a MangoDB collection.
@@ -53,11 +58,11 @@ export class IndexManager {
    */
   async loadIndexes(): Promise<IndexInfo[]> {
     try {
-      const content = await readFile(this.indexFilePath, "utf-8");
+      const content = await readFile(this.indexFilePath, 'utf-8');
       const parsed = JSON.parse(content);
       return parsed.indexes || [];
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return [DEFAULT_ID_INDEX];
       }
       throw error;
@@ -84,7 +89,7 @@ export class IndexManager {
   generateIndexName(keySpec: IndexKeySpec): string {
     return Object.entries(keySpec)
       .map(([field, direction]) => `${field}_${direction}`)
-      .join("_");
+      .join('_');
   }
 
   /**
@@ -115,36 +120,27 @@ export class IndexManager {
    * @throws InvalidIndexOptionsError if expireAfterSeconds is used on _id field
    * @throws InvalidIndexOptionsError if expireAfterSeconds is out of valid range
    */
-  async createIndex(
-    keySpec: IndexKeySpec,
-    options: CreateIndexOptions = {}
-  ): Promise<string> {
+  async createIndex(keySpec: IndexKeySpec, options: CreateIndexOptions = {}): Promise<string> {
     // Validate: cannot combine sparse and partialFilterExpression
     if (options.sparse && options.partialFilterExpression) {
-      throw new InvalidIndexOptionsError(
-        "cannot mix 'partialFilterExpression' with 'sparse'"
-      );
+      throw new InvalidIndexOptionsError("cannot mix 'partialFilterExpression' with 'sparse'");
     }
 
     // Validate TTL options
     if (options.expireAfterSeconds !== undefined) {
       // Check if it's a valid number
-      if (typeof options.expireAfterSeconds !== "number" || isNaN(options.expireAfterSeconds)) {
-        throw new InvalidIndexOptionsError(
-          "expireAfterSeconds must be a number"
-        );
+      if (typeof options.expireAfterSeconds !== 'number' || isNaN(options.expireAfterSeconds)) {
+        throw new InvalidIndexOptionsError('expireAfterSeconds must be a number');
       }
 
       // Check range: must be between 0 and 2147483647 (max 32-bit signed integer)
       if (options.expireAfterSeconds < 0 || options.expireAfterSeconds > 2147483647) {
-        throw new InvalidIndexOptionsError(
-          "expireAfterSeconds must be between 0 and 2147483647"
-        );
+        throw new InvalidIndexOptionsError('expireAfterSeconds must be between 0 and 2147483647');
       }
 
       // TTL cannot be used on _id field
       const indexFields = Object.keys(keySpec);
-      if (indexFields.length === 1 && indexFields[0] === "_id") {
+      if (indexFields.length === 1 && indexFields[0] === '_id') {
         throw new InvalidIndexOptionsError(
           "The field 'expireAfterSeconds' is not valid for an _id index"
         );
@@ -153,52 +149,44 @@ export class IndexManager {
       // TTL indexes must be single-field indexes
       if (indexFields.length > 1) {
         throw new InvalidIndexOptionsError(
-          "TTL indexes are single-field indexes, compound indexes do not support TTL"
+          'TTL indexes are single-field indexes, compound indexes do not support TTL'
         );
       }
     }
 
     // Validate hashed index restrictions
-    const hashedFields = Object.entries(keySpec).filter(
-      ([, v]) => v === "hashed"
-    );
+    const hashedFields = Object.entries(keySpec).filter(([, v]) => v === 'hashed');
     if (hashedFields.length > 0) {
       // Cannot be unique
       if (options.unique) {
-        throw new InvalidIndexOptionsError("hashed indexes cannot be unique");
+        throw new InvalidIndexOptionsError('hashed indexes cannot be unique');
       }
       // Cannot have multiple hashed fields in one index
       if (hashedFields.length > 1) {
-        throw new InvalidIndexOptionsError(
-          "can only have one hashed index field"
-        );
+        throw new InvalidIndexOptionsError('can only have one hashed index field');
       }
     }
 
     // Validate wildcard index restrictions
-    const wildcardFields = Object.keys(keySpec).filter((k) => k.includes("$**"));
+    const wildcardFields = Object.keys(keySpec).filter((k) => k.includes('$**'));
     if (wildcardFields.length > 0) {
       // Cannot be unique
       if (options.unique) {
-        throw new InvalidIndexOptionsError("wildcard indexes cannot be unique");
+        throw new InvalidIndexOptionsError('wildcard indexes cannot be unique');
       }
       // Cannot be compound
       if (Object.keys(keySpec).length > 1) {
-        throw new InvalidIndexOptionsError(
-          "wildcard indexes cannot be compound"
-        );
+        throw new InvalidIndexOptionsError('wildcard indexes cannot be compound');
       }
       // Validate wildcardProjection if provided
       if (options.wildcardProjection) {
-        const nonIdKeys = Object.keys(options.wildcardProjection).filter(
-          (k) => k !== "_id"
-        );
+        const nonIdKeys = Object.keys(options.wildcardProjection).filter((k) => k !== '_id');
         const nonIdValues = nonIdKeys.map((k) => options.wildcardProjection![k]);
         const hasInclusion = nonIdValues.some((v) => v === 1);
         const hasExclusion = nonIdValues.some((v) => v === 0);
         if (hasInclusion && hasExclusion) {
           throw new InvalidIndexOptionsError(
-            "wildcardProjection cannot mix inclusion and exclusion"
+            'wildcardProjection cannot mix inclusion and exclusion'
           );
         }
       }
@@ -206,26 +194,23 @@ export class IndexManager {
 
     // Validate hidden option
     if (options.hidden === true) {
-      const isIdIndex =
-        Object.keys(keySpec).length === 1 && "_id" in keySpec;
+      const isIdIndex = Object.keys(keySpec).length === 1 && '_id' in keySpec;
       if (isIdIndex) {
-        throw new InvalidIndexOptionsError("cannot hide _id index");
+        throw new InvalidIndexOptionsError('cannot hide _id index');
       }
     }
 
     // Validate text index options
-    const hasTextIndex = Object.values(keySpec).includes("text");
+    const hasTextIndex = Object.values(keySpec).includes('text');
 
     if (options.weights) {
       if (!hasTextIndex) {
-        throw new InvalidIndexOptionsError(
-          "weights option requires a text index"
-        );
+        throw new InvalidIndexOptionsError('weights option requires a text index');
       }
       // Validate weight values
       for (const [field, weight] of Object.entries(options.weights)) {
         if (
-          typeof weight !== "number" ||
+          typeof weight !== 'number' ||
           weight < 1 ||
           weight > 99999 ||
           !Number.isInteger(weight)
@@ -239,21 +224,17 @@ export class IndexManager {
 
     if (options.default_language !== undefined) {
       if (!hasTextIndex) {
-        throw new InvalidIndexOptionsError(
-          "default_language option requires a text index"
-        );
+        throw new InvalidIndexOptionsError('default_language option requires a text index');
       }
     }
 
     // Validate collation option
     if (options.collation) {
       if (hasTextIndex) {
-        throw new InvalidIndexOptionsError(
-          "text indexes do not support collation"
-        );
+        throw new InvalidIndexOptionsError('text indexes do not support collation');
       }
-      if (!options.collation.locale || options.collation.locale.trim() === "") {
-        throw new InvalidIndexOptionsError("collation locale is required");
+      if (!options.collation.locale || options.collation.locale.trim() === '') {
+        throw new InvalidIndexOptionsError('collation locale is required');
       }
     }
 
@@ -270,9 +251,7 @@ export class IndexManager {
     if (geoFields.length > 0) {
       // Validate: cannot have multiple geo fields in one index
       if (geoFields.length > 1) {
-        throw new InvalidIndexOptionsError(
-          "only one geo index type allowed per index"
-        );
+        throw new InvalidIndexOptionsError('only one geo index type allowed per index');
       }
 
       // Validate: cannot have both 2d and 2dsphere on same field across indexes
@@ -313,12 +292,12 @@ export class IndexManager {
     // Add geo-specific metadata
     if (geoFields.length > 0) {
       const geoField = geoFields[0];
-      if (geoField.type === "2d") {
+      if (geoField.type === '2d') {
         // 2d index bounds (default -180 to 180 for lat/lng)
         newIndex.min = options.min ?? -180;
         newIndex.max = options.max ?? 180;
-      } else if (geoField.type === "2dsphere") {
-        newIndex["2dsphereIndexVersion"] = 3;
+      } else if (geoField.type === '2dsphere') {
+        newIndex['2dsphereIndexVersion'] = 3;
       }
     }
 
@@ -365,10 +344,10 @@ export class IndexManager {
    */
   private extractGeoFields(
     keySpec: IndexKeySpec
-  ): Array<{ field: string; type: "2d" | "2dsphere" }> {
-    const result: Array<{ field: string; type: "2d" | "2dsphere" }> = [];
+  ): Array<{ field: string; type: '2d' | '2dsphere' }> {
+    const result: Array<{ field: string; type: '2d' | '2dsphere' }> = [];
     for (const [field, direction] of Object.entries(keySpec)) {
-      if (direction === "2d" || direction === "2dsphere") {
+      if (direction === '2d' || direction === '2dsphere') {
         result.push({ field, type: direction });
       }
     }
@@ -386,20 +365,17 @@ export class IndexManager {
     const indexes = await this.loadIndexes();
 
     let indexName: string;
-    if (typeof indexNameOrSpec === "string") {
+    if (typeof indexNameOrSpec === 'string') {
       indexName = indexNameOrSpec;
     } else {
       indexName = this.generateIndexName(indexNameOrSpec);
     }
 
-    if (indexName === "_id_") {
+    if (indexName === '_id_') {
       throw new CannotDropIdIndexError();
     }
 
-    if (
-      typeof indexNameOrSpec === "object" &&
-      this.keySpecsEqual(indexNameOrSpec, { _id: 1 })
-    ) {
+    if (typeof indexNameOrSpec === 'object' && this.keySpecsEqual(indexNameOrSpec, { _id: 1 })) {
       throw new CannotDropIdIndexError();
     }
 
@@ -442,7 +418,7 @@ export class IndexManager {
     for (const idx of indexes) {
       const fields: string[] = [];
       for (const [field, direction] of Object.entries(idx.key)) {
-        if (direction === "text") {
+        if (direction === 'text') {
           fields.push(field);
         }
       }
@@ -463,12 +439,12 @@ export class IndexManager {
    */
   private hashValue(value: unknown): string {
     if (Array.isArray(value)) {
-      throw new Error("hashed indexes do not support array values");
+      throw new Error('hashed indexes do not support array values');
     }
 
     // Truncate floating-point to integer (MongoDB behavior)
     let normalizedValue = value;
-    if (typeof value === "number" && !Number.isInteger(value)) {
+    if (typeof value === 'number' && !Number.isInteger(value)) {
       normalizedValue = Math.trunc(value);
     }
 
@@ -486,10 +462,7 @@ export class IndexManager {
    * @returns Object mapping field names to their values in the document
    * @throws Error if a hashed field contains an array value
    */
-  extractKeyValue<T extends Document>(
-    doc: T,
-    keySpec: IndexKeySpec
-  ): Record<string, unknown> {
+  extractKeyValue<T extends Document>(doc: T, keySpec: IndexKeySpec): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [field, direction] of Object.entries(keySpec)) {
       const value = getValueByPath(doc, field);
@@ -498,7 +471,7 @@ export class IndexManager {
       // have the same index key for index { a: 1, b: 1 }
       const normalizedValue = value === undefined ? null : value;
 
-      if (direction === "hashed") {
+      if (direction === 'hashed') {
         // For hashed indexes, hash the value (arrays will throw)
         result[field] = this.hashValue(normalizedValue);
       } else {
@@ -515,10 +488,7 @@ export class IndexManager {
    * @param indexFields - Array of field names in the index
    * @returns true if document should be indexed, false if it should be skipped
    */
-  private shouldIncludeInSparseIndex<T extends Document>(
-    doc: T,
-    indexFields: string[]
-  ): boolean {
+  private shouldIncludeInSparseIndex<T extends Document>(doc: T, indexFields: string[]): boolean {
     // Include if at least one indexed field exists (is not undefined)
     return indexFields.some((field) => {
       const value = getValueByPath(doc, field);
@@ -571,9 +541,10 @@ export class IndexManager {
       for (const doc of existingDocs) {
         const docId = (doc as { _id?: unknown })._id;
         if (docId !== undefined) {
-          const idStr = typeof (docId as { toHexString?: () => string }).toHexString === "function"
-            ? (docId as { toHexString(): string }).toHexString()
-            : String(docId);
+          const idStr =
+            typeof (docId as { toHexString?: () => string }).toHexString === 'function'
+              ? (docId as { toHexString(): string }).toHexString()
+              : String(docId);
           if (excludeIds.has(idStr)) {
             continue;
           }
@@ -641,7 +612,7 @@ export class IndexManager {
 
     for (const idx of indexes) {
       for (const [field, direction] of Object.entries(idx.key)) {
-        if (direction === "2d" || direction === "2dsphere") {
+        if (direction === '2d' || direction === '2dsphere') {
           result.push({
             field,
             type: direction,
@@ -659,7 +630,7 @@ export class IndexManager {
    * @param field - Field name to check
    * @returns The geo index type ("2d" or "2dsphere") or null if no geo index exists
    */
-  async hasGeoIndex(field: string): Promise<"2d" | "2dsphere" | null> {
+  async hasGeoIndex(field: string): Promise<'2d' | '2dsphere' | null> {
     const geoIndexes = await this.getGeoIndexes();
     const geoIndex = geoIndexes.find((g) => g.field === field);
     return geoIndex?.type ?? null;
@@ -682,7 +653,7 @@ export class IndexManager {
    * @param operator - Operator name for error message (e.g., "$near", "$geoNear")
    * @throws Error if no geo index exists on the field
    */
-  async requireGeoIndex(field: string, operator: string): Promise<"2d" | "2dsphere"> {
+  async requireGeoIndex(field: string, operator: string): Promise<'2d' | '2dsphere'> {
     const indexType = await this.hasGeoIndex(field);
     if (!indexType) {
       throw new Error(

@@ -5,13 +5,9 @@
  * $replaceWith, $unset, $documents, $redact, $graphLookup, $densify, $fill, $setWindowFields
  */
 
-import { describe, it, before, after } from "node:test";
-import assert from "node:assert";
-import {
-  createTestClient,
-  getTestModeName,
-  type TestClient,
-} from "../../test-harness.ts";
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import { createTestClient, getTestModeName, type TestClient } from '../../test-harness.ts';
 
 describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
   let client: TestClient;
@@ -32,17 +28,17 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
   // ==================== Task 5.0.1: System Variables ====================
 
-  describe("System Variables", () => {
-    describe("$$NOW", () => {
-      it("should return current date in $project", async () => {
-        const collection = client.db(dbName).collection("sysvars_now");
-        await collection.insertOne({ name: "test" });
+  describe('System Variables', () => {
+    describe('$$NOW', () => {
+      it('should return current date in $project', async () => {
+        const collection = client.db(dbName).collection('sysvars_now');
+        await collection.insertOne({ name: 'test' });
 
         // Allow 5 seconds tolerance for clock drift between client and MongoDB server
         const CLOCK_DRIFT_MS = 5000;
         const before = new Date(Date.now() - CLOCK_DRIFT_MS);
         const results = await collection
-          .aggregate([{ $project: { currentTime: "$$NOW", _id: 0 } }])
+          .aggregate([{ $project: { currentTime: '$$NOW', _id: 0 } }])
           .toArray();
         const after = new Date(Date.now() + CLOCK_DRIFT_MS);
 
@@ -51,12 +47,12 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
         assert.ok(results[0].currentTime <= after);
       });
 
-      it("should return same date for all documents in pipeline", async () => {
-        const collection = client.db(dbName).collection("sysvars_now_same");
+      it('should return same date for all documents in pipeline', async () => {
+        const collection = client.db(dbName).collection('sysvars_now_same');
         await collection.insertMany([{ n: 1 }, { n: 2 }, { n: 3 }]);
 
         const results = await collection
-          .aggregate([{ $project: { time: "$$NOW", n: 1, _id: 0 } }])
+          .aggregate([{ $project: { time: '$$NOW', n: 1, _id: 0 } }])
           .toArray();
 
         // All documents should have the same $$NOW value
@@ -67,39 +63,39 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       });
     });
 
-    describe("$$ROOT", () => {
-      it("should return the original document", async () => {
-        const collection = client.db(dbName).collection("sysvars_root");
-        await collection.insertOne({ name: "Alice", age: 30 });
+    describe('$$ROOT', () => {
+      it('should return the original document', async () => {
+        const collection = client.db(dbName).collection('sysvars_root');
+        await collection.insertOne({ name: 'Alice', age: 30 });
 
         const results = await collection
-          .aggregate([{ $project: { original: "$$ROOT", _id: 0 } }])
+          .aggregate([{ $project: { original: '$$ROOT', _id: 0 } }])
           .toArray();
 
         const original = results[0].original as { name: string; age: number };
-        assert.strictEqual(original.name, "Alice");
+        assert.strictEqual(original.name, 'Alice');
         assert.strictEqual(original.age, 30);
       });
 
-      it("should allow accessing $$ROOT fields with dot notation", async () => {
-        const collection = client.db(dbName).collection("sysvars_root_dot");
-        await collection.insertOne({ user: { name: "Bob" } });
+      it('should allow accessing $$ROOT fields with dot notation', async () => {
+        const collection = client.db(dbName).collection('sysvars_root_dot');
+        await collection.insertOne({ user: { name: 'Bob' } });
 
         const results = await collection
-          .aggregate([{ $project: { userName: "$$ROOT.user.name", _id: 0 } }])
+          .aggregate([{ $project: { userName: '$$ROOT.user.name', _id: 0 } }])
           .toArray();
 
-        assert.strictEqual(results[0].userName, "Bob");
+        assert.strictEqual(results[0].userName, 'Bob');
       });
 
-      it("should preserve $$ROOT through $addFields", async () => {
-        const collection = client.db(dbName).collection("sysvars_root_addfields");
+      it('should preserve $$ROOT through $addFields', async () => {
+        const collection = client.db(dbName).collection('sysvars_root_addfields');
         await collection.insertOne({ x: 10 });
 
         const results = await collection
           .aggregate([
-            { $addFields: { root: "$$ROOT" } },
-            { $project: { originalX: "$root.x", _id: 0 } },
+            { $addFields: { root: '$$ROOT' } },
+            { $project: { originalX: '$root.x', _id: 0 } },
           ])
           .toArray();
 
@@ -114,14 +110,12 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
   // ==================== Tier 1 Stages ====================
 
-  describe("$replaceWith (Task 5.3)", () => {
-    it("should replace document with field reference", async () => {
-      const collection = client.db(dbName).collection("replaceWith_field");
+  describe('$replaceWith (Task 5.3)', () => {
+    it('should replace document with field reference', async () => {
+      const collection = client.db(dbName).collection('replaceWith_field');
       await collection.insertOne({ original: 1, nested: { a: 10, b: 20 } });
 
-      const results = await collection
-        .aggregate([{ $replaceWith: "$nested" }])
-        .toArray();
+      const results = await collection.aggregate([{ $replaceWith: '$nested' }]).toArray();
 
       assert.strictEqual(results.length, 1);
       assert.strictEqual(results[0].a, 10);
@@ -129,90 +123,80 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].original, undefined);
     });
 
-    it("should replace document with literal object", async () => {
-      const collection = client.db(dbName).collection("replaceWith_literal");
+    it('should replace document with literal object', async () => {
+      const collection = client.db(dbName).collection('replaceWith_literal');
       await collection.insertOne({ x: 1 });
 
       const results = await collection
-        .aggregate([{ $replaceWith: { $literal: { fixed: "value" } } }])
+        .aggregate([{ $replaceWith: { $literal: { fixed: 'value' } } }])
         .toArray();
 
-      assert.strictEqual(results[0].fixed, "value");
+      assert.strictEqual(results[0].fixed, 'value');
     });
 
-    it("should work with $$ROOT", async () => {
-      const collection = client.db(dbName).collection("replaceWith_root");
+    it('should work with $$ROOT', async () => {
+      const collection = client.db(dbName).collection('replaceWith_root');
       await collection.insertOne({ a: 1, b: 2 });
 
       const results = await collection
-        .aggregate([
-          { $addFields: { backup: "$$ROOT" } },
-          { $replaceWith: "$backup" },
-        ])
+        .aggregate([{ $addFields: { backup: '$$ROOT' } }, { $replaceWith: '$backup' }])
         .toArray();
 
       assert.strictEqual(results[0].a, 1);
       assert.strictEqual(results[0].b, 2);
     });
 
-    it("should throw error when result is null", async () => {
-      const collection = client.db(dbName).collection("replaceWith_null");
+    it('should throw error when result is null', async () => {
+      const collection = client.db(dbName).collection('replaceWith_null');
       await collection.insertOne({ x: 1 });
 
       await assert.rejects(
-        () =>
-          collection
-            .aggregate([{ $replaceWith: "$nonexistent" }])
-            .toArray(),
+        () => collection.aggregate([{ $replaceWith: '$nonexistent' }]).toArray(),
         // MongoDB: "'replacement document' must evaluate to an object"
         /must evaluate to an object/
       );
     });
 
-    it("should throw error when result is array", async () => {
-      const collection = client.db(dbName).collection("replaceWith_array");
+    it('should throw error when result is array', async () => {
+      const collection = client.db(dbName).collection('replaceWith_array');
       await collection.insertOne({ items: [1, 2, 3] });
 
       await assert.rejects(
-        () =>
-          collection.aggregate([{ $replaceWith: "$items" }]).toArray(),
+        () => collection.aggregate([{ $replaceWith: '$items' }]).toArray(),
         // MongoDB: "'replacement document' must evaluate to an object"
         /must evaluate to an object/
       );
     });
 
-    it("should throw error when result is scalar", async () => {
-      const collection = client.db(dbName).collection("replaceWith_scalar");
+    it('should throw error when result is scalar', async () => {
+      const collection = client.db(dbName).collection('replaceWith_scalar');
       await collection.insertOne({ value: 123 });
 
       await assert.rejects(
-        () =>
-          collection.aggregate([{ $replaceWith: "$value" }]).toArray(),
+        () => collection.aggregate([{ $replaceWith: '$value' }]).toArray(),
         // MongoDB: "'replacement document' must evaluate to an object"
         /must evaluate to an object/
       );
     });
   });
 
-  describe("$unset (Task 5.4)", () => {
-    it("should remove single field with string syntax", async () => {
-      const collection = client.db(dbName).collection("unset_single");
+  describe('$unset (Task 5.4)', () => {
+    it('should remove single field with string syntax', async () => {
+      const collection = client.db(dbName).collection('unset_single');
       await collection.insertOne({ a: 1, b: 2, c: 3 });
 
-      const results = await collection.aggregate([{ $unset: "b" }]).toArray();
+      const results = await collection.aggregate([{ $unset: 'b' }]).toArray();
 
       assert.strictEqual(results[0].a, 1);
       assert.strictEqual(results[0].b, undefined);
       assert.strictEqual(results[0].c, 3);
     });
 
-    it("should remove multiple fields with array syntax", async () => {
-      const collection = client.db(dbName).collection("unset_array");
+    it('should remove multiple fields with array syntax', async () => {
+      const collection = client.db(dbName).collection('unset_array');
       await collection.insertOne({ a: 1, b: 2, c: 3, d: 4 });
 
-      const results = await collection
-        .aggregate([{ $unset: ["b", "d"] }])
-        .toArray();
+      const results = await collection.aggregate([{ $unset: ['b', 'd'] }]).toArray();
 
       assert.strictEqual(results[0].a, 1);
       assert.strictEqual(results[0].b, undefined);
@@ -220,80 +204,67 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].d, undefined);
     });
 
-    it("should remove nested field with dot notation", async () => {
-      const collection = client.db(dbName).collection("unset_nested");
+    it('should remove nested field with dot notation', async () => {
+      const collection = client.db(dbName).collection('unset_nested');
       await collection.insertOne({ top: { a: 1, b: 2 }, other: 3 });
 
-      const results = await collection
-        .aggregate([{ $unset: "top.a" }])
-        .toArray();
+      const results = await collection.aggregate([{ $unset: 'top.a' }]).toArray();
 
       assert.strictEqual((results[0].top as { b: number }).b, 2);
-      assert.strictEqual(
-        (results[0].top as { a?: number }).a,
-        undefined
-      );
+      assert.strictEqual((results[0].top as { a?: number }).a, undefined);
       assert.strictEqual(results[0].other, 3);
     });
 
-    it("should silently ignore non-existent fields", async () => {
-      const collection = client.db(dbName).collection("unset_nonexistent");
+    it('should silently ignore non-existent fields', async () => {
+      const collection = client.db(dbName).collection('unset_nonexistent');
       await collection.insertOne({ a: 1 });
 
-      const results = await collection
-        .aggregate([{ $unset: "nonexistent" }])
-        .toArray();
+      const results = await collection.aggregate([{ $unset: 'nonexistent' }]).toArray();
 
       assert.strictEqual(results[0].a, 1);
     });
 
-    it("should preserve _id when unsetting other fields", async () => {
-      const collection = client.db(dbName).collection("unset_id");
+    it('should preserve _id when unsetting other fields', async () => {
+      const collection = client.db(dbName).collection('unset_id');
       await collection.insertOne({ a: 1, b: 2 });
 
-      const results = await collection.aggregate([{ $unset: "a" }]).toArray();
+      const results = await collection.aggregate([{ $unset: 'a' }]).toArray();
 
       assert.ok(results[0]._id);
       assert.strictEqual(results[0].b, 2);
     });
 
-    it("should throw error for non-string in array", async () => {
-      const collection = client.db(dbName).collection("unset_invalid");
+    it('should throw error for non-string in array', async () => {
+      const collection = client.db(dbName).collection('unset_invalid');
       await collection.insertOne({ a: 1 });
 
       await assert.rejects(
-        () =>
-          collection
-            .aggregate([{ $unset: ["a", 123 as unknown as string] }])
-            .toArray(),
+        () => collection.aggregate([{ $unset: ['a', 123 as unknown as string] }]).toArray(),
         // MongoDB: "$unset specification must be a string or an array containing only string values"
         /\$unset specification must be a string/
       );
     });
 
-    it("should throw error for empty string field", async () => {
-      const collection = client.db(dbName).collection("unset_empty");
+    it('should throw error for empty string field', async () => {
+      const collection = client.db(dbName).collection('unset_empty');
       await collection.insertOne({ a: 1 });
 
       await assert.rejects(
-        () => collection.aggregate([{ $unset: "" }]).toArray(),
+        () => collection.aggregate([{ $unset: '' }]).toArray(),
         /FieldPath cannot be constructed with empty string/
       );
     });
   });
 
-  describe("$documents (Task 5.5)", () => {
+  describe('$documents (Task 5.5)', () => {
     // Note: $documents must be run with db.aggregate() (database-level aggregate)
     // MongoDB: "$documents can only be run with {aggregate: 1}"
 
-    it("should inject literal documents as first stage", async () => {
+    it('should inject literal documents as first stage', async () => {
       const db = client.db(dbName);
 
       const results = await db
-        .aggregate([
-          { $documents: [{ a: 1 }, { a: 2 }, { a: 3 }] },
-          { $match: { a: { $gt: 1 } } },
-        ])
+        .aggregate([{ $documents: [{ a: 1 }, { a: 2 }, { a: 3 }] }, { $match: { a: { $gt: 1 } } }])
         .toArray();
 
       assert.strictEqual(results.length, 2);
@@ -301,17 +272,15 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[1].a, 3);
     });
 
-    it("should work with empty array", async () => {
+    it('should work with empty array', async () => {
       const db = client.db(dbName);
 
-      const results = await db
-        .aggregate([{ $documents: [] }, { $project: { _id: 0 } }])
-        .toArray();
+      const results = await db.aggregate([{ $documents: [] }, { $project: { _id: 0 } }]).toArray();
 
       assert.strictEqual(results.length, 0);
     });
 
-    it("should support $$NOW in documents", async () => {
+    it('should support $$NOW in documents', async () => {
       const db = client.db(dbName);
 
       // Allow 5 seconds tolerance for clock drift between client and MongoDB server
@@ -320,7 +289,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       const results = await db
         .aggregate([
           {
-            $documents: [{ timestamp: "$$NOW" }],
+            $documents: [{ timestamp: '$$NOW' }],
           },
         ])
         .toArray();
@@ -331,17 +300,11 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.ok((results[0].timestamp as Date) <= after);
     });
 
-    it("should throw error when not first stage", async () => {
+    it('should throw error when not first stage', async () => {
       const db = client.db(dbName);
 
       await assert.rejects(
-        () =>
-          db
-            .aggregate([
-              { $match: {} },
-              { $documents: [{ a: 1 }] },
-            ])
-            .toArray(),
+        () => db.aggregate([{ $match: {} }, { $documents: [{ a: 1 }] }]).toArray(),
         // MongoDB 8.0.x: "Pipeline can only have no collection if the first stage is $changeStream or $documents or $currentOp"
         // MongoDB 8.2.x: "{aggregate: 1} is not valid for '$match'; a collection is required."
         // MangoDB: "$documents must be the first stage"
@@ -349,41 +312,35 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       );
     });
 
-    it("should throw error for non-array", async () => {
+    it('should throw error for non-array', async () => {
       const db = client.db(dbName);
 
       await assert.rejects(
-        () =>
-          db
-            .aggregate([{ $documents: { a: 1 } }])
-            .toArray(),
+        () => db.aggregate([{ $documents: { a: 1 } }]).toArray(),
         // MongoDB: "an array is expected"
         // MangoDB: "$documents requires array of documents"
         /array/i
       );
     });
 
-    it("should throw error for non-object elements", async () => {
+    it('should throw error for non-object elements', async () => {
       const db = client.db(dbName);
 
       await assert.rejects(
-        () =>
-          db
-            .aggregate([{ $documents: [{ a: 1 }, "string"] }])
-            .toArray(),
+        () => db.aggregate([{ $documents: [{ a: 1 }, 'string'] }]).toArray(),
         // MongoDB: "an object is required"
         // MangoDB: "$documents array elements must be objects"
         /object/i
       );
     });
 
-    it("should work with subsequent stages", async () => {
+    it('should work with subsequent stages', async () => {
       const db = client.db(dbName);
 
       const results = await db
         .aggregate([
           { $documents: [{ x: 5 }, { x: 10 }, { x: 15 }] },
-          { $addFields: { doubled: { $multiply: ["$x", 2] } } },
+          { $addFields: { doubled: { $multiply: ['$x', 2] } } },
           { $project: { _id: 0 } },
         ])
         .toArray();
@@ -397,12 +354,12 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
   // ==================== Tier 2 Stages ====================
 
-  describe("$redact (Task 5.2)", () => {
-    it("should prune documents matching condition", async () => {
-      const collection = client.db(dbName).collection("redact_prune");
+  describe('$redact (Task 5.2)', () => {
+    it('should prune documents matching condition', async () => {
+      const collection = client.db(dbName).collection('redact_prune');
       await collection.insertMany([
-        { level: "public", data: "visible" },
-        { level: "secret", data: "hidden" },
+        { level: 'public', data: 'visible' },
+        { level: 'secret', data: 'hidden' },
       ]);
 
       const results = await collection
@@ -410,9 +367,9 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           {
             $redact: {
               $cond: {
-                if: { $eq: ["$level", "secret"] },
-                then: "$$PRUNE",
-                else: "$$KEEP",
+                if: { $eq: ['$level', 'secret'] },
+                then: '$$PRUNE',
+                else: '$$KEEP',
               },
             },
           },
@@ -420,14 +377,14 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
         .toArray();
 
       assert.strictEqual(results.length, 1);
-      assert.strictEqual(results[0].level, "public");
+      assert.strictEqual(results[0].level, 'public');
     });
 
-    it("should keep documents matching condition", async () => {
-      const collection = client.db(dbName).collection("redact_keep");
+    it('should keep documents matching condition', async () => {
+      const collection = client.db(dbName).collection('redact_keep');
       await collection.insertMany([
-        { authorized: true, data: "visible" },
-        { authorized: false, data: "hidden" },
+        { authorized: true, data: 'visible' },
+        { authorized: false, data: 'hidden' },
       ]);
 
       const results = await collection
@@ -435,9 +392,9 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           {
             $redact: {
               $cond: {
-                if: "$authorized",
-                then: "$$KEEP",
-                else: "$$PRUNE",
+                if: '$authorized',
+                then: '$$KEEP',
+                else: '$$PRUNE',
               },
             },
           },
@@ -448,16 +405,16 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].authorized, true);
     });
 
-    it("should descend into nested documents", async () => {
-      const collection = client.db(dbName).collection("redact_descend");
+    it('should descend into nested documents', async () => {
+      const collection = client.db(dbName).collection('redact_descend');
       await collection.insertOne({
-        level: "public",
+        level: 'public',
         nested: {
-          level: "secret",
+          level: 'secret',
           value: 123,
         },
         other: {
-          level: "public",
+          level: 'public',
           value: 456,
         },
       });
@@ -467,9 +424,9 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           {
             $redact: {
               $cond: {
-                if: { $eq: ["$level", "secret"] },
-                then: "$$PRUNE",
-                else: "$$DESCEND",
+                if: { $eq: ['$level', 'secret'] },
+                then: '$$PRUNE',
+                else: '$$DESCEND',
               },
             },
           },
@@ -483,14 +440,14 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual((results[0].other as { value: number }).value, 456);
     });
 
-    it("should handle arrays of documents", async () => {
-      const collection = client.db(dbName).collection("redact_arrays");
+    it('should handle arrays of documents', async () => {
+      const collection = client.db(dbName).collection('redact_arrays');
       await collection.insertOne({
-        level: "public",
+        level: 'public',
         items: [
-          { level: "public", name: "item1" },
-          { level: "secret", name: "item2" },
-          { level: "public", name: "item3" },
+          { level: 'public', name: 'item1' },
+          { level: 'secret', name: 'item2' },
+          { level: 'public', name: 'item3' },
         ],
       });
 
@@ -499,9 +456,9 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           {
             $redact: {
               $cond: {
-                if: { $eq: ["$level", "secret"] },
-                then: "$$PRUNE",
-                else: "$$DESCEND",
+                if: { $eq: ['$level', 'secret'] },
+                then: '$$PRUNE',
+                else: '$$DESCEND',
               },
             },
           },
@@ -512,32 +469,29 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 1);
       const items = results[0].items as { name: string }[];
       assert.strictEqual(items.length, 2);
-      assert.strictEqual(items[0].name, "item1");
-      assert.strictEqual(items[1].name, "item3");
+      assert.strictEqual(items[0].name, 'item1');
+      assert.strictEqual(items[1].name, 'item3');
     });
 
-    it("should throw error for invalid result", async () => {
-      const collection = client.db(dbName).collection("redact_invalid");
+    it('should throw error for invalid result', async () => {
+      const collection = client.db(dbName).collection('redact_invalid');
       await collection.insertOne({ x: 1 });
 
       await assert.rejects(
-        () =>
-          collection
-            .aggregate([{ $redact: { $literal: "invalid" } }])
-            .toArray(),
+        () => collection.aggregate([{ $redact: { $literal: 'invalid' } }]).toArray(),
         // MongoDB: "$redact's expression should not return anything aside from the variables $$KEEP, $$DESCEND, and $$PRUNE"
         // MangoDB: "$redact must resolve to $$DESCEND, $$PRUNE, or $$KEEP"
         /\$redact.*\$\$(KEEP|DESCEND|PRUNE)/
       );
     });
 
-    it("should use $$DESCEND correctly to stop at field level", async () => {
-      const collection = client.db(dbName).collection("redact_descend_stop");
+    it('should use $$DESCEND correctly to stop at field level', async () => {
+      const collection = client.db(dbName).collection('redact_descend_stop');
       await collection.insertOne({
         public: true,
         data: {
           public: false,
-          secret: "should be pruned",
+          secret: 'should be pruned',
         },
       });
 
@@ -546,9 +500,9 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           {
             $redact: {
               $cond: {
-                if: { $eq: ["$public", true] },
-                then: "$$DESCEND",
-                else: "$$PRUNE",
+                if: { $eq: ['$public', true] },
+                then: '$$DESCEND',
+                else: '$$PRUNE',
               },
             },
           },
@@ -562,28 +516,28 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
     });
   });
 
-  describe("$graphLookup (Task 5.1)", () => {
-    it("should traverse simple hierarchy", async () => {
+  describe('$graphLookup (Task 5.1)', () => {
+    it('should traverse simple hierarchy', async () => {
       // Create employees collection with manager hierarchy
-      const employees = client.db(dbName).collection("graph_employees");
+      const employees = client.db(dbName).collection('graph_employees');
       await employees.insertMany([
-        { _id: "alice", name: "Alice", reportsTo: null },
-        { _id: "bob", name: "Bob", reportsTo: "alice" },
-        { _id: "charlie", name: "Charlie", reportsTo: "bob" },
-        { _id: "dana", name: "Dana", reportsTo: "bob" },
+        { _id: 'alice', name: 'Alice', reportsTo: null },
+        { _id: 'bob', name: 'Bob', reportsTo: 'alice' },
+        { _id: 'charlie', name: 'Charlie', reportsTo: 'bob' },
+        { _id: 'dana', name: 'Dana', reportsTo: 'bob' },
       ]);
 
       // Find all reports (direct and indirect) for Alice
       const results = await employees
         .aggregate([
-          { $match: { _id: "alice" } },
+          { $match: { _id: 'alice' } },
           {
             $graphLookup: {
-              from: "graph_employees",
-              startWith: "$_id",
-              connectFromField: "reportsTo",
-              connectToField: "_id",
-              as: "reports",
+              from: 'graph_employees',
+              startWith: '$_id',
+              connectFromField: 'reportsTo',
+              connectToField: '_id',
+              as: 'reports',
             },
           },
         ])
@@ -595,8 +549,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.ok(Array.isArray(results[0].reports));
     });
 
-    it("should limit depth with maxDepth", async () => {
-      const nodes = client.db(dbName).collection("graph_nodes");
+    it('should limit depth with maxDepth', async () => {
+      const nodes = client.db(dbName).collection('graph_nodes');
       await nodes.insertMany([
         { _id: 1, parent: null },
         { _id: 2, parent: 1 },
@@ -609,11 +563,11 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           { $match: { _id: 1 } },
           {
             $graphLookup: {
-              from: "graph_nodes",
-              startWith: "$_id",
-              connectFromField: "parent",
-              connectToField: "_id",
-              as: "ancestors",
+              from: 'graph_nodes',
+              startWith: '$_id',
+              connectFromField: 'parent',
+              connectToField: '_id',
+              as: 'ancestors',
               maxDepth: 1,
             },
           },
@@ -625,25 +579,25 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.ok((results[0].ancestors as unknown[]).length <= 2);
     });
 
-    it("should track depth with depthField", async () => {
-      const categories = client.db(dbName).collection("graph_categories");
+    it('should track depth with depthField', async () => {
+      const categories = client.db(dbName).collection('graph_categories');
       await categories.insertMany([
-        { _id: "root", name: "Root", parentId: null },
-        { _id: "electronics", name: "Electronics", parentId: "root" },
-        { _id: "phones", name: "Phones", parentId: "electronics" },
+        { _id: 'root', name: 'Root', parentId: null },
+        { _id: 'electronics', name: 'Electronics', parentId: 'root' },
+        { _id: 'phones', name: 'Phones', parentId: 'electronics' },
       ]);
 
       const results = await categories
         .aggregate([
-          { $match: { _id: "root" } },
+          { $match: { _id: 'root' } },
           {
             $graphLookup: {
-              from: "graph_categories",
-              startWith: "$_id",
-              connectFromField: "parentId",
-              connectToField: "_id",
-              as: "descendants",
-              depthField: "level",
+              from: 'graph_categories',
+              startWith: '$_id',
+              connectFromField: 'parentId',
+              connectToField: '_id',
+              as: 'descendants',
+              depthField: 'level',
             },
           },
         ])
@@ -652,28 +606,28 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 1);
       // Check that depthField is added
       for (const desc of results[0].descendants as { level: number }[]) {
-        assert.ok(typeof desc.level === "number");
+        assert.ok(typeof desc.level === 'number');
       }
     });
 
-    it("should filter with restrictSearchWithMatch", async () => {
-      const items = client.db(dbName).collection("graph_items");
+    it('should filter with restrictSearchWithMatch', async () => {
+      const items = client.db(dbName).collection('graph_items');
       await items.insertMany([
-        { _id: "a", nextId: "b", active: true },
-        { _id: "b", nextId: "c", active: false },
-        { _id: "c", nextId: null, active: true },
+        { _id: 'a', nextId: 'b', active: true },
+        { _id: 'b', nextId: 'c', active: false },
+        { _id: 'c', nextId: null, active: true },
       ]);
 
       const results = await items
         .aggregate([
-          { $match: { _id: "a" } },
+          { $match: { _id: 'a' } },
           {
             $graphLookup: {
-              from: "graph_items",
-              startWith: "$nextId",
-              connectFromField: "nextId",
-              connectToField: "_id",
-              as: "chain",
+              from: 'graph_items',
+              startWith: '$nextId',
+              connectFromField: 'nextId',
+              connectToField: '_id',
+              as: 'chain',
               restrictSearchWithMatch: { active: true },
             },
           },
@@ -688,19 +642,19 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       }
     });
 
-    it("should return empty array for null startWith", async () => {
-      const coll = client.db(dbName).collection("graph_null_start");
+    it('should return empty array for null startWith', async () => {
+      const coll = client.db(dbName).collection('graph_null_start');
       await coll.insertOne({ _id: 1, ref: null });
 
       const results = await coll
         .aggregate([
           {
             $graphLookup: {
-              from: "graph_null_start",
-              startWith: "$ref",
-              connectFromField: "ref",
-              connectToField: "_id",
-              as: "found",
+              from: 'graph_null_start',
+              startWith: '$ref',
+              connectFromField: 'ref',
+              connectToField: '_id',
+              as: 'found',
             },
           },
         ])
@@ -710,8 +664,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.deepStrictEqual(results[0].found, []);
     });
 
-    it("should throw error for missing required fields", async () => {
-      const coll = client.db(dbName).collection("graph_error_test");
+    it('should throw error for missing required fields', async () => {
+      const coll = client.db(dbName).collection('graph_error_test');
       await coll.insertOne({ x: 1 });
 
       await assert.rejects(
@@ -720,12 +674,18 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             .aggregate([
               {
                 $graphLookup: {
-                  from: "test",
-                  startWith: "$x",
-                  connectFromField: "a",
-                  connectToField: "b",
+                  from: 'test',
+                  startWith: '$x',
+                  connectFromField: 'a',
+                  connectToField: 'b',
                   // missing "as"
-                } as { from: string; startWith: unknown; connectFromField: string; connectToField: string; as: string },
+                } as {
+                  from: string;
+                  startWith: unknown;
+                  connectFromField: string;
+                  connectToField: string;
+                  as: string;
+                },
               },
             ])
             .toArray(),
@@ -736,17 +696,17 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
     });
   });
 
-  describe("$densify stage", () => {
-    it("should fill gaps in numeric sequence", async () => {
-      const coll = client.db(dbName).collection("densify_numeric");
+  describe('$densify stage', () => {
+    it('should fill gaps in numeric sequence', async () => {
+      const coll = client.db(dbName).collection('densify_numeric');
       await coll.insertMany([
-        { x: 1, label: "a" },
-        { x: 3, label: "b" },
-        { x: 5, label: "c" },
+        { x: 1, label: 'a' },
+        { x: 3, label: 'b' },
+        { x: 5, label: 'c' },
       ]);
 
       const results = await coll
-        .aggregate([{ $densify: { field: "x", range: { step: 1, bounds: "full" } } }])
+        .aggregate([{ $densify: { field: 'x', range: { step: 1, bounds: 'full' } } }])
         .toArray();
 
       // Should have docs for x=1,2,3,4,5
@@ -755,15 +715,15 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.deepStrictEqual(xValues, [1, 2, 3, 4, 5]);
     });
 
-    it("should preserve original documents in numeric densify", async () => {
-      const coll = client.db(dbName).collection("densify_preserve");
+    it('should preserve original documents in numeric densify', async () => {
+      const coll = client.db(dbName).collection('densify_preserve');
       await coll.insertMany([
-        { x: 0, data: "first" },
-        { x: 2, data: "second" },
+        { x: 0, data: 'first' },
+        { x: 2, data: 'second' },
       ]);
 
       const results = await coll
-        .aggregate([{ $densify: { field: "x", range: { step: 1, bounds: "full" } } }])
+        .aggregate([{ $densify: { field: 'x', range: { step: 1, bounds: 'full' } } }])
         .toArray();
 
       // Should have x=0,1,2
@@ -771,26 +731,26 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       // Original docs should have their data fields
       const first = results.find((d) => d.x === 0);
       const second = results.find((d) => d.x === 2);
-      assert.strictEqual(first?.data, "first");
-      assert.strictEqual(second?.data, "second");
+      assert.strictEqual(first?.data, 'first');
+      assert.strictEqual(second?.data, 'second');
       // Generated doc should only have the densify field
       const generated = results.find((d) => d.x === 1);
       assert.strictEqual(generated?.data, undefined);
     });
 
-    it("should fill gaps in date sequence", async () => {
-      const coll = client.db(dbName).collection("densify_date");
+    it('should fill gaps in date sequence', async () => {
+      const coll = client.db(dbName).collection('densify_date');
       await coll.insertMany([
-        { timestamp: new Date("2024-01-01"), value: 10 },
-        { timestamp: new Date("2024-01-03"), value: 30 },
+        { timestamp: new Date('2024-01-01'), value: 10 },
+        { timestamp: new Date('2024-01-03'), value: 30 },
       ]);
 
       const results = await coll
         .aggregate([
           {
             $densify: {
-              field: "timestamp",
-              range: { step: 1, unit: "day", bounds: "full" },
+              field: 'timestamp',
+              range: { step: 1, unit: 'day', bounds: 'full' },
             },
           },
         ])
@@ -798,28 +758,26 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
       // Should have Jan 1, 2, 3
       assert.strictEqual(results.length, 3);
-      const dates = results
-        .map((d) => (d.timestamp as Date).toISOString().slice(0, 10))
-        .sort();
-      assert.deepStrictEqual(dates, ["2024-01-01", "2024-01-02", "2024-01-03"]);
+      const dates = results.map((d) => (d.timestamp as Date).toISOString().slice(0, 10)).sort();
+      assert.deepStrictEqual(dates, ['2024-01-01', '2024-01-02', '2024-01-03']);
     });
 
-    it("should densify with partitions", async () => {
-      const coll = client.db(dbName).collection("densify_partition");
+    it('should densify with partitions', async () => {
+      const coll = client.db(dbName).collection('densify_partition');
       await coll.insertMany([
-        { category: "A", x: 1 },
-        { category: "A", x: 3 },
-        { category: "B", x: 10 },
-        { category: "B", x: 12 },
+        { category: 'A', x: 1 },
+        { category: 'A', x: 3 },
+        { category: 'B', x: 10 },
+        { category: 'B', x: 12 },
       ]);
 
       const results = await coll
         .aggregate([
           {
             $densify: {
-              field: "x",
-              range: { step: 1, bounds: "partition" },
-              partitionByFields: ["category"],
+              field: 'x',
+              range: { step: 1, bounds: 'partition' },
+              partitionByFields: ['category'],
             },
           },
         ])
@@ -829,8 +787,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       // Category B: x=10,11,12 (3 docs)
       assert.strictEqual(results.length, 6);
 
-      const catA = results.filter((d) => d.category === "A");
-      const catB = results.filter((d) => d.category === "B");
+      const catA = results.filter((d) => d.category === 'A');
+      const catB = results.filter((d) => d.category === 'B');
       assert.strictEqual(catA.length, 3);
       assert.strictEqual(catB.length, 3);
 
@@ -840,15 +798,15 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.deepStrictEqual(catBValues, [10, 11, 12]);
     });
 
-    it("should densify with explicit bounds", async () => {
-      const coll = client.db(dbName).collection("densify_bounds");
+    it('should densify with explicit bounds', async () => {
+      const coll = client.db(dbName).collection('densify_bounds');
       await coll.insertMany([{ x: 5 }]);
 
       const results = await coll
         .aggregate([
           {
             $densify: {
-              field: "x",
+              field: 'x',
               range: { step: 1, bounds: [3, 7] },
             },
           },
@@ -861,16 +819,14 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.deepStrictEqual(xValues, [3, 4, 5, 6]);
     });
 
-    it("should throw error for field starting with $", async () => {
-      const coll = client.db(dbName).collection("densify_error_field");
+    it('should throw error for field starting with $', async () => {
+      const coll = client.db(dbName).collection('densify_error_field');
       await coll.insertOne({ x: 1 });
 
       await assert.rejects(
         () =>
           coll
-            .aggregate([
-              { $densify: { field: "$invalid", range: { step: 1, bounds: "full" } } },
-            ])
+            .aggregate([{ $densify: { field: '$invalid', range: { step: 1, bounds: 'full' } } }])
             .toArray(),
         // MongoDB: "FieldPath field names may not start with '$'"
         // MangoDB: "Cannot densify field starting with '$'"
@@ -878,14 +834,14 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       );
     });
 
-    it("should throw error for non-positive step", async () => {
-      const coll = client.db(dbName).collection("densify_error_step");
+    it('should throw error for non-positive step', async () => {
+      const coll = client.db(dbName).collection('densify_error_step');
       await coll.insertOne({ x: 1 });
 
       await assert.rejects(
         () =>
           coll
-            .aggregate([{ $densify: { field: "x", range: { step: 0, bounds: "full" } } }])
+            .aggregate([{ $densify: { field: 'x', range: { step: 0, bounds: 'full' } } }])
             .toArray(),
         // MongoDB: "'$densify.range.step' must be a positive number"
         // MangoDB: "Step must be positive"
@@ -893,15 +849,15 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       );
     });
 
-    it("should throw error for unit with numeric field", async () => {
-      const coll = client.db(dbName).collection("densify_error_unit");
+    it('should throw error for unit with numeric field', async () => {
+      const coll = client.db(dbName).collection('densify_error_unit');
       await coll.insertOne({ x: 1 });
 
       await assert.rejects(
         () =>
           coll
             .aggregate([
-              { $densify: { field: "x", range: { step: 1, unit: "day", bounds: "full" } } },
+              { $densify: { field: 'x', range: { step: 1, unit: 'day', bounds: 'full' } } },
             ])
             .toArray(),
         // MongoDB: "PlanExecutor error during aggregation :: caused by :: The type of numeric is not Date"
@@ -910,14 +866,14 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       );
     });
 
-    it("should throw error for date field without unit", async () => {
-      const coll = client.db(dbName).collection("densify_error_no_unit");
+    it('should throw error for date field without unit', async () => {
+      const coll = client.db(dbName).collection('densify_error_no_unit');
       await coll.insertOne({ ts: new Date() });
 
       await assert.rejects(
         () =>
           coll
-            .aggregate([{ $densify: { field: "ts", range: { step: 1, bounds: "full" } } }])
+            .aggregate([{ $densify: { field: 'ts', range: { step: 1, bounds: 'full' } } }])
             .toArray(),
         // MongoDB: "PlanExecutor error during aggregation :: caused by :: The type of a date is Date"
         // MangoDB: "Unit required for date field"
@@ -925,21 +881,21 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       );
     });
 
-    it("should handle empty collection", async () => {
-      const coll = client.db(dbName).collection("densify_empty");
+    it('should handle empty collection', async () => {
+      const coll = client.db(dbName).collection('densify_empty');
       // Empty collection
 
       const results = await coll
-        .aggregate([{ $densify: { field: "x", range: { step: 1, bounds: "full" } } }])
+        .aggregate([{ $densify: { field: 'x', range: { step: 1, bounds: 'full' } } }])
         .toArray();
 
       assert.strictEqual(results.length, 0);
     });
   });
 
-  describe("$fill stage", () => {
-    it("should fill nulls with static value", async () => {
-      const coll = client.db(dbName).collection("fill_value");
+  describe('$fill stage', () => {
+    it('should fill nulls with static value', async () => {
+      const coll = client.db(dbName).collection('fill_value');
       await coll.insertMany([
         { x: 1, y: 10 },
         { x: 2, y: null },
@@ -947,10 +903,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       ]);
 
       const results = await coll
-        .aggregate([
-          { $fill: { output: { y: { value: 0 } } } },
-          { $sort: { x: 1 } },
-        ])
+        .aggregate([{ $fill: { output: { y: { value: 0 } } } }, { $sort: { x: 1 } }])
         .toArray();
 
       assert.strictEqual(results.length, 3);
@@ -959,8 +912,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[2].y, 30);
     });
 
-    it("should fill nulls with expression value", async () => {
-      const coll = client.db(dbName).collection("fill_expr");
+    it('should fill nulls with expression value', async () => {
+      const coll = client.db(dbName).collection('fill_expr');
       await coll.insertMany([
         { x: 1, y: null },
         { x: 2, y: 20 },
@@ -968,7 +921,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
       const results = await coll
         .aggregate([
-          { $fill: { output: { y: { value: { $multiply: ["$x", 10] } } } } },
+          { $fill: { output: { y: { value: { $multiply: ['$x', 10] } } } } },
           { $sort: { x: 1 } },
         ])
         .toArray();
@@ -978,8 +931,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[1].y, 20); // unchanged
     });
 
-    it("should fill with locf method", async () => {
-      const coll = client.db(dbName).collection("fill_locf");
+    it('should fill with locf method', async () => {
+      const coll = client.db(dbName).collection('fill_locf');
       await coll.insertMany([
         { x: 1, y: 100 },
         { x: 2, y: null },
@@ -988,9 +941,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       ]);
 
       const results = await coll
-        .aggregate([
-          { $fill: { sortBy: { x: 1 }, output: { y: { method: "locf" } } } },
-        ])
+        .aggregate([{ $fill: { sortBy: { x: 1 }, output: { y: { method: 'locf' } } } }])
         .toArray();
 
       assert.strictEqual(results.length, 4);
@@ -1000,8 +951,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].y, 400);
     });
 
-    it("should leave null at start for locf", async () => {
-      const coll = client.db(dbName).collection("fill_locf_start");
+    it('should leave null at start for locf', async () => {
+      const coll = client.db(dbName).collection('fill_locf_start');
       await coll.insertMany([
         { x: 1, y: null },
         { x: 2, y: 20 },
@@ -1009,9 +960,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       ]);
 
       const results = await coll
-        .aggregate([
-          { $fill: { sortBy: { x: 1 }, output: { y: { method: "locf" } } } },
-        ])
+        .aggregate([{ $fill: { sortBy: { x: 1 }, output: { y: { method: 'locf' } } } }])
         .toArray();
 
       assert.strictEqual(results.length, 3);
@@ -1020,8 +969,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[2].y, 20); // carried from x=2
     });
 
-    it("should fill with linear interpolation", async () => {
-      const coll = client.db(dbName).collection("fill_linear");
+    it('should fill with linear interpolation', async () => {
+      const coll = client.db(dbName).collection('fill_linear');
       await coll.insertMany([
         { x: 1, y: 0 },
         { x: 2, y: null },
@@ -1030,9 +979,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       ]);
 
       const results = await coll
-        .aggregate([
-          { $fill: { sortBy: { x: 1 }, output: { y: { method: "linear" } } } },
-        ])
+        .aggregate([{ $fill: { sortBy: { x: 1 }, output: { y: { method: 'linear' } } } }])
         .toArray();
 
       assert.strictEqual(results.length, 4);
@@ -1042,13 +989,13 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].y, 30);
     });
 
-    it("should fill with partitions", async () => {
-      const coll = client.db(dbName).collection("fill_partition");
+    it('should fill with partitions', async () => {
+      const coll = client.db(dbName).collection('fill_partition');
       await coll.insertMany([
-        { category: "A", x: 1, y: 100 },
-        { category: "A", x: 2, y: null },
-        { category: "B", x: 1, y: 200 },
-        { category: "B", x: 2, y: null },
+        { category: 'A', x: 1, y: 100 },
+        { category: 'A', x: 2, y: null },
+        { category: 'B', x: 1, y: 200 },
+        { category: 'B', x: 2, y: null },
       ]);
 
       const results = await coll
@@ -1056,8 +1003,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
           {
             $fill: {
               sortBy: { x: 1 },
-              partitionByFields: ["category"],
-              output: { y: { method: "locf" } },
+              partitionByFields: ['category'],
+              output: { y: { method: 'locf' } },
             },
           },
           { $sort: { category: 1, x: 1 } },
@@ -1073,8 +1020,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].y, 200); // carried from B, x=1
     });
 
-    it("should fill multiple fields", async () => {
-      const coll = client.db(dbName).collection("fill_multi");
+    it('should fill multiple fields', async () => {
+      const coll = client.db(dbName).collection('fill_multi');
       await coll.insertMany([
         { x: 1, a: 10, b: 100 },
         { x: 2, a: null, b: null },
@@ -1087,7 +1034,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $fill: {
               sortBy: { x: 1 },
               output: {
-                a: { method: "locf" },
+                a: { method: 'locf' },
                 b: { value: 0 },
               },
             },
@@ -1108,23 +1055,20 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
     // It only requires sortBy for linear method
     // MangoDB aligns with this behavior
 
-    it("should throw error when sortBy missing for linear", async () => {
-      const coll = client.db(dbName).collection("fill_error_sort2");
+    it('should throw error when sortBy missing for linear', async () => {
+      const coll = client.db(dbName).collection('fill_error_sort2');
       await coll.insertOne({ x: 1, y: null });
 
       await assert.rejects(
-        () =>
-          coll
-            .aggregate([{ $fill: { output: { y: { method: "linear" } } } }])
-            .toArray(),
+        () => coll.aggregate([{ $fill: { output: { y: { method: 'linear' } } } }]).toArray(),
         // MongoDB: "$linearFill must be specified with a top level sortBy expression with exactly one element"
         // MangoDB: "sortBy required for locf/linear"
         /sortBy|linearFill/i
       );
     });
 
-    it("should throw error for both value and method", async () => {
-      const coll = client.db(dbName).collection("fill_error_both");
+    it('should throw error for both value and method', async () => {
+      const coll = client.db(dbName).collection('fill_error_both');
       await coll.insertOne({ x: 1, y: null });
 
       await assert.rejects(
@@ -1133,7 +1077,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             .aggregate([
               {
                 $fill: {
-                  output: { y: { value: 0, method: "locf" } },
+                  output: { y: { value: 0, method: 'locf' } },
                   sortBy: { x: 1 },
                 },
               },
@@ -1148,25 +1092,19 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
     // Note: MongoDB allows string partitionBy with expression syntax
     // MangoDB can support this as well - removing this test as it tests invalid assumption
 
-    it("should handle empty collection", async () => {
-      const coll = client.db(dbName).collection("fill_empty");
+    it('should handle empty collection', async () => {
+      const coll = client.db(dbName).collection('fill_empty');
 
-      const results = await coll
-        .aggregate([{ $fill: { output: { y: { value: 0 } } } }])
-        .toArray();
+      const results = await coll.aggregate([{ $fill: { output: { y: { value: 0 } } } }]).toArray();
 
       assert.strictEqual(results.length, 0);
     });
   });
 
-  describe("$setWindowFields stage", () => {
-    it("should compute $documentNumber", async () => {
-      const coll = client.db(dbName).collection("swf_docnum");
-      await coll.insertMany([
-        { x: 3 },
-        { x: 1 },
-        { x: 2 },
-      ]);
+  describe('$setWindowFields stage', () => {
+    it('should compute $documentNumber', async () => {
+      const coll = client.db(dbName).collection('swf_docnum');
+      await coll.insertMany([{ x: 3 }, { x: 1 }, { x: 2 }]);
 
       const results = await coll
         .aggregate([
@@ -1186,8 +1124,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.deepStrictEqual(nums, [1, 2, 3]);
     });
 
-    it("should compute $sum over entire partition", async () => {
-      const coll = client.db(dbName).collection("swf_sum");
+    it('should compute $sum over entire partition', async () => {
+      const coll = client.db(dbName).collection('swf_sum');
       await coll.insertMany([
         { x: 1, value: 10 },
         { x: 2, value: 20 },
@@ -1200,7 +1138,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                total: { $sum: "$value" },
+                total: { $sum: '$value' },
               },
             },
           },
@@ -1214,8 +1152,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       }
     });
 
-    it("should compute $sum with document window", async () => {
-      const coll = client.db(dbName).collection("swf_sum_window");
+    it('should compute $sum with document window', async () => {
+      const coll = client.db(dbName).collection('swf_sum_window');
       await coll.insertMany([
         { x: 1, value: 10 },
         { x: 2, value: 20 },
@@ -1230,8 +1168,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
               sortBy: { x: 1 },
               output: {
                 runningSum: {
-                  $sum: "$value",
-                  window: { documents: ["unbounded", "current"] },
+                  $sum: '$value',
+                  window: { documents: ['unbounded', 'current'] },
                 },
               },
             },
@@ -1246,8 +1184,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].runningSum, 100);
     });
 
-    it("should compute $avg with sliding window", async () => {
-      const coll = client.db(dbName).collection("swf_avg_window");
+    it('should compute $avg with sliding window', async () => {
+      const coll = client.db(dbName).collection('swf_avg_window');
       await coll.insertMany([
         { x: 1, value: 10 },
         { x: 2, value: 20 },
@@ -1263,7 +1201,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
               sortBy: { x: 1 },
               output: {
                 movingAvg: {
-                  $avg: "$value",
+                  $avg: '$value',
                   window: { documents: [-1, 1] },
                 },
               },
@@ -1280,23 +1218,23 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[4].movingAvg, 45); // (40+50)/2
     });
 
-    it("should partition documents", async () => {
-      const coll = client.db(dbName).collection("swf_partition");
+    it('should partition documents', async () => {
+      const coll = client.db(dbName).collection('swf_partition');
       await coll.insertMany([
-        { category: "A", x: 1, value: 10 },
-        { category: "A", x: 2, value: 20 },
-        { category: "B", x: 1, value: 100 },
-        { category: "B", x: 2, value: 200 },
+        { category: 'A', x: 1, value: 10 },
+        { category: 'A', x: 2, value: 20 },
+        { category: 'B', x: 1, value: 100 },
+        { category: 'B', x: 2, value: 200 },
       ]);
 
       const results = await coll
         .aggregate([
           {
             $setWindowFields: {
-              partitionBy: { cat: "$category" },
+              partitionBy: { cat: '$category' },
               sortBy: { x: 1 },
               output: {
-                total: { $sum: "$value" },
+                total: { $sum: '$value' },
               },
             },
           },
@@ -1313,12 +1251,12 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].total, 300);
     });
 
-    it("should compute $first and $last", async () => {
-      const coll = client.db(dbName).collection("swf_first_last");
+    it('should compute $first and $last', async () => {
+      const coll = client.db(dbName).collection('swf_first_last');
       await coll.insertMany([
-        { x: 1, value: "a" },
-        { x: 2, value: "b" },
-        { x: 3, value: "c" },
+        { x: 1, value: 'a' },
+        { x: 2, value: 'b' },
+        { x: 3, value: 'c' },
       ]);
 
       const results = await coll
@@ -1327,8 +1265,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                firstVal: { $first: "$value" },
-                lastVal: { $last: "$value" },
+                firstVal: { $first: '$value' },
+                lastVal: { $last: '$value' },
               },
             },
           },
@@ -1337,13 +1275,13 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
       assert.strictEqual(results.length, 3);
       for (const doc of results) {
-        assert.strictEqual(doc.firstVal, "a");
-        assert.strictEqual(doc.lastVal, "c");
+        assert.strictEqual(doc.firstVal, 'a');
+        assert.strictEqual(doc.lastVal, 'c');
       }
     });
 
-    it("should compute $shift", async () => {
-      const coll = client.db(dbName).collection("swf_shift");
+    it('should compute $shift', async () => {
+      const coll = client.db(dbName).collection('swf_shift');
       await coll.insertMany([
         { x: 1, value: 10 },
         { x: 2, value: 20 },
@@ -1357,10 +1295,10 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
               sortBy: { x: 1 },
               output: {
                 prevValue: {
-                  $shift: { output: "$value", by: -1, default: 0 },
+                  $shift: { output: '$value', by: -1, default: 0 },
                 },
                 nextValue: {
-                  $shift: { output: "$value", by: 1, default: 0 },
+                  $shift: { output: '$value', by: 1, default: 0 },
                 },
               },
             },
@@ -1377,8 +1315,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[2].nextValue, 0); // no next
     });
 
-    it("should compute $locf in window", async () => {
-      const coll = client.db(dbName).collection("swf_locf");
+    it('should compute $locf in window', async () => {
+      const coll = client.db(dbName).collection('swf_locf');
       await coll.insertMany([
         { x: 1, value: 100 },
         { x: 2, value: null },
@@ -1392,7 +1330,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                filled: { $locf: "$value" },
+                filled: { $locf: '$value' },
               },
             },
           },
@@ -1406,8 +1344,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].filled, 400);
     });
 
-    it("should compute $linearFill in window", async () => {
-      const coll = client.db(dbName).collection("swf_linear");
+    it('should compute $linearFill in window', async () => {
+      const coll = client.db(dbName).collection('swf_linear');
       await coll.insertMany([
         { x: 1, value: 0 },
         { x: 2, value: null },
@@ -1421,7 +1359,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                filled: { $linearFill: "$value" },
+                filled: { $linearFill: '$value' },
               },
             },
           },
@@ -1435,8 +1373,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].filled, 30);
     });
 
-    it("should compute $min and $max", async () => {
-      const coll = client.db(dbName).collection("swf_minmax");
+    it('should compute $min and $max', async () => {
+      const coll = client.db(dbName).collection('swf_minmax');
       await coll.insertMany([
         { x: 1, value: 30 },
         { x: 2, value: 10 },
@@ -1450,8 +1388,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                minVal: { $min: "$value" },
-                maxVal: { $max: "$value" },
+                minVal: { $min: '$value' },
+                maxVal: { $max: '$value' },
               },
             },
           },
@@ -1465,13 +1403,9 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       }
     });
 
-    it("should compute $count", async () => {
-      const coll = client.db(dbName).collection("swf_count");
-      await coll.insertMany([
-        { x: 1 },
-        { x: 2 },
-        { x: 3 },
-      ]);
+    it('should compute $count', async () => {
+      const coll = client.db(dbName).collection('swf_count');
+      await coll.insertMany([{ x: 1 }, { x: 2 }, { x: 3 }]);
 
       const results = await coll
         .aggregate([
@@ -1492,8 +1426,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       }
     });
 
-    it("should handle empty collection", async () => {
-      const coll = client.db(dbName).collection("swf_empty");
+    it('should handle empty collection', async () => {
+      const coll = client.db(dbName).collection('swf_empty');
 
       const results = await coll
         .aggregate([
@@ -1509,13 +1443,13 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 0);
     });
 
-    it("should compute $rank with ties", async () => {
-      const coll = client.db(dbName).collection("swf_rank_ties");
+    it('should compute $rank with ties', async () => {
+      const coll = client.db(dbName).collection('swf_rank_ties');
       await coll.insertMany([
-        { score: 100, name: "a" },
-        { score: 90, name: "b" },
-        { score: 90, name: "c" },
-        { score: 80, name: "d" },
+        { score: 100, name: 'a' },
+        { score: 90, name: 'b' },
+        { score: 90, name: 'c' },
+        { score: 80, name: 'd' },
       ]);
 
       const results = await coll
@@ -1534,8 +1468,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 4);
       // Ranks should be 1, 2, 2, 4 (with gaps for ties)
       const first = results.find((d) => d.score === 100);
-      const second = results.find((d) => d.score === 90 && d.name === "b");
-      const third = results.find((d) => d.score === 90 && d.name === "c");
+      const second = results.find((d) => d.score === 90 && d.name === 'b');
+      const third = results.find((d) => d.score === 90 && d.name === 'c');
       const fourth = results.find((d) => d.score === 80);
 
       assert.strictEqual(first?.rank, 1);
@@ -1544,13 +1478,13 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(fourth?.rank, 4); // Gap after tie
     });
 
-    it("should compute $denseRank with ties", async () => {
-      const coll = client.db(dbName).collection("swf_denserank_ties");
+    it('should compute $denseRank with ties', async () => {
+      const coll = client.db(dbName).collection('swf_denserank_ties');
       await coll.insertMany([
-        { score: 100, name: "a" },
-        { score: 90, name: "b" },
-        { score: 90, name: "c" },
-        { score: 80, name: "d" },
+        { score: 100, name: 'a' },
+        { score: 90, name: 'b' },
+        { score: 90, name: 'c' },
+        { score: 80, name: 'd' },
       ]);
 
       const results = await coll
@@ -1569,8 +1503,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results.length, 4);
       // Dense ranks should be 1, 2, 2, 3 (no gaps)
       const first = results.find((d) => d.score === 100);
-      const second = results.find((d) => d.score === 90 && d.name === "b");
-      const third = results.find((d) => d.score === 90 && d.name === "c");
+      const second = results.find((d) => d.score === 90 && d.name === 'b');
+      const third = results.find((d) => d.score === 90 && d.name === 'c');
       const fourth = results.find((d) => d.score === 80);
 
       assert.strictEqual(first?.denseRank, 1);
@@ -1579,12 +1513,12 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(fourth?.denseRank, 3);
     });
 
-    it("should handle $min and $max with strings", async () => {
-      const coll = client.db(dbName).collection("swf_minmax_strings");
+    it('should handle $min and $max with strings', async () => {
+      const coll = client.db(dbName).collection('swf_minmax_strings');
       await coll.insertMany([
-        { x: 1, name: "banana" },
-        { x: 2, name: "apple" },
-        { x: 3, name: "cherry" },
+        { x: 1, name: 'banana' },
+        { x: 2, name: 'apple' },
+        { x: 3, name: 'cherry' },
       ]);
 
       const results = await coll
@@ -1593,8 +1527,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                minName: { $min: "$name" },
-                maxName: { $max: "$name" },
+                minName: { $min: '$name' },
+                maxName: { $max: '$name' },
               },
             },
           },
@@ -1603,13 +1537,13 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
 
       assert.strictEqual(results.length, 3);
       for (const doc of results) {
-        assert.strictEqual(doc.minName, "apple");
-        assert.strictEqual(doc.maxName, "cherry");
+        assert.strictEqual(doc.minName, 'apple');
+        assert.strictEqual(doc.maxName, 'cherry');
       }
     });
 
-    it("should compute $derivative", async () => {
-      const coll = client.db(dbName).collection("swf_derivative");
+    it('should compute $derivative', async () => {
+      const coll = client.db(dbName).collection('swf_derivative');
       await coll.insertMany([
         { t: 0, value: 0 },
         { t: 1, value: 10 },
@@ -1624,7 +1558,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
               sortBy: { t: 1 },
               output: {
                 rate: {
-                  $derivative: { input: "$value" },
+                  $derivative: { input: '$value' },
                   // MongoDB requires explicit window bounds for $derivative
                   window: { documents: [-1, 0] },
                 },
@@ -1641,8 +1575,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].rate, 30); // (60-30)/(3-2) = 30
     });
 
-    it("should compute $integral", async () => {
-      const coll = client.db(dbName).collection("swf_integral");
+    it('should compute $integral', async () => {
+      const coll = client.db(dbName).collection('swf_integral');
       await coll.insertMany([
         { t: 0, value: 0 },
         { t: 1, value: 10 },
@@ -1657,10 +1591,10 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
               sortBy: { t: 1 },
               output: {
                 area: {
-                  $integral: { input: "$value" },
+                  $integral: { input: '$value' },
                   // MongoDB computes integral over entire partition by default
                   // Using unbounded window to match this behavior
-                  window: { documents: ["unbounded", "unbounded"] },
+                  window: { documents: ['unbounded', 'unbounded'] },
                 },
               },
             },
@@ -1677,8 +1611,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[3].area, 20);
     });
 
-    it("should compute $expMovingAvg with N", async () => {
-      const coll = client.db(dbName).collection("swf_ema");
+    it('should compute $expMovingAvg with N', async () => {
+      const coll = client.db(dbName).collection('swf_ema');
       await coll.insertMany([
         { x: 1, value: 10 },
         { x: 2, value: 20 },
@@ -1691,7 +1625,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                ema: { $expMovingAvg: { input: "$value", N: 2 } },
+                ema: { $expMovingAvg: { input: '$value', N: 2 } },
               },
             },
           },
@@ -1705,8 +1639,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.ok(Math.abs((results[1].ema as number) - 16.67) < 0.1);
     });
 
-    it("should compute $covariancePop", async () => {
-      const coll = client.db(dbName).collection("swf_covpop");
+    it('should compute $covariancePop', async () => {
+      const coll = client.db(dbName).collection('swf_covpop');
       await coll.insertMany([
         { x: 1, a: 1, b: 2 },
         { x: 2, a: 2, b: 4 },
@@ -1719,7 +1653,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                cov: { $covariancePop: ["$a", "$b"] },
+                cov: { $covariancePop: ['$a', '$b'] },
               },
             },
           },
@@ -1734,8 +1668,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.ok(Math.abs((results[0].cov as number) - 1.333) < 0.01);
     });
 
-    it("should compute $stdDevPop", async () => {
-      const coll = client.db(dbName).collection("swf_stddevpop");
+    it('should compute $stdDevPop', async () => {
+      const coll = client.db(dbName).collection('swf_stddevpop');
       await coll.insertMany([
         { x: 1, value: 2 },
         { x: 2, value: 4 },
@@ -1753,7 +1687,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                stdDev: { $stdDevPop: "$value" },
+                stdDev: { $stdDevPop: '$value' },
               },
             },
           },
@@ -1765,8 +1699,8 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
       assert.strictEqual(results[0].stdDev, 2);
     });
 
-    it("should compute $stdDevSamp", async () => {
-      const coll = client.db(dbName).collection("swf_stddevsamp");
+    it('should compute $stdDevSamp', async () => {
+      const coll = client.db(dbName).collection('swf_stddevsamp');
       await coll.insertMany([
         { x: 1, value: 1 },
         { x: 2, value: 2 },
@@ -1779,7 +1713,7 @@ describe(`Advanced Aggregation Stages (${getTestModeName()})`, () => {
             $setWindowFields: {
               sortBy: { x: 1 },
               output: {
-                stdDev: { $stdDevSamp: "$value" },
+                stdDev: { $stdDevSamp: '$value' },
               },
             },
           },

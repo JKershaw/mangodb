@@ -8,11 +8,11 @@
  * - If MONGODB_URI is not set: Tests run against MangoDB
  */
 
-import { MongoClient } from "mongodb";
-import { MangoClient } from "../src/index.ts";
-import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { MongoClient } from 'mongodb';
+import { MangoClient } from '../src/index.ts';
+import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 export interface TestClient {
   connect(): Promise<void>;
@@ -27,7 +27,7 @@ export interface ListCollectionsCursor {
 
 export interface CollectionInfo {
   name: string;
-  type: "collection" | "view";
+  type: 'collection' | 'view';
   options?: Record<string, unknown>;
   info?: { readOnly: boolean };
 }
@@ -68,10 +68,7 @@ export interface RenameOptions {
 export interface TestDb {
   collection<T extends Document = Document>(name: string): TestCollection<T>;
   dropDatabase(): Promise<void>;
-  listCollections(
-    filter?: Document,
-    options?: ListCollectionsOptions
-  ): ListCollectionsCursor;
+  listCollections(filter?: Document, options?: ListCollectionsOptions): ListCollectionsCursor;
   stats(): Promise<DbStats>;
   aggregate<T extends Document = Document>(pipeline: Document[]): AggregationCursor<T>;
 }
@@ -99,16 +96,16 @@ export interface CollationOptions {
   locale: string;
   strength?: 1 | 2 | 3 | 4 | 5;
   caseLevel?: boolean;
-  caseFirst?: "upper" | "lower" | "off";
+  caseFirst?: 'upper' | 'lower' | 'off';
   numericOrdering?: boolean;
-  alternate?: "non-ignorable" | "shifted";
-  maxVariable?: "punct" | "space";
+  alternate?: 'non-ignorable' | 'shifted';
+  maxVariable?: 'punct' | 'space';
   backwards?: boolean;
 }
 
 export interface IndexInfo {
   v: number;
-  key: Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed">;
+  key: Record<string, 1 | -1 | 'text' | '2d' | '2dsphere' | 'hashed'>;
   name: string;
   unique?: boolean;
   sparse?: boolean;
@@ -153,14 +150,14 @@ export interface FindOneAndReplaceOptions {
   projection?: Document;
   sort?: Document;
   upsert?: boolean;
-  returnDocument?: "before" | "after";
+  returnDocument?: 'before' | 'after';
 }
 
 export interface FindOneAndUpdateOptions {
   projection?: Document;
   sort?: Document;
   upsert?: boolean;
-  returnDocument?: "before" | "after";
+  returnDocument?: 'before' | 'after';
 }
 
 export interface BulkWriteOperation {
@@ -184,30 +181,14 @@ export interface BulkWriteResult {
 }
 
 export interface TestCollection<T extends Document = Document> {
-  insertOne(
-    doc: T
-  ): Promise<{ acknowledged: boolean; insertedId: unknown }>;
-  insertMany(
-    docs: T[]
-  ): Promise<{ acknowledged: boolean; insertedIds: Record<number, unknown> }>;
+  insertOne(doc: T): Promise<{ acknowledged: boolean; insertedId: unknown }>;
+  insertMany(docs: T[]): Promise<{ acknowledged: boolean; insertedIds: Record<number, unknown> }>;
   findOne(filter?: Partial<T>, options?: FindOptions): Promise<T | null>;
   find(filter?: Partial<T>, options?: FindOptions): TestCursor<T>;
-  deleteOne(
-    filter: Partial<T>
-  ): Promise<{ acknowledged: boolean; deletedCount: number }>;
-  deleteMany(
-    filter: Partial<T>
-  ): Promise<{ acknowledged: boolean; deletedCount: number }>;
-  updateOne(
-    filter: Partial<T>,
-    update: Document,
-    options?: UpdateOptions
-  ): Promise<UpdateResult>;
-  updateMany(
-    filter: Partial<T>,
-    update: Document,
-    options?: UpdateOptions
-  ): Promise<UpdateResult>;
+  deleteOne(filter: Partial<T>): Promise<{ acknowledged: boolean; deletedCount: number }>;
+  deleteMany(filter: Partial<T>): Promise<{ acknowledged: boolean; deletedCount: number }>;
+  updateOne(filter: Partial<T>, update: Document, options?: UpdateOptions): Promise<UpdateResult>;
+  updateMany(filter: Partial<T>, update: Document, options?: UpdateOptions): Promise<UpdateResult>;
   replaceOne(
     filter: Partial<T>,
     replacement: T,
@@ -215,22 +196,23 @@ export interface TestCollection<T extends Document = Document> {
   ): Promise<UpdateResult>;
   countDocuments(filter?: Partial<T>): Promise<number>;
   createIndex(
-    keySpec: Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed">,
+    keySpec: Record<string, 1 | -1 | 'text' | '2d' | '2dsphere' | 'hashed'>,
     options?: CreateIndexOptions
   ): Promise<string>;
   createIndexes(
-    indexSpecs: Array<{ key: Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed"> } & CreateIndexOptions>
+    indexSpecs: Array<
+      { key: Record<string, 1 | -1 | 'text' | '2d' | '2dsphere' | 'hashed'> } & CreateIndexOptions
+    >
   ): Promise<string[]>;
-  dropIndex(indexNameOrSpec: string | Record<string, 1 | -1 | "text" | "2d" | "2dsphere" | "hashed">): Promise<void>;
-  dropIndexes(indexNames?: "*" | string[]): Promise<void>;
+  dropIndex(
+    indexNameOrSpec: string | Record<string, 1 | -1 | 'text' | '2d' | '2dsphere' | 'hashed'>
+  ): Promise<void>;
+  dropIndexes(indexNames?: '*' | string[]): Promise<void>;
   indexes(): Promise<IndexInfo[]>;
   listIndexes(): IndexCursor;
   // Phase 8: FindOneAnd* and bulkWrite
   // Driver 6.0+ returns document directly (not wrapped in { value, ok })
-  findOneAndDelete(
-    filter: Partial<T>,
-    options?: FindOneAndDeleteOptions
-  ): Promise<T | null>;
+  findOneAndDelete(filter: Partial<T>, options?: FindOneAndDeleteOptions): Promise<T | null>;
   findOneAndReplace(
     filter: Partial<T>,
     replacement: T,
@@ -275,7 +257,7 @@ export function isMongoDBMode(): boolean {
 }
 
 export function getTestModeName(): string {
-  return isMongoDBMode() ? "MongoDB" : "MangoDB";
+  return isMongoDBMode() ? 'MongoDB' : 'MangoDB';
 }
 
 /**
@@ -288,7 +270,7 @@ export async function createTestClient(): Promise<{
   cleanup: () => Promise<void>;
 }> {
   // Use clearly test-only prefix (_mtest_) + short UUID to stay under Atlas 38-byte limit
-  const dbName = `_mtest_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
+  const dbName = `_mtest_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
   if (isMongoDBMode()) {
     const client = new MongoClient(MONGODB_URI!);

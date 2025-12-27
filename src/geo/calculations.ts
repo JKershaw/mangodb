@@ -3,7 +3,7 @@
  * All calculations implemented from scratch without external libraries.
  */
 
-import type { Position, GeoJSONGeometry, GeoJSONPolygon, LinearRing } from "./geometry.ts";
+import type { Position, GeoJSONGeometry, GeoJSONPolygon, LinearRing } from './geometry.ts';
 
 // Earth radius in meters (WGS84 mean radius)
 export const EARTH_RADIUS_METERS = 6378100;
@@ -379,11 +379,11 @@ export function metersToRadians(meters: number): number {
  */
 export function geometryContainsPoint(geometry: GeoJSONGeometry, point: Position): boolean {
   switch (geometry.type) {
-    case "Point":
+    case 'Point':
       // Point contains point only if they're the same
       return geometry.coordinates[0] === point[0] && geometry.coordinates[1] === point[1];
 
-    case "LineString":
+    case 'LineString':
       // Check if point is on any segment of the line
       for (let i = 0; i < geometry.coordinates.length - 1; i++) {
         if (pointOnSegment(point, geometry.coordinates[i], geometry.coordinates[i + 1])) {
@@ -392,13 +392,13 @@ export function geometryContainsPoint(geometry: GeoJSONGeometry, point: Position
       }
       return false;
 
-    case "Polygon":
+    case 'Polygon':
       return pointInPolygon(point, geometry);
 
-    case "MultiPoint":
+    case 'MultiPoint':
       return geometry.coordinates.some((p) => p[0] === point[0] && p[1] === point[1]);
 
-    case "MultiLineString":
+    case 'MultiLineString':
       for (const line of geometry.coordinates) {
         for (let i = 0; i < line.length - 1; i++) {
           if (pointOnSegment(point, line[i], line[i + 1])) {
@@ -408,16 +408,16 @@ export function geometryContainsPoint(geometry: GeoJSONGeometry, point: Position
       }
       return false;
 
-    case "MultiPolygon":
+    case 'MultiPolygon':
       for (const polyCoords of geometry.coordinates) {
-        const poly: GeoJSONPolygon = { type: "Polygon", coordinates: polyCoords };
+        const poly: GeoJSONPolygon = { type: 'Polygon', coordinates: polyCoords };
         if (pointInPolygon(point, poly)) {
           return true;
         }
       }
       return false;
 
-    case "GeometryCollection":
+    case 'GeometryCollection':
       return geometry.geometries.some((g) => geometryContainsPoint(g, point));
 
     default:
@@ -430,54 +430,54 @@ export function geometryContainsPoint(geometry: GeoJSONGeometry, point: Position
  */
 export function geometriesIntersect(geo1: GeoJSONGeometry, geo2: GeoJSONGeometry): boolean {
   // Handle GeometryCollection by checking all sub-geometries
-  if (geo1.type === "GeometryCollection") {
+  if (geo1.type === 'GeometryCollection') {
     return geo1.geometries.some((g) => geometriesIntersect(g, geo2));
   }
-  if (geo2.type === "GeometryCollection") {
+  if (geo2.type === 'GeometryCollection') {
     return geo2.geometries.some((g) => geometriesIntersect(geo1, g));
   }
 
   // Point vs anything
-  if (geo1.type === "Point") {
+  if (geo1.type === 'Point') {
     return geometryContainsPoint(geo2, geo1.coordinates);
   }
-  if (geo2.type === "Point") {
+  if (geo2.type === 'Point') {
     return geometryContainsPoint(geo1, geo2.coordinates);
   }
 
   // MultiPoint vs anything
-  if (geo1.type === "MultiPoint") {
+  if (geo1.type === 'MultiPoint') {
     return geo1.coordinates.some((p) => geometryContainsPoint(geo2, p));
   }
-  if (geo2.type === "MultiPoint") {
+  if (geo2.type === 'MultiPoint') {
     return geo2.coordinates.some((p) => geometryContainsPoint(geo1, p));
   }
 
   // Polygon vs Polygon
-  if (geo1.type === "Polygon" && geo2.type === "Polygon") {
+  if (geo1.type === 'Polygon' && geo2.type === 'Polygon') {
     return polygonsIntersect(geo1, geo2);
   }
 
   // MultiPolygon vs Polygon
-  if (geo1.type === "MultiPolygon" && geo2.type === "Polygon") {
+  if (geo1.type === 'MultiPolygon' && geo2.type === 'Polygon') {
     return geo1.coordinates.some((polyCoords) =>
-      polygonsIntersect({ type: "Polygon", coordinates: polyCoords }, geo2)
+      polygonsIntersect({ type: 'Polygon', coordinates: polyCoords }, geo2)
     );
   }
-  if (geo1.type === "Polygon" && geo2.type === "MultiPolygon") {
+  if (geo1.type === 'Polygon' && geo2.type === 'MultiPolygon') {
     return geo2.coordinates.some((polyCoords) =>
-      polygonsIntersect(geo1, { type: "Polygon", coordinates: polyCoords })
+      polygonsIntersect(geo1, { type: 'Polygon', coordinates: polyCoords })
     );
   }
 
   // MultiPolygon vs MultiPolygon
-  if (geo1.type === "MultiPolygon" && geo2.type === "MultiPolygon") {
+  if (geo1.type === 'MultiPolygon' && geo2.type === 'MultiPolygon') {
     for (const coords1 of geo1.coordinates) {
       for (const coords2 of geo2.coordinates) {
         if (
           polygonsIntersect(
-            { type: "Polygon", coordinates: coords1 },
-            { type: "Polygon", coordinates: coords2 }
+            { type: 'Polygon', coordinates: coords1 },
+            { type: 'Polygon', coordinates: coords2 }
           )
         ) {
           return true;
@@ -488,7 +488,7 @@ export function geometriesIntersect(geo1: GeoJSONGeometry, geo2: GeoJSONGeometry
   }
 
   // LineString vs Polygon
-  if (geo1.type === "LineString" && geo2.type === "Polygon") {
+  if (geo1.type === 'LineString' && geo2.type === 'Polygon') {
     for (let i = 0; i < geo1.coordinates.length - 1; i++) {
       if (segmentIntersectsPolygon(geo1.coordinates[i], geo1.coordinates[i + 1], geo2)) {
         return true;
@@ -496,12 +496,12 @@ export function geometriesIntersect(geo1: GeoJSONGeometry, geo2: GeoJSONGeometry
     }
     return false;
   }
-  if (geo1.type === "Polygon" && geo2.type === "LineString") {
+  if (geo1.type === 'Polygon' && geo2.type === 'LineString') {
     return geometriesIntersect(geo2, geo1);
   }
 
   // LineString vs LineString
-  if (geo1.type === "LineString" && geo2.type === "LineString") {
+  if (geo1.type === 'LineString' && geo2.type === 'LineString') {
     for (let i = 0; i < geo1.coordinates.length - 1; i++) {
       for (let j = 0; j < geo2.coordinates.length - 1; j++) {
         if (
@@ -520,14 +520,14 @@ export function geometriesIntersect(geo1: GeoJSONGeometry, geo2: GeoJSONGeometry
   }
 
   // Handle MultiLineString
-  if (geo1.type === "MultiLineString") {
+  if (geo1.type === 'MultiLineString') {
     return geo1.coordinates.some((line) =>
-      geometriesIntersect({ type: "LineString", coordinates: line }, geo2)
+      geometriesIntersect({ type: 'LineString', coordinates: line }, geo2)
     );
   }
-  if (geo2.type === "MultiLineString") {
+  if (geo2.type === 'MultiLineString') {
     return geo2.coordinates.some((line) =>
-      geometriesIntersect(geo1, { type: "LineString", coordinates: line })
+      geometriesIntersect(geo1, { type: 'LineString', coordinates: line })
     );
   }
 

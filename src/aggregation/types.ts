@@ -1,7 +1,7 @@
 /**
  * Shared types for aggregation pipeline.
  */
-import type { Document } from "../types.ts";
+import type { Document } from '../types.ts';
 
 /**
  * Variable context for $filter, $map, $reduce expressions.
@@ -13,7 +13,7 @@ export type VariableContext = Record<string, unknown>;
  */
 export interface GeoIndexInfo {
   field: string;
-  type: "2d" | "2dsphere";
+  type: '2d' | '2dsphere';
   indexName: string;
 }
 

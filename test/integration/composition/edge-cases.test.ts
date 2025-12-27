@@ -6,13 +6,9 @@
  * Set MONGODB_URI environment variable to run against MongoDB.
  */
 
-import { describe, it, before, after } from "node:test";
-import assert from "node:assert";
-import {
-  createTestClient,
-  getTestModeName,
-  type TestClient,
-} from "../../test-harness.ts";
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import { createTestClient, getTestModeName, type TestClient } from '../../test-harness.ts';
 
 describe(`Edge Cases (${getTestModeName()})`, () => {
   let client: TestClient;
@@ -31,13 +27,25 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
     await cleanup();
   });
 
-  describe("Query edge cases", () => {
-    describe("$all with $elemMatch", () => {
-      it("should support $all with single $elemMatch", async () => {
-        const collection = client.db(dbName).collection("all_elemmatch_single");
+  describe('Query edge cases', () => {
+    describe('$all with $elemMatch', () => {
+      it('should support $all with single $elemMatch', async () => {
+        const collection = client.db(dbName).collection('all_elemmatch_single');
         await collection.insertMany([
-          { _id: 1, items: [{ a: 1, b: 2 }, { a: 3, b: 4 }] },
-          { _id: 2, items: [{ a: 1, b: 5 }, { a: 6, b: 2 }] },
+          {
+            _id: 1,
+            items: [
+              { a: 1, b: 2 },
+              { a: 3, b: 4 },
+            ],
+          },
+          {
+            _id: 2,
+            items: [
+              { a: 1, b: 5 },
+              { a: 6, b: 2 },
+            ],
+          },
           { _id: 3, items: [{ a: 7, b: 8 }] },
         ]);
 
@@ -50,8 +58,8 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         assert.strictEqual(result[0]._id, 1);
       });
 
-      it("should support $all with multiple $elemMatch", async () => {
-        const collection = client.db(dbName).collection("all_elemmatch_multi");
+      it('should support $all with multiple $elemMatch', async () => {
+        const collection = client.db(dbName).collection('all_elemmatch_multi');
         await collection.insertMany([
           { _id: 1, items: [{ x: 1 }, { x: 2 }, { x: 3 }] },
           { _id: 2, items: [{ x: 1 }, { x: 2 }] },
@@ -71,8 +79,8 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         assert.strictEqual(result[0]._id, 1);
       });
 
-      it("should support $all with $elemMatch containing operators", async () => {
-        const collection = client.db(dbName).collection("all_elemmatch_ops");
+      it('should support $all with $elemMatch containing operators', async () => {
+        const collection = client.db(dbName).collection('all_elemmatch_ops');
         await collection.insertMany([
           { _id: 1, scores: [{ val: 85 }, { val: 92 }] },
           { _id: 2, scores: [{ val: 70 }, { val: 75 }] },
@@ -90,30 +98,28 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       });
     });
 
-    describe("$expr with array operators", () => {
-      it("should support $expr with $in (expression form)", async () => {
-        const collection = client.db(dbName).collection("expr_in_expr");
+    describe('$expr with array operators', () => {
+      it('should support $expr with $in (expression form)', async () => {
+        const collection = client.db(dbName).collection('expr_in_expr');
         await collection.insertMany([
-          { _id: 1, status: "active", allowed: ["active", "pending"] },
-          { _id: 2, status: "deleted", allowed: ["active", "pending"] },
-          { _id: 3, status: "pending", allowed: ["active"] },
+          { _id: 1, status: 'active', allowed: ['active', 'pending'] },
+          { _id: 2, status: 'deleted', allowed: ['active', 'pending'] },
+          { _id: 3, status: 'pending', allowed: ['active'] },
         ]);
 
         // Find where status is in allowed array
-        const result = await collection
-          .find({ $expr: { $in: ["$status", "$allowed"] } })
-          .toArray();
+        const result = await collection.find({ $expr: { $in: ['$status', '$allowed'] } }).toArray();
 
         assert.strictEqual(result.length, 1);
         assert.strictEqual(result[0]._id, 1);
       });
 
-      it("should support $expr with $setIntersection", async () => {
-        const collection = client.db(dbName).collection("expr_setintersect");
+      it('should support $expr with $setIntersection', async () => {
+        const collection = client.db(dbName).collection('expr_setintersect');
         await collection.insertMany([
-          { _id: 1, tags: ["a", "b", "c"], required: ["a", "d"] },
-          { _id: 2, tags: ["x", "y"], required: ["a", "b"] },
-          { _id: 3, tags: ["a", "b"], required: ["a", "b"] },
+          { _id: 1, tags: ['a', 'b', 'c'], required: ['a', 'd'] },
+          { _id: 2, tags: ['x', 'y'], required: ['a', 'b'] },
+          { _id: 3, tags: ['a', 'b'], required: ['a', 'b'] },
         ]);
 
         // Find where tags contains all required
@@ -121,8 +127,8 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
           .find({
             $expr: {
               $eq: [
-                { $size: { $setIntersection: ["$tags", "$required"] } },
-                { $size: "$required" },
+                { $size: { $setIntersection: ['$tags', '$required'] } },
+                { $size: '$required' },
               ],
             },
           })
@@ -133,28 +139,26 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       });
     });
 
-    describe("$regex edge cases", () => {
-      it("should support $not with $regex", async () => {
-        const collection = client.db(dbName).collection("not_regex");
+    describe('$regex edge cases', () => {
+      it('should support $not with $regex', async () => {
+        const collection = client.db(dbName).collection('not_regex');
         await collection.insertMany([
-          { _id: 1, name: "test-file" },
-          { _id: 2, name: "production" },
-          { _id: 3, name: "test-data" },
+          { _id: 1, name: 'test-file' },
+          { _id: 2, name: 'production' },
+          { _id: 3, name: 'test-data' },
         ]);
 
-        const result = await collection
-          .find({ name: { $not: /^test/ } })
-          .toArray();
+        const result = await collection.find({ name: { $not: /^test/ } }).toArray();
 
         assert.strictEqual(result.length, 1);
         assert.strictEqual(result[0]._id, 2);
       });
 
-      it("should support $regex inside $elemMatch", async () => {
-        const collection = client.db(dbName).collection("elemmatch_regex");
+      it('should support $regex inside $elemMatch', async () => {
+        const collection = client.db(dbName).collection('elemmatch_regex');
         await collection.insertMany([
-          { _id: 1, tags: [{ name: "JavaScript" }, { name: "Python" }] },
-          { _id: 2, tags: [{ name: "Ruby" }, { name: "Go" }] },
+          { _id: 1, tags: [{ name: 'JavaScript' }, { name: 'Python' }] },
+          { _id: 2, tags: [{ name: 'Ruby' }, { name: 'Go' }] },
         ]);
 
         const result = await collection
@@ -167,10 +171,10 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
     });
   });
 
-  describe("Update edge cases", () => {
-    describe("$push with all modifiers", () => {
-      it("should support $push with $each, $slice, $sort combined", async () => {
-        const collection = client.db(dbName).collection("push_all_mods");
+  describe('Update edge cases', () => {
+    describe('$push with all modifiers', () => {
+      it('should support $push with $each, $slice, $sort combined', async () => {
+        const collection = client.db(dbName).collection('push_all_mods');
         await collection.insertOne({
           _id: 1,
           scores: [{ val: 80 }, { val: 90 }],
@@ -192,18 +196,14 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         const doc = await collection.findOne({ _id: 1 });
         assert.ok(doc);
         // Should have top 3 scores: 95, 90, 85
-        assert.deepStrictEqual(doc.scores, [
-          { val: 95 },
-          { val: 90 },
-          { val: 85 },
-        ]);
+        assert.deepStrictEqual(doc.scores, [{ val: 95 }, { val: 90 }, { val: 85 }]);
       });
 
-      it("should support $push with $each, $position, $slice", async () => {
-        const collection = client.db(dbName).collection("push_pos_slice");
+      it('should support $push with $each, $position, $slice', async () => {
+        const collection = client.db(dbName).collection('push_pos_slice');
         await collection.insertOne({
           _id: 1,
-          items: ["c", "d", "e"],
+          items: ['c', 'd', 'e'],
         });
 
         await collection.updateOne(
@@ -211,7 +211,7 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
           {
             $push: {
               items: {
-                $each: ["a", "b"],
+                $each: ['a', 'b'],
                 $position: 0,
                 $slice: 4,
               },
@@ -221,20 +221,20 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
 
         const doc = await collection.findOne({ _id: 1 });
         assert.ok(doc);
-        assert.deepStrictEqual(doc.items, ["a", "b", "c", "d"]);
+        assert.deepStrictEqual(doc.items, ['a', 'b', 'c', 'd']);
       });
     });
 
-    describe("$pull with complex conditions", () => {
-      it("should support $pull with multiple field conditions", async () => {
-        const collection = client.db(dbName).collection("pull_multi_cond");
+    describe('$pull with complex conditions', () => {
+      it('should support $pull with multiple field conditions', async () => {
+        const collection = client.db(dbName).collection('pull_multi_cond');
         await collection.insertOne({
           _id: 1,
           items: [
-            { name: "a", qty: 10, status: "active" },
-            { name: "b", qty: 5, status: "deleted" },
-            { name: "c", qty: 3, status: "active" },
-            { name: "d", qty: 8, status: "deleted" },
+            { name: 'a', qty: 10, status: 'active' },
+            { name: 'b', qty: 5, status: 'deleted' },
+            { name: 'c', qty: 3, status: 'active' },
+            { name: 'd', qty: 8, status: 'deleted' },
           ],
         });
 
@@ -243,7 +243,7 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
           { _id: 1 },
           {
             $pull: {
-              items: { $or: [{ status: "deleted" }, { qty: { $lt: 5 } }] },
+              items: { $or: [{ status: 'deleted' }, { qty: { $lt: 5 } }] },
             },
           }
         );
@@ -252,17 +252,17 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         assert.ok(doc);
         const items = doc.items as Array<{ name: string }>;
         assert.strictEqual(items.length, 1);
-        assert.strictEqual(items[0].name, "a");
+        assert.strictEqual(items[0].name, 'a');
       });
 
-      it("should support $pull with $elemMatch-style condition", async () => {
-        const collection = client.db(dbName).collection("pull_elemmatch_style");
+      it('should support $pull with $elemMatch-style condition', async () => {
+        const collection = client.db(dbName).collection('pull_elemmatch_style');
         await collection.insertOne({
           _id: 1,
           orders: [
-            { product: "A", qty: 10, price: 100 },
-            { product: "B", qty: 5, price: 200 },
-            { product: "C", qty: 20, price: 50 },
+            { product: 'A', qty: 10, price: 100 },
+            { product: 'B', qty: 5, price: 200 },
+            { product: 'C', qty: 20, price: 50 },
           ],
         });
 
@@ -277,26 +277,23 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         const orders = doc.orders as Array<{ product: string }>;
         assert.strictEqual(orders.length, 2);
         const products = orders.map((o) => o.product);
-        assert.deepStrictEqual(products.sort(), ["A", "B"]);
+        assert.deepStrictEqual(products.sort(), ['A', 'B']);
       });
     });
 
-    describe("Positional operators with nested arrays", () => {
-      it("should support $[] with nested array path", async () => {
-        const collection = client.db(dbName).collection("pos_nested_all");
+    describe('Positional operators with nested arrays', () => {
+      it('should support $[] with nested array path', async () => {
+        const collection = client.db(dbName).collection('pos_nested_all');
         await collection.insertOne({
           _id: 1,
           groups: [
-            { name: "G1", members: [{ score: 10 }, { score: 20 }] },
-            { name: "G2", members: [{ score: 30 }, { score: 40 }] },
+            { name: 'G1', members: [{ score: 10 }, { score: 20 }] },
+            { name: 'G2', members: [{ score: 30 }, { score: 40 }] },
           ],
         });
 
         // Double all scores in all groups
-        await collection.updateOne(
-          { _id: 1 },
-          { $mul: { "groups.$[].members.$[].score": 2 } }
-        );
+        await collection.updateOne({ _id: 1 }, { $mul: { 'groups.$[].members.$[].score': 2 } });
 
         const doc = await collection.findOne({ _id: 1 });
         assert.ok(doc);
@@ -307,23 +304,23 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         assert.strictEqual(groups[1].members[1].score, 80);
       });
 
-      it("should support multiple arrayFilters on nested arrays", async () => {
-        const collection = client.db(dbName).collection("pos_nested_filter");
+      it('should support multiple arrayFilters on nested arrays', async () => {
+        const collection = client.db(dbName).collection('pos_nested_filter');
         await collection.insertOne({
           _id: 1,
           departments: [
             {
-              name: "Engineering",
+              name: 'Engineering',
               employees: [
-                { name: "Alice", level: 3 },
-                { name: "Bob", level: 5 },
+                { name: 'Alice', level: 3 },
+                { name: 'Bob', level: 5 },
               ],
             },
             {
-              name: "Sales",
+              name: 'Sales',
               employees: [
-                { name: "Carol", level: 4 },
-                { name: "Dave", level: 2 },
+                { name: 'Carol', level: 4 },
+                { name: 'Dave', level: 2 },
               ],
             },
           ],
@@ -332,12 +329,9 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         // Promote employees with level >= 4 in Engineering
         await collection.updateOne(
           { _id: 1 },
-          { $inc: { "departments.$[dept].employees.$[emp].level": 1 } },
+          { $inc: { 'departments.$[dept].employees.$[emp].level': 1 } },
           {
-            arrayFilters: [
-              { "dept.name": "Engineering" },
-              { "emp.level": { $gte: 4 } },
-            ],
+            arrayFilters: [{ 'dept.name': 'Engineering' }, { 'emp.level': { $gte: 4 } }],
           }
         );
 
@@ -352,13 +346,13 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
     });
   });
 
-  describe("Variable scoping", () => {
-    describe("$$ROOT usage", () => {
-      it("should access $$ROOT in nested $map", async () => {
-        const collection = client.db(dbName).collection("root_nested_map");
+  describe('Variable scoping', () => {
+    describe('$$ROOT usage', () => {
+      it('should access $$ROOT in nested $map', async () => {
+        const collection = client.db(dbName).collection('root_nested_map');
         await collection.insertOne({
           _id: 1,
-          name: "Doc1",
+          name: 'Doc1',
           values: [1, 2, 3],
         });
 
@@ -368,11 +362,11 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
               $project: {
                 mapped: {
                   $map: {
-                    input: "$values",
-                    as: "v",
+                    input: '$values',
+                    as: 'v',
                     in: {
-                      value: "$$v",
-                      docName: "$$ROOT.name",
+                      value: '$$v',
+                      docName: '$$ROOT.name',
                     },
                   },
                 },
@@ -384,24 +378,24 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         const mapped = result[0].mapped as Array<{ value: number; docName: string }>;
         assert.strictEqual(mapped.length, 3);
         assert.strictEqual(mapped[0].value, 1);
-        assert.strictEqual(mapped[0].docName, "Doc1");
+        assert.strictEqual(mapped[0].docName, 'Doc1');
       });
 
-      it("should preserve $$ROOT through $unwind", async () => {
-        const collection = client.db(dbName).collection("root_unwind");
+      it('should preserve $$ROOT through $unwind', async () => {
+        const collection = client.db(dbName).collection('root_unwind');
         await collection.insertOne({
           _id: 1,
-          name: "Parent",
-          items: ["a", "b"],
+          name: 'Parent',
+          items: ['a', 'b'],
         });
 
         const result = await collection
           .aggregate([
-            { $unwind: "$items" },
+            { $unwind: '$items' },
             {
               $project: {
-                item: "$items",
-                originalName: "$$ROOT.name",
+                item: '$items',
+                originalName: '$$ROOT.name',
               },
             },
           ])
@@ -409,14 +403,14 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
 
         assert.strictEqual(result.length, 2);
         // $$ROOT should still reference the pre-unwind document
-        assert.strictEqual(result[0].originalName, "Parent");
-        assert.strictEqual(result[1].originalName, "Parent");
+        assert.strictEqual(result[0].originalName, 'Parent');
+        assert.strictEqual(result[1].originalName, 'Parent');
       });
     });
 
-    describe("$let expressions", () => {
-      it("should support $let with computed variables", async () => {
-        const collection = client.db(dbName).collection("let_computed");
+    describe('$let expressions', () => {
+      it('should support $let with computed variables', async () => {
+        const collection = client.db(dbName).collection('let_computed');
         await collection.insertOne({
           _id: 1,
           price: 100,
@@ -431,10 +425,10 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
                 total: {
                   $let: {
                     vars: {
-                      subtotal: { $multiply: ["$price", "$qty"] },
-                      taxMultiplier: { $add: [1, "$taxRate"] },
+                      subtotal: { $multiply: ['$price', '$qty'] },
+                      taxMultiplier: { $add: [1, '$taxRate'] },
                     },
-                    in: { $multiply: ["$$subtotal", "$$taxMultiplier"] },
+                    in: { $multiply: ['$$subtotal', '$$taxMultiplier'] },
                   },
                 },
               },
@@ -445,8 +439,8 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
         assert.strictEqual(result[0].total, 550); // 100 * 5 * 1.1
       });
 
-      it("should support nested $let with variable shadowing", async () => {
-        const collection = client.db(dbName).collection("let_shadow");
+      it('should support nested $let with variable shadowing', async () => {
+        const collection = client.db(dbName).collection('let_shadow');
         await collection.insertOne({ _id: 1, x: 10 });
 
         const result = await collection
@@ -457,11 +451,11 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
                   $let: {
                     vars: { val: 5 },
                     in: {
-                      outer: "$$val",
+                      outer: '$$val',
                       inner: {
                         $let: {
                           vars: { val: 20 }, // shadows outer val
-                          in: "$$val",
+                          in: '$$val',
                         },
                       },
                     },
@@ -478,12 +472,15 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       });
     });
 
-    describe("Variable shadowing in $map/$filter", () => {
-      it("should handle same variable name in nested $map", async () => {
-        const collection = client.db(dbName).collection("map_shadow");
+    describe('Variable shadowing in $map/$filter', () => {
+      it('should handle same variable name in nested $map', async () => {
+        const collection = client.db(dbName).collection('map_shadow');
         await collection.insertOne({
           _id: 1,
-          matrix: [[1, 2], [3, 4]],
+          matrix: [
+            [1, 2],
+            [3, 4],
+          ],
         });
 
         const result = await collection
@@ -492,13 +489,13 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
               $project: {
                 doubled: {
                   $map: {
-                    input: "$matrix",
-                    as: "item",
+                    input: '$matrix',
+                    as: 'item',
                     in: {
                       $map: {
-                        input: "$$item",
-                        as: "item", // Same variable name - shadows outer
-                        in: { $multiply: ["$$item", 2] },
+                        input: '$$item',
+                        as: 'item', // Same variable name - shadows outer
+                        in: { $multiply: ['$$item', 2] },
                       },
                     },
                   },
@@ -508,36 +505,37 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
           ])
           .toArray();
 
-        assert.deepStrictEqual(result[0].doubled, [[2, 4], [6, 8]]);
+        assert.deepStrictEqual(result[0].doubled, [
+          [2, 4],
+          [6, 8],
+        ]);
       });
     });
   });
 
-  describe("Numeric precision", () => {
-    it("should handle large integers near MAX_SAFE_INTEGER", async () => {
-      const collection = client.db(dbName).collection("large_int");
+  describe('Numeric precision', () => {
+    it('should handle large integers near MAX_SAFE_INTEGER', async () => {
+      const collection = client.db(dbName).collection('large_int');
       const largeNum = Number.MAX_SAFE_INTEGER - 10;
       await collection.insertOne({ _id: 1, value: largeNum });
 
       const result = await collection
-        .aggregate([
-          { $project: { incremented: { $add: ["$value", 5] } } },
-        ])
+        .aggregate([{ $project: { incremented: { $add: ['$value', 5] } } }])
         .toArray();
 
       assert.strictEqual(result[0].incremented, largeNum + 5);
     });
 
-    it("should handle division resulting in repeating decimals", async () => {
-      const collection = client.db(dbName).collection("div_repeat");
+    it('should handle division resulting in repeating decimals', async () => {
+      const collection = client.db(dbName).collection('div_repeat');
       await collection.insertOne({ _id: 1, num: 10, denom: 3 });
 
       const result = await collection
         .aggregate([
           {
             $project: {
-              divided: { $divide: ["$num", "$denom"] },
-              rounded: { $round: [{ $divide: ["$num", "$denom"] }, 4] },
+              divided: { $divide: ['$num', '$denom'] },
+              rounded: { $round: [{ $divide: ['$num', '$denom'] }, 4] },
             },
           },
         ])
@@ -549,7 +547,7 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
     });
 
     it("should handle $round with 0.5 (banker's rounding check)", async () => {
-      const collection = client.db(dbName).collection("round_half");
+      const collection = client.db(dbName).collection('round_half');
       await collection.insertMany([
         { _id: 1, val: 2.5 },
         { _id: 2, val: 3.5 },
@@ -557,10 +555,7 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       ]);
 
       const result = await collection
-        .aggregate([
-          { $project: { rounded: { $round: ["$val", 0] } } },
-          { $sort: { _id: 1 } },
-        ])
+        .aggregate([{ $project: { rounded: { $round: ['$val', 0] } } }, { $sort: { _id: 1 } }])
         .toArray();
 
       // MongoDB uses "round half to even" (banker's rounding)
@@ -569,8 +564,8 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       assert.strictEqual(result[2].rounded, -2); // -2.5 -> -2
     });
 
-    it("should handle $mod with negative numbers", async () => {
-      const collection = client.db(dbName).collection("mod_negative");
+    it('should handle $mod with negative numbers', async () => {
+      const collection = client.db(dbName).collection('mod_negative');
       await collection.insertMany([
         { _id: 1, a: -10, b: 3 },
         { _id: 2, a: 10, b: -3 },
@@ -578,35 +573,32 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       ]);
 
       const result = await collection
-        .aggregate([
-          { $project: { mod: { $mod: ["$a", "$b"] } } },
-          { $sort: { _id: 1 } },
-        ])
+        .aggregate([{ $project: { mod: { $mod: ['$a', '$b'] } } }, { $sort: { _id: 1 } }])
         .toArray();
 
       // Remainder takes sign of dividend
       assert.strictEqual(result[0].mod, -1); // -10 % 3 = -1
-      assert.strictEqual(result[1].mod, 1);  // 10 % -3 = 1
+      assert.strictEqual(result[1].mod, 1); // 10 % -3 = 1
       assert.strictEqual(result[2].mod, -1); // -10 % -3 = -1
     });
   });
 
-  describe("Empty/null propagation", () => {
-    it("should handle $in with empty array", async () => {
-      const collection = client.db(dbName).collection("in_empty");
+  describe('Empty/null propagation', () => {
+    it('should handle $in with empty array', async () => {
+      const collection = client.db(dbName).collection('in_empty');
       await collection.insertMany([
-        { _id: 1, val: "a" },
-        { _id: 2, val: "b" },
+        { _id: 1, val: 'a' },
+        { _id: 2, val: 'b' },
       ]);
 
       const result = await collection.find({ val: { $in: [] } }).toArray();
       assert.strictEqual(result.length, 0);
     });
 
-    it("should handle $all with empty array", async () => {
-      const collection = client.db(dbName).collection("all_empty");
+    it('should handle $all with empty array', async () => {
+      const collection = client.db(dbName).collection('all_empty');
       await collection.insertMany([
-        { _id: 1, tags: ["a", "b"] },
+        { _id: 1, tags: ['a', 'b'] },
         { _id: 2, tags: [] },
       ]);
 
@@ -615,8 +607,8 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       assert.strictEqual(result.length, 0);
     });
 
-    it("should handle $reduce with empty array", async () => {
-      const collection = client.db(dbName).collection("reduce_empty");
+    it('should handle $reduce with empty array', async () => {
+      const collection = client.db(dbName).collection('reduce_empty');
       await collection.insertOne({ _id: 1, values: [] });
 
       const result = await collection
@@ -625,9 +617,9 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
             $project: {
               sum: {
                 $reduce: {
-                  input: "$values",
+                  input: '$values',
                   initialValue: 100,
-                  in: { $add: ["$$value", "$$this"] },
+                  in: { $add: ['$$value', '$$this'] },
                 },
               },
             },
@@ -638,21 +630,19 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].sum, 100); // Returns initialValue
     });
 
-    it("should handle null in $concatArrays", async () => {
-      const collection = client.db(dbName).collection("concat_null");
+    it('should handle null in $concatArrays', async () => {
+      const collection = client.db(dbName).collection('concat_null');
       await collection.insertOne({ _id: 1, a: [1, 2], b: null });
 
       const result = await collection
-        .aggregate([
-          { $project: { combined: { $concatArrays: ["$a", "$b"] } } },
-        ])
+        .aggregate([{ $project: { combined: { $concatArrays: ['$a', '$b'] } } }])
         .toArray();
 
       assert.strictEqual(result[0].combined, null);
     });
 
-    it("should handle missing field in $ifNull chain", async () => {
-      const collection = client.db(dbName).collection("ifnull_chain");
+    it('should handle missing field in $ifNull chain', async () => {
+      const collection = client.db(dbName).collection('ifnull_chain');
       await collection.insertOne({ _id: 1 }); // No fields
 
       const result = await collection
@@ -660,32 +650,29 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
           {
             $project: {
               value: {
-                $ifNull: [
-                  "$missing1",
-                  { $ifNull: ["$missing2", "default"] },
-                ],
+                $ifNull: ['$missing1', { $ifNull: ['$missing2', 'default'] }],
               },
             },
           },
         ])
         .toArray();
 
-      assert.strictEqual(result[0].value, "default");
+      assert.strictEqual(result[0].value, 'default');
     });
 
-    it("should handle empty object in $mergeObjects", async () => {
-      const collection = client.db(dbName).collection("merge_empty");
+    it('should handle empty object in $mergeObjects', async () => {
+      const collection = client.db(dbName).collection('merge_empty');
       await collection.insertMany([
-        { _id: 1, category: "A", data: { x: 1 } },
-        { _id: 2, category: "A", data: {} },
+        { _id: 1, category: 'A', data: { x: 1 } },
+        { _id: 2, category: 'A', data: {} },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              merged: { $mergeObjects: "$data" },
+              _id: '$category',
+              merged: { $mergeObjects: '$data' },
             },
           },
         ])
@@ -696,39 +683,36 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
     });
   });
 
-  describe("Complex $lookup/$graphLookup", () => {
-    it("should support $lookup with $expr in pipeline", async () => {
-      const orders = client.db(dbName).collection("lookup_orders");
-      const products = client.db(dbName).collection("lookup_products");
+  describe('Complex $lookup/$graphLookup', () => {
+    it('should support $lookup with $expr in pipeline', async () => {
+      const orders = client.db(dbName).collection('lookup_orders');
+      const products = client.db(dbName).collection('lookup_products');
 
       await orders.insertMany([
-        { _id: 1, productId: "P1", qty: 5 },
-        { _id: 2, productId: "P2", qty: 3 },
+        { _id: 1, productId: 'P1', qty: 5 },
+        { _id: 2, productId: 'P2', qty: 3 },
       ]);
       await products.insertMany([
-        { _id: "P1", name: "Widget", minQty: 3 },
-        { _id: "P2", name: "Gadget", minQty: 5 },
+        { _id: 'P1', name: 'Widget', minQty: 3 },
+        { _id: 'P2', name: 'Gadget', minQty: 5 },
       ]);
 
       const result = await orders
         .aggregate([
           {
             $lookup: {
-              from: "lookup_products",
-              let: { pid: "$productId", orderQty: "$qty" },
+              from: 'lookup_products',
+              let: { pid: '$productId', orderQty: '$qty' },
               pipeline: [
                 {
                   $match: {
                     $expr: {
-                      $and: [
-                        { $eq: ["$_id", "$$pid"] },
-                        { $gte: ["$$orderQty", "$minQty"] },
-                      ],
+                      $and: [{ $eq: ['$_id', '$$pid'] }, { $gte: ['$$orderQty', '$minQty'] }],
                     },
                   },
                 },
               ],
-              as: "validProduct",
+              as: 'validProduct',
             },
           },
           { $sort: { _id: 1 } },
@@ -738,20 +722,20 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       // Order 1: qty 5 >= minQty 3, should match
       const vp0 = result[0].validProduct as Array<{ name: string }>;
       assert.strictEqual(vp0.length, 1);
-      assert.strictEqual(vp0[0].name, "Widget");
+      assert.strictEqual(vp0[0].name, 'Widget');
 
       // Order 2: qty 3 < minQty 5, should not match
       assert.strictEqual((result[1].validProduct as unknown[]).length, 0);
     });
 
-    it("should support $graphLookup with restrictSearchWithMatch", async () => {
-      const collection = client.db(dbName).collection("graph_restrict");
+    it('should support $graphLookup with restrictSearchWithMatch', async () => {
+      const collection = client.db(dbName).collection('graph_restrict');
       await collection.insertMany([
-        { _id: 1, name: "A", parent: null, active: true },
-        { _id: 2, name: "B", parent: "A", active: true },
-        { _id: 3, name: "C", parent: "B", active: false },
-        { _id: 4, name: "D", parent: "B", active: true },
-        { _id: 5, name: "E", parent: "C", active: true },
+        { _id: 1, name: 'A', parent: null, active: true },
+        { _id: 2, name: 'B', parent: 'A', active: true },
+        { _id: 3, name: 'C', parent: 'B', active: false },
+        { _id: 4, name: 'D', parent: 'B', active: true },
+        { _id: 5, name: 'E', parent: 'C', active: true },
       ]);
 
       const result = await collection
@@ -759,11 +743,11 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
           { $match: { _id: 1 } },
           {
             $graphLookup: {
-              from: "graph_restrict",
-              startWith: "$name",
-              connectFromField: "name",
-              connectToField: "parent",
-              as: "activeDescendants",
+              from: 'graph_restrict',
+              startWith: '$name',
+              connectFromField: 'name',
+              connectToField: 'parent',
+              as: 'activeDescendants',
               restrictSearchWithMatch: { active: true },
             },
           },
@@ -773,37 +757,37 @@ describe(`Edge Cases (${getTestModeName()})`, () => {
       // Should find B and D (active), but not C (inactive) or E (child of inactive)
       const descendants = result[0].activeDescendants as Array<{ name: string }>;
       const names = descendants.map((d) => d.name).sort();
-      assert.deepStrictEqual(names, ["B", "D"]);
+      assert.deepStrictEqual(names, ['B', 'D']);
     });
 
-    it("should support $lookup with complex pipeline and $group", async () => {
-      const orders = client.db(dbName).collection("lookup_orders2");
-      const items = client.db(dbName).collection("lookup_items2");
+    it('should support $lookup with complex pipeline and $group', async () => {
+      const orders = client.db(dbName).collection('lookup_orders2');
+      const items = client.db(dbName).collection('lookup_items2');
 
-      await orders.insertOne({ _id: 1, orderId: "O1" });
+      await orders.insertOne({ _id: 1, orderId: 'O1' });
       await items.insertMany([
-        { orderId: "O1", product: "A", qty: 2, price: 10 },
-        { orderId: "O1", product: "B", qty: 3, price: 20 },
-        { orderId: "O2", product: "C", qty: 1, price: 30 },
+        { orderId: 'O1', product: 'A', qty: 2, price: 10 },
+        { orderId: 'O1', product: 'B', qty: 3, price: 20 },
+        { orderId: 'O2', product: 'C', qty: 1, price: 30 },
       ]);
 
       const result = await orders
         .aggregate([
           {
             $lookup: {
-              from: "lookup_items2",
-              let: { oid: "$orderId" },
+              from: 'lookup_items2',
+              let: { oid: '$orderId' },
               pipeline: [
-                { $match: { $expr: { $eq: ["$orderId", "$$oid"] } } },
+                { $match: { $expr: { $eq: ['$orderId', '$$oid'] } } },
                 {
                   $group: {
                     _id: null,
-                    total: { $sum: { $multiply: ["$qty", "$price"] } },
+                    total: { $sum: { $multiply: ['$qty', '$price'] } },
                     itemCount: { $sum: 1 },
                   },
                 },
               ],
-              as: "summary",
+              as: 'summary',
             },
           },
         ])

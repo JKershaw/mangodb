@@ -45,9 +45,7 @@ export function applyLinearFill(
   values: (number | null | undefined)[],
   positions?: number[]
 ): (number | null)[] {
-  const result: (number | null)[] = [...values].map((v) =>
-    v === undefined ? null : v
-  );
+  const result: (number | null)[] = [...values].map((v) => (v === undefined ? null : v));
 
   // Use positions if provided, otherwise use indices
   const pos = positions ?? values.map((_, i) => i);
@@ -107,9 +105,7 @@ export function isGap(value: unknown): value is null | undefined {
 /**
  * Get the first non-null value from an array.
  */
-export function getFirstNonNull<T>(
-  values: (T | null | undefined)[]
-): T | null {
+export function getFirstNonNull<T>(values: (T | null | undefined)[]): T | null {
   for (const value of values) {
     if (value !== null && value !== undefined) {
       return value;
@@ -121,9 +117,7 @@ export function getFirstNonNull<T>(
 /**
  * Get the last non-null value from an array.
  */
-export function getLastNonNull<T>(
-  values: (T | null | undefined)[]
-): T | null {
+export function getLastNonNull<T>(values: (T | null | undefined)[]): T | null {
   for (let i = values.length - 1; i >= 0; i--) {
     if (values[i] !== null && values[i] !== undefined) {
       return values[i] as T;

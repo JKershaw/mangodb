@@ -1,14 +1,14 @@
 /**
  * Operator registry - maps operator names to handler functions.
  */
-import * as arithmetic from "./arithmetic.ts";
-import * as string from "./string.ts";
-import * as comparison from "./comparison.ts";
-import * as conditional from "./conditional.ts";
-import * as array from "./array.ts";
-import * as typeConversion from "./type-conversion.ts";
-import * as date from "./date.ts";
-import * as object from "./object.ts";
+import * as arithmetic from './arithmetic.ts';
+import * as string from './string.ts';
+import * as comparison from './comparison.ts';
+import * as conditional from './conditional.ts';
+import * as array from './array.ts';
+import * as typeConversion from './type-conversion.ts';
+import * as date from './date.ts';
+import * as object from './object.ts';
 
 /**
  * Registry of all expression operators.

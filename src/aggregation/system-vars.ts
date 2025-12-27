@@ -4,21 +4,21 @@
  * MongoDB provides built-in system variables that can be referenced
  * using the $$ prefix (e.g., $$NOW, $$ROOT, $$DESCEND).
  */
-import type { Document } from "../types.ts";
-import type { VariableContext } from "./types.ts";
+import type { Document } from '../types.ts';
+import type { VariableContext } from './types.ts';
 
 /**
  * Special marker object for $$REMOVE in projections.
  * When a field evaluates to this, the field is excluded from output.
  */
-export const REMOVE_MARKER = Symbol("$$REMOVE");
+export const REMOVE_MARKER = Symbol('$$REMOVE');
 
 /**
  * System variable string constants for $redact stage.
  */
-export const REDACT_DESCEND = "descend";
-export const REDACT_PRUNE = "prune";
-export const REDACT_KEEP = "keep";
+export const REDACT_DESCEND = 'descend';
+export const REDACT_PRUNE = 'prune';
+export const REDACT_KEEP = 'keep';
 
 /**
  * Create system variables context for expression evaluation.
@@ -27,10 +27,7 @@ export const REDACT_KEEP = "keep";
  * @param now - Optional fixed Date for $$NOW (defaults to new Date())
  * @returns Variable context with system variables
  */
-export function createSystemVars(
-  doc?: Document,
-  now?: Date
-): VariableContext {
+export function createSystemVars(doc?: Document, now?: Date): VariableContext {
   return {
     // $$NOW - Current datetime (fixed per aggregation pipeline)
     NOW: now ?? new Date(),

@@ -1,11 +1,11 @@
 /**
  * Type conversion expression operators.
  */
-import { ObjectId } from "bson";
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
-import { getValueByPath } from "../../utils.ts";
-import { getBSONTypeName } from "../helpers.ts";
+import { ObjectId } from 'bson';
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
+import { getValueByPath } from '../../utils.ts';
+import { getBSONTypeName } from '../helpers.ts';
 
 export function evalToInt(
   args: unknown,
@@ -19,17 +19,17 @@ export function evalToInt(
     return null;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return Math.trunc(value);
   }
 
-  if (typeof value === "boolean") {
+  if (typeof value === 'boolean') {
     return value ? 1 : 0;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (trimmed === "Infinity" || trimmed === "-Infinity" || trimmed === "NaN") {
+    if (trimmed === 'Infinity' || trimmed === '-Infinity' || trimmed === 'NaN') {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     const parsed = parseInt(value, 10);
@@ -59,23 +59,23 @@ export function evalToDouble(
     return null;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return value;
   }
 
-  if (typeof value === "boolean") {
+  if (typeof value === 'boolean') {
     return value ? 1.0 : 0.0;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (trimmed === "Infinity") {
+    if (trimmed === 'Infinity') {
       return Infinity;
     }
-    if (trimmed === "-Infinity") {
+    if (trimmed === '-Infinity') {
       return -Infinity;
     }
-    if (trimmed === "NaN") {
+    if (trimmed === 'NaN') {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     const parsed = parseFloat(value);
@@ -105,15 +105,15 @@ export function evalToBool(
     return null;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return value !== 0;
   }
 
-  if (typeof value === "boolean") {
+  if (typeof value === 'boolean') {
     return value;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return true;
   }
 
@@ -121,7 +121,7 @@ export function evalToBool(
     return true;
   }
 
-  if (Array.isArray(value) || typeof value === "object") {
+  if (Array.isArray(value) || typeof value === 'object') {
     return true;
   }
 
@@ -144,11 +144,11 @@ export function evalToDate(
     return value;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return new Date(value);
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const parsed = new Date(value);
     if (isNaN(parsed.getTime())) {
       throw new Error(`Error parsing date string '${value}'`);
@@ -167,53 +167,53 @@ export function evalType(
   evaluate: EvaluateExpressionFn
 ): string {
   // Special handling for $type - detect "missing" before evaluating
-  if (typeof args === "string" && args.startsWith("$") && !args.startsWith("$$")) {
+  if (typeof args === 'string' && args.startsWith('$') && !args.startsWith('$$')) {
     const fieldPath = args.slice(1);
     const value = getValueByPath(doc, fieldPath);
     if (value === undefined) {
-      return "missing";
+      return 'missing';
     }
   }
 
   const value = evaluate(args, doc, vars);
 
   if (value === undefined) {
-    return "missing";
+    return 'missing';
   }
 
   if (value === null) {
-    return "null";
+    return 'null';
   }
 
-  if (typeof value === "boolean") {
-    return "bool";
+  if (typeof value === 'boolean') {
+    return 'bool';
   }
 
-  if (typeof value === "number") {
-    return "double";
+  if (typeof value === 'number') {
+    return 'double';
   }
 
-  if (typeof value === "string") {
-    return "string";
+  if (typeof value === 'string') {
+    return 'string';
   }
 
   if (value instanceof Date) {
-    return "date";
+    return 'date';
   }
 
   if (Array.isArray(value)) {
-    return "array";
+    return 'array';
   }
 
-  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
-    return "objectId";
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === 'function') {
+    return 'objectId';
   }
 
-  if (typeof value === "object") {
-    return "object";
+  if (typeof value === 'object') {
+    return 'object';
   }
 
-  return "unknown";
+  return 'unknown';
 }
 
 /**
@@ -226,7 +226,7 @@ export function evalIsNumber(
   evaluate: EvaluateExpressionFn
 ): boolean {
   const value = evaluate(args, doc, vars);
-  return typeof value === "number" && !isNaN(value);
+  return typeof value === 'number' && !isNaN(value);
 }
 
 /**
@@ -245,17 +245,17 @@ export function evalToLong(
     return null;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return Math.trunc(value);
   }
 
-  if (typeof value === "boolean") {
+  if (typeof value === 'boolean') {
     return value ? 1 : 0;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (trimmed === "Infinity" || trimmed === "-Infinity" || trimmed === "NaN") {
+    if (trimmed === 'Infinity' || trimmed === '-Infinity' || trimmed === 'NaN') {
       throw new Error(`Failed to parse number '${value}' in $convert`);
     }
     const parsed = parseInt(value, 10);
@@ -302,14 +302,16 @@ export function evalToObjectId(
   }
 
   // Already an ObjectId
-  if (value && typeof (value as { toHexString?: unknown }).toHexString === "function") {
+  if (value && typeof (value as { toHexString?: unknown }).toHexString === 'function') {
     return value as ObjectId;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     // Validate 24-character hex string
     if (!/^[0-9a-fA-F]{24}$/.test(value)) {
-      throw new Error(`Invalid string length for parsing to ObjectId, string length: ${value.length} but must be 24`);
+      throw new Error(
+        `Invalid string length for parsing to ObjectId, string length: ${value.length} but must be 24`
+      );
     }
     return new ObjectId(value);
   }
@@ -328,8 +330,8 @@ export function evalConvert(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown {
-  if (typeof args !== "object" || args === null) {
-    throw new Error("$convert requires an object as argument");
+  if (typeof args !== 'object' || args === null) {
+    throw new Error('$convert requires an object as argument');
   }
 
   const spec = args as { input: unknown; to: unknown; onError?: unknown; onNull?: unknown };
@@ -345,21 +347,21 @@ export function evalConvert(
   const toType = evaluate(spec.to, doc, vars);
   let targetType: string;
 
-  if (typeof toType === "string") {
+  if (typeof toType === 'string') {
     targetType = toType.toLowerCase();
-  } else if (typeof toType === "number") {
+  } else if (typeof toType === 'number') {
     // MongoDB type codes
     const typeCodes: Record<number, string> = {
-      1: "double",
-      2: "string",
-      7: "objectId",
-      8: "bool",
-      9: "date",
-      16: "int",
-      18: "long",
-      19: "decimal",
+      1: 'double',
+      2: 'string',
+      7: 'objectId',
+      8: 'bool',
+      9: 'date',
+      16: 'int',
+      18: 'long',
+      19: 'decimal',
     };
-    targetType = typeCodes[toType] || "unknown";
+    targetType = typeCodes[toType] || 'unknown';
   } else {
     throw new Error(`Invalid 'to' type in $convert`);
   }
@@ -376,22 +378,22 @@ export function evalConvert(
     }
 
     switch (targetType) {
-      case "string":
+      case 'string':
         return evalToString(spec.input, doc, vars, evaluate);
-      case "bool":
-      case "boolean":
+      case 'bool':
+      case 'boolean':
         return evalToBool(spec.input, doc, vars, evaluate);
-      case "int":
+      case 'int':
         return evalToInt(spec.input, doc, vars, evaluate);
-      case "long":
+      case 'long':
         return evalToLong(spec.input, doc, vars, evaluate);
-      case "double":
+      case 'double':
         return evalToDouble(spec.input, doc, vars, evaluate);
-      case "decimal":
+      case 'decimal':
         return evalToDecimal(spec.input, doc, vars, evaluate);
-      case "date":
+      case 'date':
         return evalToDate(spec.input, doc, vars, evaluate);
-      case "objectid":
+      case 'objectid':
         return evalToObjectId(spec.input, doc, vars, evaluate);
       default:
         throw new Error(`Unsupported target type '${targetType}' in $convert`);
@@ -417,11 +419,11 @@ function evalToString(
     return null;
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return value;
   }
 
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
 
@@ -429,7 +431,7 @@ function evalToString(
     return value.toISOString();
   }
 
-  if (value && typeof (value as { toHexString?: () => string }).toHexString === "function") {
+  if (value && typeof (value as { toHexString?: () => string }).toHexString === 'function') {
     return (value as { toHexString: () => string }).toHexString();
   }
 

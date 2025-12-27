@@ -1,10 +1,10 @@
 /**
  * Accumulator classes for $group stage.
  */
-import type { Document } from "../types.ts";
-import { compareValuesForSort } from "../utils.ts";
-import { valuesEqual } from "../document-utils.ts";
-import { evaluateExpression } from "./expression.ts";
+import type { Document } from '../types.ts';
+import { compareValuesForSort } from '../utils.ts';
+import { valuesEqual } from '../document-utils.ts';
+import { evaluateExpression } from './expression.ts';
 
 export interface Accumulator {
   accumulate(doc: Document): void;
@@ -21,7 +21,7 @@ class SumAccumulator implements Accumulator {
 
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
-    if (typeof value === "number") {
+    if (typeof value === 'number') {
       this.sum += value;
     }
   }
@@ -42,7 +42,7 @@ class AvgAccumulator implements Accumulator {
 
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
-    if (typeof value === "number") {
+    if (typeof value === 'number') {
       this.sum += value;
       this.count++;
     }
@@ -202,7 +202,12 @@ class MergeObjectsAccumulator implements Accumulator {
 
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
-    if (value !== null && value !== undefined && typeof value === "object" && !Array.isArray(value)) {
+    if (
+      value !== null &&
+      value !== undefined &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
       Object.assign(this.result, value);
     }
   }
@@ -225,7 +230,7 @@ class StdDevPopAccumulator implements Accumulator {
 
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
-    if (typeof value === "number" && !isNaN(value)) {
+    if (typeof value === 'number' && !isNaN(value)) {
       this.values.push(value);
     }
   }
@@ -256,7 +261,7 @@ class StdDevSampAccumulator implements Accumulator {
 
   accumulate(doc: Document): void {
     const value = evaluateExpression(this.expr, doc);
-    if (typeof value === "number" && !isNaN(value)) {
+    if (typeof value === 'number' && !isNaN(value)) {
       this.values.push(value);
     }
   }
@@ -276,29 +281,29 @@ class StdDevSampAccumulator implements Accumulator {
 
 export function createAccumulator(op: string, expr: unknown): Accumulator {
   switch (op) {
-    case "$sum":
+    case '$sum':
       return new SumAccumulator(expr);
-    case "$avg":
+    case '$avg':
       return new AvgAccumulator(expr);
-    case "$min":
+    case '$min':
       return new MinAccumulator(expr);
-    case "$max":
+    case '$max':
       return new MaxAccumulator(expr);
-    case "$first":
+    case '$first':
       return new FirstAccumulator(expr);
-    case "$last":
+    case '$last':
       return new LastAccumulator(expr);
-    case "$push":
+    case '$push':
       return new PushAccumulator(expr);
-    case "$addToSet":
+    case '$addToSet':
       return new AddToSetAccumulator(expr);
-    case "$count":
+    case '$count':
       return new CountAccumulator();
-    case "$mergeObjects":
+    case '$mergeObjects':
       return new MergeObjectsAccumulator(expr);
-    case "$stdDevPop":
+    case '$stdDevPop':
       return new StdDevPopAccumulator(expr);
-    case "$stdDevSamp":
+    case '$stdDevSamp':
       return new StdDevSampAccumulator(expr);
     default:
       throw new Error(`unknown group operator '${op}'`);

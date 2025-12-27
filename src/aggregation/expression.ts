@@ -1,10 +1,10 @@
 /**
  * Expression evaluation for aggregation pipeline.
  */
-import type { Document } from "../types.ts";
-import type { VariableContext } from "./types.ts";
-import { getValueByPath } from "../utils.ts";
-import { operators } from "./operators/index.ts";
+import type { Document } from '../types.ts';
+import type { VariableContext } from './types.ts';
+import { getValueByPath } from '../utils.ts';
+import { operators } from './operators/index.ts';
 
 /**
  * Evaluate an aggregation expression against a document.
@@ -15,22 +15,18 @@ import { operators } from "./operators/index.ts";
  * - Literal values: numbers, strings, booleans, null
  * - Operator expressions: { $add: [...] }, { $concat: [...] }, etc.
  */
-export function evaluateExpression(
-  expr: unknown,
-  doc: Document,
-  vars?: VariableContext
-): unknown {
+export function evaluateExpression(expr: unknown, doc: Document, vars?: VariableContext): unknown {
   // String starting with $$ is a variable reference
-  if (typeof expr === "string" && expr.startsWith("$$")) {
+  if (typeof expr === 'string' && expr.startsWith('$$')) {
     const varPath = expr.slice(2);
-    const dotIndex = varPath.indexOf(".");
+    const dotIndex = varPath.indexOf('.');
     if (dotIndex === -1) {
       return vars?.[varPath];
     } else {
       const varName = varPath.slice(0, dotIndex);
       const fieldPath = varPath.slice(dotIndex + 1);
       const varValue = vars?.[varName];
-      if (varValue && typeof varValue === "object") {
+      if (varValue && typeof varValue === 'object') {
         return getValueByPath(varValue as Document, fieldPath);
       }
       return undefined;
@@ -38,13 +34,13 @@ export function evaluateExpression(
   }
 
   // String starting with $ is a field reference
-  if (typeof expr === "string" && expr.startsWith("$")) {
+  if (typeof expr === 'string' && expr.startsWith('$')) {
     const fieldPath = expr.slice(1);
     return getValueByPath(doc, fieldPath);
   }
 
   // Primitive values returned as-is
-  if (expr === null || typeof expr !== "object") {
+  if (expr === null || typeof expr !== 'object') {
     return expr;
   }
 
@@ -57,12 +53,12 @@ export function evaluateExpression(
   const exprObj = expr as Record<string, unknown>;
   const keys = Object.keys(exprObj);
 
-  if (keys.length === 1 && keys[0].startsWith("$")) {
+  if (keys.length === 1 && keys[0].startsWith('$')) {
     const op = keys[0];
     const args = exprObj[op];
 
     // Handle $literal specially - return as-is without evaluation
-    if (op === "$literal") {
+    if (op === '$literal') {
       return args;
     }
 

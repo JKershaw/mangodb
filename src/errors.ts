@@ -2,7 +2,7 @@
  * MongoDB-compatible error classes for MangoDB.
  */
 
-import type { IndexKeySpec } from "./types.ts";
+import type { IndexKeySpec } from './types.ts';
 
 /**
  * MongoDB error codes used by MangoDB error classes.
@@ -65,11 +65,11 @@ export class DuplicateKeyError extends Error {
   ) {
     const keyStr = Object.entries(keyValue)
       .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-      .join(", ");
+      .join(', ');
     super(
       `E11000 duplicate key error collection: ${db}.${collection} index: ${indexName} dup key: { ${keyStr} }`
     );
-    this.name = "DuplicateKeyError";
+    this.name = 'DuplicateKeyError';
     this.keyPattern = keyPattern;
     this.keyValue = keyValue;
   }
@@ -93,7 +93,7 @@ export class DuplicateKeyError extends Error {
 export class IndexNotFoundError extends Error {
   /** MongoDB error code for IndexNotFound */
   readonly code = MONGO_ERROR_CODES.INDEX_NOT_FOUND;
-  readonly codeName = "IndexNotFound";
+  readonly codeName = 'IndexNotFound';
 
   /**
    * Create a new IndexNotFoundError.
@@ -103,7 +103,7 @@ export class IndexNotFoundError extends Error {
   constructor(indexName: string) {
     // MongoDB uses "index not found with name [indexName]"
     super(`index not found with name [${indexName}]`);
-    this.name = "IndexNotFoundError";
+    this.name = 'IndexNotFoundError';
   }
 }
 
@@ -126,14 +126,14 @@ export class IndexNotFoundError extends Error {
 export class CannotDropIdIndexError extends Error {
   /** MongoDB error code for InvalidOptions */
   readonly code = MONGO_ERROR_CODES.CANNOT_DROP_ID_INDEX;
-  readonly codeName = "InvalidOptions";
+  readonly codeName = 'InvalidOptions';
 
   /**
    * Create a new CannotDropIdIndexError.
    */
   constructor() {
-    super("cannot drop _id index");
-    this.name = "CannotDropIdIndexError";
+    super('cannot drop _id index');
+    this.name = 'CannotDropIdIndexError';
   }
 }
 
@@ -155,14 +155,14 @@ export class CannotDropIdIndexError extends Error {
 export class TextIndexRequiredError extends Error {
   /** MongoDB error code for IndexNotFound */
   readonly code = MONGO_ERROR_CODES.INDEX_NOT_FOUND;
-  readonly codeName = "IndexNotFound";
+  readonly codeName = 'IndexNotFound';
 
   /**
    * Create a new TextIndexRequiredError.
    */
   constructor() {
-    super("text index required for $text query");
-    this.name = "TextIndexRequiredError";
+    super('text index required for $text query');
+    this.name = 'TextIndexRequiredError';
   }
 }
 
@@ -188,7 +188,7 @@ export class TextIndexRequiredError extends Error {
 export class InvalidIndexOptionsError extends Error {
   /** MongoDB error code for InvalidOptions */
   readonly code = MONGO_ERROR_CODES.INVALID_OPTIONS;
-  readonly codeName = "InvalidOptions";
+  readonly codeName = 'InvalidOptions';
 
   /**
    * Create a new InvalidIndexOptionsError.
@@ -197,7 +197,7 @@ export class InvalidIndexOptionsError extends Error {
    */
   constructor(message: string) {
     super(message);
-    this.name = "InvalidIndexOptionsError";
+    this.name = 'InvalidIndexOptionsError';
   }
 }
 
@@ -219,7 +219,7 @@ export class InvalidIndexOptionsError extends Error {
 export class BadHintError extends Error {
   /** MongoDB error code for bad hint */
   readonly code = MONGO_ERROR_CODES.BAD_VALUE;
-  readonly codeName = "BadValue";
+  readonly codeName = 'BadValue';
 
   /**
    * Create a new BadHintError.
@@ -227,9 +227,9 @@ export class BadHintError extends Error {
    * @param hint - The hint that was specified (index name or key pattern)
    */
   constructor(hint: string | Record<string, unknown>) {
-    const hintStr = typeof hint === "string" ? hint : JSON.stringify(hint);
+    const hintStr = typeof hint === 'string' ? hint : JSON.stringify(hint);
     super(`planner returned error: bad hint - ${hintStr}`);
-    this.name = "BadHintError";
+    this.name = 'BadHintError';
   }
 }
 
@@ -253,16 +253,16 @@ export class BadHintError extends Error {
 export class NamespaceNotFoundError extends Error {
   /** MongoDB error code for NamespaceNotFound */
   readonly code = MONGO_ERROR_CODES.NAMESPACE_NOT_FOUND;
-  readonly codeName = "NamespaceNotFound";
+  readonly codeName = 'NamespaceNotFound';
 
   /**
    * Create a new NamespaceNotFoundError.
    *
    * @param message - Description of the namespace issue (default: "source namespace does not exist")
    */
-  constructor(message = "source namespace does not exist") {
+  constructor(message = 'source namespace does not exist') {
     super(message);
-    this.name = "NamespaceNotFoundError";
+    this.name = 'NamespaceNotFoundError';
   }
 }
 
@@ -286,16 +286,16 @@ export class NamespaceNotFoundError extends Error {
 export class TargetNamespaceExistsError extends Error {
   /** MongoDB error code for NamespaceExists */
   readonly code = MONGO_ERROR_CODES.NAMESPACE_EXISTS;
-  readonly codeName = "NamespaceExists";
+  readonly codeName = 'NamespaceExists';
 
   /**
    * Create a new TargetNamespaceExistsError.
    *
    * @param message - Description of the namespace issue (default: "target namespace exists")
    */
-  constructor(message = "target namespace exists") {
+  constructor(message = 'target namespace exists') {
     super(message);
-    this.name = "TargetNamespaceExistsError";
+    this.name = 'TargetNamespaceExistsError';
   }
 }
 
@@ -318,7 +318,7 @@ export class TargetNamespaceExistsError extends Error {
 export class IllegalOperationError extends Error {
   /** MongoDB error code for IllegalOperation */
   readonly code = MONGO_ERROR_CODES.ILLEGAL_OPERATION;
-  readonly codeName = "IllegalOperation";
+  readonly codeName = 'IllegalOperation';
 
   /**
    * Create a new IllegalOperationError.
@@ -327,7 +327,7 @@ export class IllegalOperationError extends Error {
    */
   constructor(message: string) {
     super(message);
-    this.name = "IllegalOperationError";
+    this.name = 'IllegalOperationError';
   }
 }
 
@@ -349,7 +349,7 @@ export class IllegalOperationError extends Error {
 export class InvalidNamespaceError extends Error {
   /** MongoDB error code for InvalidNamespace */
   readonly code = MONGO_ERROR_CODES.INVALID_NAMESPACE;
-  readonly codeName = "InvalidNamespace";
+  readonly codeName = 'InvalidNamespace';
 
   /**
    * Create a new InvalidNamespaceError.
@@ -358,6 +358,6 @@ export class InvalidNamespaceError extends Error {
    */
   constructor(message: string) {
     super(message);
-    this.name = "InvalidNamespaceError";
+    this.name = 'InvalidNamespaceError';
   }
 }

@@ -4,12 +4,12 @@
  * Used by $redact to walk through nested documents and arrays,
  * applying access control logic at each level.
  */
-import type { Document } from "../types.ts";
+import type { Document } from '../types.ts';
 
 /**
  * Actions that can be taken during document traversal.
  */
-export type TraversalAction = "descend" | "prune" | "keep";
+export type TraversalAction = 'descend' | 'prune' | 'keep';
 
 /**
  * Recursively traverse a document, applying a callback at each level.
@@ -27,11 +27,11 @@ export function traverseDocument(
   // Get the action for this document
   const action = callback(doc);
 
-  if (action === "prune") {
+  if (action === 'prune') {
     return null;
   }
 
-  if (action === "keep") {
+  if (action === 'keep') {
     return doc;
   }
 
@@ -47,7 +47,7 @@ export function traverseDocument(
       for (const item of value) {
         if (
           item !== null &&
-          typeof item === "object" &&
+          typeof item === 'object' &&
           !Array.isArray(item) &&
           !(item instanceof Date)
         ) {
@@ -63,10 +63,7 @@ export function traverseDocument(
         }
       }
       result[key] = processedArray;
-    } else if (
-      typeof value === "object" &&
-      !(value instanceof Date)
-    ) {
+    } else if (typeof value === 'object' && !(value instanceof Date)) {
       // Recurse into embedded documents
       const processed = traverseDocument(value as Document, callback);
       if (processed !== null) {

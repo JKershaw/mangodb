@@ -37,7 +37,7 @@ export {
   normalizePoint,
   getBoundingBox,
   getAllPositions,
-} from "./geometry.ts";
+} from './geometry.ts';
 
 // Distance and intersection calculations
 export {
@@ -62,7 +62,7 @@ export {
   metersToRadians,
   geometryContainsPoint,
   geometriesIntersect,
-} from "./calculations.ts";
+} from './calculations.ts';
 
 // Shape specifiers
 export {
@@ -89,7 +89,7 @@ export {
   validateGeoWithinShape,
   validateGeoIntersectsShape,
   parseNearQuery,
-} from "./shapes.ts";
+} from './shapes.ts';
 
 // Operator implementations
 export {
@@ -105,7 +105,7 @@ export {
   calculateDistance,
   validateNearPoint,
   getGeoFieldFromIndexes,
-} from "./operators.ts";
+} from './operators.ts';
 
 // Error classes
 export {
@@ -118,4 +118,4 @@ export {
   InvalidGeoIntersectsError,
   DuplicateGeoIndexError,
   CoordinateOutOfBoundsError,
-} from "./errors.ts";
+} from './errors.ts';

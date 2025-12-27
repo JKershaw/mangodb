@@ -1,13 +1,9 @@
 /**
  * AggregationCursor and pipeline stage implementations.
  */
-import { matchesFilter } from "../query-matcher.ts";
-import {
-  getValueByPath,
-  setValueByPath,
-  compareValuesForSort,
-} from "../utils.ts";
-import { cloneDocument, valuesEqual } from "../document-utils.ts";
+import { matchesFilter } from '../query-matcher.ts';
+import { getValueByPath, setValueByPath, compareValuesForSort } from '../utils.ts';
+import { cloneDocument, valuesEqual } from '../document-utils.ts';
 import type {
   Document,
   Filter,
@@ -15,22 +11,22 @@ import type {
   SortSpec,
   UnwindOptions,
   ProjectExpression,
-} from "../types.ts";
-import type { AggregationDbContext } from "./types.ts";
-import { evaluateExpression } from "./expression.ts";
-import { createAccumulator } from "./accumulators.ts";
-import { getBSONTypeName } from "./helpers.ts";
-import { createSystemVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from "./system-vars.ts";
-import { traverseDocument } from "./traverse.ts";
-import { partitionDocuments, sortPartition } from "./partition.ts";
-import { addDateStep, type TimeUnit, isValidTimeUnit } from "./date-utils.ts";
-import { applyLocf, applyLinearFill } from "./gap-fill.ts";
+} from '../types.ts';
+import type { AggregationDbContext } from './types.ts';
+import { evaluateExpression } from './expression.ts';
+import { createAccumulator } from './accumulators.ts';
+import { getBSONTypeName } from './helpers.ts';
+import { createSystemVars, REDACT_DESCEND, REDACT_PRUNE, REDACT_KEEP } from './system-vars.ts';
+import { traverseDocument } from './traverse.ts';
+import { partitionDocuments, sortPartition } from './partition.ts';
+import { addDateStep, type TimeUnit, isValidTimeUnit } from './date-utils.ts';
+import { applyLocf, applyLinearFill } from './gap-fill.ts';
 import {
   extractPointFromDocument,
   calculateDistance,
   parseNearQuery,
   GeoNearIndexRequiredError,
-} from "../geo/index.ts";
+} from '../geo/index.ts';
 
 /**
  * Specification for $geoNear aggregation stage.
@@ -81,14 +77,14 @@ export class AggregationCursor<T extends Document = Document> {
     // Validate stage positions
     for (let i = 0; i < this.pipeline.length; i++) {
       const stage = this.pipeline[i] as unknown as Record<string, unknown>;
-      if ("$out" in stage && i !== this.pipeline.length - 1) {
-        throw new Error("$out can only be the final stage in the pipeline");
+      if ('$out' in stage && i !== this.pipeline.length - 1) {
+        throw new Error('$out can only be the final stage in the pipeline');
       }
-      if ("$documents" in stage && i !== 0) {
-        throw new Error("$documents must be the first stage in the pipeline");
+      if ('$documents' in stage && i !== 0) {
+        throw new Error('$documents must be the first stage in the pipeline');
       }
-      if ("$geoNear" in stage && i !== 0) {
-        throw new Error("$geoNear is only valid as the first stage in an aggregation pipeline");
+      if ('$geoNear' in stage && i !== 0) {
+        throw new Error('$geoNear is only valid as the first stage in an aggregation pipeline');
       }
     }
 
@@ -97,7 +93,7 @@ export class AggregationCursor<T extends Document = Document> {
     // Handle $documents as first stage specially
     if (this.pipeline.length > 0) {
       const firstStage = this.pipeline[0] as unknown as Record<string, unknown>;
-      if ("$documents" in firstStage) {
+      if ('$documents' in firstStage) {
         documents = this.execDocuments(firstStage.$documents);
         // Process remaining stages
         for (let i = 1; i < this.pipeline.length; i++) {
@@ -107,7 +103,7 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Handle $geoNear as first stage specially - it needs to sort results
-      if ("$geoNear" in firstStage) {
+      if ('$geoNear' in firstStage) {
         const sourceDocuments = await this.source();
         documents = await this.execGeoNear(firstStage.$geoNear as GeoNearSpec, sourceDocuments);
         // Process remaining stages
@@ -127,39 +123,36 @@ export class AggregationCursor<T extends Document = Document> {
     return documents;
   }
 
-  private async executeStage(
-    stage: PipelineStage,
-    docs: Document[]
-  ): Promise<Document[]> {
+  private async executeStage(stage: PipelineStage, docs: Document[]): Promise<Document[]> {
     const stageKeys = Object.keys(stage);
     if (stageKeys.length !== 1) {
-      throw new Error("Pipeline stage must have exactly one field");
+      throw new Error('Pipeline stage must have exactly one field');
     }
 
     const stageKey = stageKeys[0];
     const stageValue = (stage as unknown as Record<string, unknown>)[stageKey];
 
     switch (stageKey) {
-      case "$match":
+      case '$match':
         return this.execMatch(stageValue as Filter<Document>, docs);
-      case "$project":
+      case '$project':
         return this.execProject(
           stageValue as Record<string, 0 | 1 | string | ProjectExpression>,
           docs
         );
-      case "$sort":
+      case '$sort':
         return this.execSort(stageValue as SortSpec, docs);
-      case "$limit":
+      case '$limit':
         return this.execLimit(stageValue as number, docs);
-      case "$skip":
+      case '$skip':
         return this.execSkip(stageValue as number, docs);
-      case "$count":
+      case '$count':
         return this.execCount(stageValue as string, docs);
-      case "$unwind":
+      case '$unwind':
         return this.execUnwind(stageValue as string | UnwindOptions, docs);
-      case "$group":
+      case '$group':
         return this.execGroup(stageValue as { _id: unknown; [key: string]: unknown }, docs);
-      case "$lookup":
+      case '$lookup':
         return this.execLookup(
           stageValue as {
             from: string;
@@ -171,20 +164,20 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
-      case "$addFields":
+      case '$addFields':
         return this.execAddFields(stageValue as Record<string, unknown>, docs);
-      case "$set":
+      case '$set':
         return this.execAddFields(stageValue as Record<string, unknown>, docs);
-      case "$replaceRoot":
+      case '$replaceRoot':
         return this.execReplaceRoot(stageValue as { newRoot: unknown }, docs);
-      case "$replaceWith":
+      case '$replaceWith':
         // $replaceWith is an alias for $replaceRoot with simpler syntax
         return this.execReplaceRoot({ newRoot: stageValue }, docs);
-      case "$unset":
+      case '$unset':
         return this.execUnset(stageValue, docs);
-      case "$redact":
+      case '$redact':
         return this.execRedact(stageValue, docs);
-      case "$graphLookup":
+      case '$graphLookup':
         return this.execGraphLookup(
           stageValue as {
             from: string;
@@ -198,20 +191,20 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
-      case "$densify":
+      case '$densify':
         return this.execDensify(
           stageValue as {
             field: string;
             range: {
               step: number;
               unit?: string;
-              bounds?: [unknown, unknown] | "full" | "partition";
+              bounds?: [unknown, unknown] | 'full' | 'partition';
             };
             partitionByFields?: string[];
           },
           docs
         );
-      case "$fill":
+      case '$fill':
         return this.execFill(
           stageValue as {
             sortBy?: SortSpec;
@@ -221,7 +214,7 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
-      case "$setWindowFields":
+      case '$setWindowFields':
         return this.execSetWindowFields(
           stageValue as {
             partitionBy?: unknown;
@@ -230,25 +223,25 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
-      case "$out":
+      case '$out':
         return this.execOut(stageValue as string, docs);
-      case "$merge":
+      case '$merge':
         return this.execMerge(
           stageValue as {
             into: string | { db?: string; coll: string };
             on?: string | string[];
-            whenMatched?: "replace" | "keepExisting" | "merge" | "fail" | PipelineStage[];
-            whenNotMatched?: "insert" | "discard" | "fail";
+            whenMatched?: 'replace' | 'keepExisting' | 'merge' | 'fail' | PipelineStage[];
+            whenNotMatched?: 'insert' | 'discard' | 'fail';
           },
           docs
         );
-      case "$sortByCount":
+      case '$sortByCount':
         return this.execSortByCount(stageValue, docs);
-      case "$sample":
+      case '$sample':
         return this.execSample(stageValue as { size: number }, docs);
-      case "$facet":
+      case '$facet':
         return this.execFacet(stageValue as Record<string, PipelineStage[]>, docs);
-      case "$bucket":
+      case '$bucket':
         return this.execBucket(
           stageValue as {
             groupBy: unknown;
@@ -258,7 +251,7 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
-      case "$bucketAuto":
+      case '$bucketAuto':
         return this.execBucketAuto(
           stageValue as {
             groupBy: unknown;
@@ -268,11 +261,8 @@ export class AggregationCursor<T extends Document = Document> {
           },
           docs
         );
-      case "$unionWith":
-        return this.execUnionWith(
-          stageValue as { coll: string; pipeline?: PipelineStage[] },
-          docs
-        );
+      case '$unionWith':
+        return this.execUnionWith(stageValue as { coll: string; pipeline?: PipelineStage[] }, docs);
       default:
         throw new Error(`Unrecognized pipeline stage name: '${stageKey}'`);
     }
@@ -288,10 +278,10 @@ export class AggregationCursor<T extends Document = Document> {
   ): Document[] {
     const keys = Object.keys(projection);
     if (keys.length === 0) {
-      throw new Error("$project requires at least one field");
+      throw new Error('$project requires at least one field');
     }
 
-    const nonIdKeys = keys.filter((k) => k !== "_id");
+    const nonIdKeys = keys.filter((k) => k !== '_id');
     let hasInclusion = false;
     let hasExclusion = false;
     let hasFieldRef = false;
@@ -303,9 +293,9 @@ export class AggregationCursor<T extends Document = Document> {
         hasInclusion = true;
       } else if (value === 0) {
         hasExclusion = true;
-      } else if (typeof value === "string" && value.startsWith("$")) {
+      } else if (typeof value === 'string' && value.startsWith('$')) {
         hasFieldRef = true;
-      } else if (typeof value === "object" && value !== null) {
+      } else if (typeof value === 'object' && value !== null) {
         hasExpression = true;
       }
     }
@@ -315,15 +305,12 @@ export class AggregationCursor<T extends Document = Document> {
     }
 
     if (hasInclusion && hasExclusion) {
-      throw new Error("Cannot mix inclusion and exclusion in projection");
+      throw new Error('Cannot mix inclusion and exclusion in projection');
     }
 
-    const isExclusionMode =
-      hasExclusion || (nonIdKeys.length === 0 && projection._id === 0);
+    const isExclusionMode = hasExclusion || (nonIdKeys.length === 0 && projection._id === 0);
 
-    return docs.map((doc) =>
-      this.projectDocument(doc, projection, isExclusionMode)
-    );
+    return docs.map((doc) => this.projectDocument(doc, projection, isExclusionMode));
   }
 
   /**
@@ -340,15 +327,13 @@ export class AggregationCursor<T extends Document = Document> {
 
         // Validate result
         if (action === REDACT_DESCEND) {
-          return "descend";
+          return 'descend';
         } else if (action === REDACT_PRUNE) {
-          return "prune";
+          return 'prune';
         } else if (action === REDACT_KEEP) {
-          return "keep";
+          return 'keep';
         } else {
-          throw new Error(
-            "$redact must resolve to $$DESCEND, $$PRUNE, or $$KEEP"
-          );
+          throw new Error('$redact must resolve to $$DESCEND, $$PRUNE, or $$KEEP');
         }
       });
 
@@ -371,14 +356,14 @@ export class AggregationCursor<T extends Document = Document> {
     const result = evaluateExpression(spec, {}, systemVars);
 
     if (!Array.isArray(result)) {
-      throw new Error("$documents requires array of documents");
+      throw new Error('$documents requires array of documents');
     }
 
     // Validate all elements are objects
     for (let i = 0; i < result.length; i++) {
       const item = result[i];
-      if (item === null || typeof item !== "object" || Array.isArray(item)) {
-        throw new Error("$documents array elements must be objects");
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error('$documents array elements must be objects');
       }
     }
 
@@ -393,30 +378,26 @@ export class AggregationCursor<T extends Document = Document> {
     // Normalize to array of field paths
     let fields: string[];
 
-    if (typeof spec === "string") {
+    if (typeof spec === 'string') {
       fields = [spec];
     } else if (Array.isArray(spec)) {
       fields = spec.map((f) => {
-        if (typeof f !== "string") {
-          throw new Error(
-            "$unset specification must be a string or array of strings"
-          );
+        if (typeof f !== 'string') {
+          throw new Error('$unset specification must be a string or array of strings');
         }
-        if (f === "") {
-          throw new Error("FieldPath cannot be constructed with empty string");
+        if (f === '') {
+          throw new Error('FieldPath cannot be constructed with empty string');
         }
         return f;
       });
     } else {
-      throw new Error(
-        "$unset specification must be a string or array of strings"
-      );
+      throw new Error('$unset specification must be a string or array of strings');
     }
 
     // Validate fields
     for (const field of fields) {
-      if (field === "") {
-        throw new Error("FieldPath cannot be constructed with empty string");
+      if (field === '') {
+        throw new Error('FieldPath cannot be constructed with empty string');
       }
     }
 
@@ -432,10 +413,7 @@ export class AggregationCursor<T extends Document = Document> {
 
   private isLiteralExpression(value: unknown): value is ProjectExpression {
     return (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      "$literal" in value
+      value !== null && typeof value === 'object' && !Array.isArray(value) && '$literal' in value
     );
   }
 
@@ -450,11 +428,11 @@ export class AggregationCursor<T extends Document = Document> {
       const result = cloneDocument(doc);
       for (const key of keys) {
         if (projection[key] === 0) {
-          if (key.includes(".")) {
-            const parts = key.split(".");
+          if (key.includes('.')) {
+            const parts = key.split('.');
             let current: Record<string, unknown> = result;
             for (let i = 0; i < parts.length - 1; i++) {
-              if (current[parts[i]] && typeof current[parts[i]] === "object") {
+              if (current[parts[i]] && typeof current[parts[i]] === 'object') {
                 current = current[parts[i]] as Record<string, unknown>;
               } else {
                 break;
@@ -475,26 +453,26 @@ export class AggregationCursor<T extends Document = Document> {
       result._id = doc._id;
     }
 
-    const nonIdKeys = keys.filter((k) => k !== "_id");
+    const nonIdKeys = keys.filter((k) => k !== '_id');
     for (const key of nonIdKeys) {
       const value = projection[key];
 
       if (value === 1) {
         const fieldValue = getValueByPath(doc, key);
         if (fieldValue !== undefined) {
-          if (key.includes(".")) {
+          if (key.includes('.')) {
             setValueByPath(result, key, fieldValue);
           } else {
             result[key] = fieldValue;
           }
         }
-      } else if (typeof value === "string" && value.startsWith("$$")) {
+      } else if (typeof value === 'string' && value.startsWith('$$')) {
         // System variable reference (e.g., $$NOW, $$ROOT)
         const evaluated = evaluateExpression(value, doc, this.getSystemVars(doc));
         if (evaluated !== undefined) {
           result[key] = evaluated;
         }
-      } else if (typeof value === "string" && value.startsWith("$")) {
+      } else if (typeof value === 'string' && value.startsWith('$')) {
         // Field reference (e.g., $fieldName)
         const refPath = value.slice(1);
         const refValue = getValueByPath(doc, refPath);
@@ -503,7 +481,7 @@ export class AggregationCursor<T extends Document = Document> {
         }
       } else if (this.isLiteralExpression(value)) {
         result[key] = value.$literal;
-      } else if (typeof value === "object" && value !== null) {
+      } else if (typeof value === 'object' && value !== null) {
         const evaluated = evaluateExpression(value, doc, this.getSystemVars(doc));
         result[key] = evaluated;
       }
@@ -529,7 +507,7 @@ export class AggregationCursor<T extends Document = Document> {
   }
 
   private execLimit(limit: number, docs: Document[]): Document[] {
-    if (typeof limit !== "number" || !Number.isFinite(limit)) {
+    if (typeof limit !== 'number' || !Number.isFinite(limit)) {
       throw new Error(`Expected an integer: $limit: ${limit}`);
     }
     if (!Number.isInteger(limit)) {
@@ -539,29 +517,29 @@ export class AggregationCursor<T extends Document = Document> {
       throw new Error(`Expected a non-negative number in: $limit: ${limit}`);
     }
     if (limit === 0) {
-      throw new Error("the limit must be positive");
+      throw new Error('the limit must be positive');
     }
     return docs.slice(0, limit);
   }
 
   private execSkip(skip: number, docs: Document[]): Document[] {
-    if (typeof skip !== "number" || !Number.isFinite(skip) || skip < 0) {
-      throw new Error("$skip must be a non-negative integer");
+    if (typeof skip !== 'number' || !Number.isFinite(skip) || skip < 0) {
+      throw new Error('$skip must be a non-negative integer');
     }
     if (!Number.isInteger(skip)) {
-      throw new Error("$skip must be a non-negative integer");
+      throw new Error('$skip must be a non-negative integer');
     }
     return docs.slice(skip);
   }
 
   private execCount(fieldName: string, docs: Document[]): Document[] {
-    if (!fieldName || typeof fieldName !== "string" || fieldName.length === 0) {
-      throw new Error("$count field name must be a non-empty string");
+    if (!fieldName || typeof fieldName !== 'string' || fieldName.length === 0) {
+      throw new Error('$count field name must be a non-empty string');
     }
-    if (fieldName.startsWith("$")) {
+    if (fieldName.startsWith('$')) {
       throw new Error("$count field name cannot start with '$'");
     }
-    if (fieldName.includes(".")) {
+    if (fieldName.includes('.')) {
       throw new Error("$count field name cannot contain '.'");
     }
 
@@ -572,20 +550,14 @@ export class AggregationCursor<T extends Document = Document> {
     return [{ [fieldName]: docs.length }];
   }
 
-  private execUnwind(
-    unwind: string | UnwindOptions,
-    docs: Document[]
-  ): Document[] {
-    const path = typeof unwind === "string" ? unwind : unwind.path;
+  private execUnwind(unwind: string | UnwindOptions, docs: Document[]): Document[] {
+    const path = typeof unwind === 'string' ? unwind : unwind.path;
     const preserveNullAndEmpty =
-      typeof unwind === "object" && unwind.preserveNullAndEmptyArrays === true;
-    const includeArrayIndex =
-      typeof unwind === "object" ? unwind.includeArrayIndex : undefined;
+      typeof unwind === 'object' && unwind.preserveNullAndEmptyArrays === true;
+    const includeArrayIndex = typeof unwind === 'object' ? unwind.includeArrayIndex : undefined;
 
-    if (!path.startsWith("$")) {
-      throw new Error(
-        "$unwind requires a path starting with '$', found: " + path
-      );
+    if (!path.startsWith('$')) {
+      throw new Error("$unwind requires a path starting with '$', found: " + path);
     }
 
     const fieldPath = path.slice(1);
@@ -617,7 +589,7 @@ export class AggregationCursor<T extends Document = Document> {
       if (value.length === 0) {
         if (preserveNullAndEmpty) {
           const newDoc = cloneDocument(doc);
-          if (fieldPath.includes(".")) {
+          if (fieldPath.includes('.')) {
             setValueByPath(newDoc, fieldPath, null);
           } else {
             delete newDoc[fieldPath];
@@ -632,7 +604,7 @@ export class AggregationCursor<T extends Document = Document> {
 
       for (let i = 0; i < value.length; i++) {
         const newDoc = cloneDocument(doc);
-        if (fieldPath.includes(".")) {
+        if (fieldPath.includes('.')) {
           setValueByPath(newDoc, fieldPath, value[i]);
         } else {
           newDoc[fieldPath] = value[i];
@@ -651,8 +623,8 @@ export class AggregationCursor<T extends Document = Document> {
     groupSpec: { _id: unknown; [key: string]: unknown },
     docs: Document[]
   ): Document[] {
-    if (!("_id" in groupSpec)) {
-      throw new Error("a group specification must include an _id");
+    if (!('_id' in groupSpec)) {
+      throw new Error('a group specification must include an _id');
     }
 
     const groups = new Map<
@@ -660,9 +632,7 @@ export class AggregationCursor<T extends Document = Document> {
       { _id: unknown; accumulators: Map<string, ReturnType<typeof createAccumulator>> }
     >();
 
-    const accumulatorFields = Object.entries(groupSpec).filter(
-      ([key]) => key !== "_id"
-    );
+    const accumulatorFields = Object.entries(groupSpec).filter(([key]) => key !== '_id');
 
     for (const doc of docs) {
       const groupId = evaluateExpression(groupSpec._id, doc, this.getSystemVars(doc));
@@ -673,7 +643,7 @@ export class AggregationCursor<T extends Document = Document> {
         for (const [field, expr] of accumulatorFields) {
           const exprObj = expr as Record<string, unknown>;
           const opKeys = Object.keys(exprObj);
-          if (opKeys.length === 1 && opKeys[0].startsWith("$")) {
+          if (opKeys.length === 1 && opKeys[0].startsWith('$')) {
             accumulators.set(field, createAccumulator(opKeys[0], exprObj[opKeys[0]]));
           }
         }
@@ -715,7 +685,7 @@ export class AggregationCursor<T extends Document = Document> {
     }
 
     if (!this.dbContext) {
-      throw new Error("$lookup requires database context");
+      throw new Error('$lookup requires database context');
     }
 
     // Check if this is the pipeline form (has pipeline) or simple form (has localField/foreignField)
@@ -764,7 +734,10 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Substitute $$varName references in the pipeline with actual values
-      const substitutedPipeline = this.substituteLetVars(pipeline, resolvedLetVars) as PipelineStage[];
+      const substitutedPipeline = this.substituteLetVars(
+        pipeline,
+        resolvedLetVars
+      ) as PipelineStage[];
 
       // Execute the pipeline on foreign documents
       const pipelineCursor = new AggregationCursor(
@@ -788,14 +761,14 @@ export class AggregationCursor<T extends Document = Document> {
    * MongoDB system variables that should not be substituted.
    */
   private static readonly SYSTEM_VARIABLES = new Set([
-    "ROOT",
-    "CURRENT",
-    "NOW",
-    "CLUSTER_TIME",
-    "DESCEND",
-    "PRUNE",
-    "KEEP",
-    "REMOVE",
+    'ROOT',
+    'CURRENT',
+    'NOW',
+    'CLUSTER_TIME',
+    'DESCEND',
+    'PRUNE',
+    'KEEP',
+    'REMOVE',
   ]);
 
   /**
@@ -807,11 +780,11 @@ export class AggregationCursor<T extends Document = Document> {
       return obj;
     }
 
-    if (typeof obj === "string") {
+    if (typeof obj === 'string') {
       // Check for $$varName reference
-      if (obj.startsWith("$$")) {
+      if (obj.startsWith('$$')) {
         const fullPath = obj.slice(2); // Remove $$
-        const dotIndex = fullPath.indexOf(".");
+        const dotIndex = fullPath.indexOf('.');
         const varName = dotIndex === -1 ? fullPath : fullPath.slice(0, dotIndex);
 
         // Don't substitute system variables
@@ -833,10 +806,10 @@ export class AggregationCursor<T extends Document = Document> {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map(item => this.substituteLetVars(item, vars));
+      return obj.map((item) => this.substituteLetVars(item, vars));
     }
 
-    if (typeof obj === "object") {
+    if (typeof obj === 'object') {
       const result: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(obj)) {
         result[key] = this.substituteLetVars(value, vars);
@@ -882,19 +855,19 @@ export class AggregationCursor<T extends Document = Document> {
 
     // Validate optional fields
     if (spec.maxDepth !== undefined && spec.maxDepth < 0) {
-      throw new Error("maxDepth must be non-negative");
+      throw new Error('maxDepth must be non-negative');
     }
     if (
       spec.restrictSearchWithMatch !== undefined &&
-      (typeof spec.restrictSearchWithMatch !== "object" ||
+      (typeof spec.restrictSearchWithMatch !== 'object' ||
         spec.restrictSearchWithMatch === null ||
         Array.isArray(spec.restrictSearchWithMatch))
     ) {
-      throw new Error("restrictSearchWithMatch must be object");
+      throw new Error('restrictSearchWithMatch must be object');
     }
 
     if (!this.dbContext) {
-      throw new Error("$graphLookup requires database context");
+      throw new Error('$graphLookup requires database context');
     }
 
     // Get all documents from the target collection
@@ -912,11 +885,7 @@ export class AggregationCursor<T extends Document = Document> {
 
     for (const doc of docs) {
       // Evaluate startWith expression
-      const startValue = evaluateExpression(
-        spec.startWith,
-        doc,
-        this.getSystemVars(doc)
-      );
+      const startValue = evaluateExpression(spec.startWith, doc, this.getSystemVars(doc));
 
       // Handle null/missing startWith - return empty array
       if (startValue === null || startValue === undefined) {
@@ -943,10 +912,7 @@ export class AggregationCursor<T extends Document = Document> {
         for (const searchValue of currentValues) {
           // Find matching documents
           const matches = foreignDocs.filter((foreignDoc) => {
-            const connectToValue = getValueByPath(
-              foreignDoc,
-              spec.connectToField
-            );
+            const connectToValue = getValueByPath(foreignDoc, spec.connectToField);
             if (Array.isArray(connectToValue)) {
               return connectToValue.some((v) => valuesEqual(v, searchValue));
             }
@@ -992,20 +958,20 @@ export class AggregationCursor<T extends Document = Document> {
       range: {
         step: number;
         unit?: string;
-        bounds?: [unknown, unknown] | "full" | "partition";
+        bounds?: [unknown, unknown] | 'full' | 'partition';
       };
       partitionByFields?: string[];
     },
     docs: Document[]
   ): Document[] {
     // Validate field name
-    if (!spec.field || spec.field.startsWith("$")) {
+    if (!spec.field || spec.field.startsWith('$')) {
       throw new Error("Cannot densify field starting with '$'");
     }
 
     // Validate step
     if (spec.range.step <= 0) {
-      throw new Error("Step must be positive");
+      throw new Error('Step must be positive');
     }
 
     // Validate unit if provided
@@ -1028,7 +994,7 @@ export class AggregationCursor<T extends Document = Document> {
       for (const doc of partitionDocs) {
         const val = getValueByPath(doc, spec.field);
         if (val !== null && val !== undefined) {
-          if (typeof val === "number" || val instanceof Date) {
+          if (typeof val === 'number' || val instanceof Date) {
             values.push({ value: val, doc });
           }
         }
@@ -1051,8 +1017,8 @@ export class AggregationCursor<T extends Document = Document> {
       let lowerBound: number | Date = values[0].value;
       let upperBound: number | Date = values[values.length - 1].value;
 
-      if (spec.range.bounds && spec.range.bounds !== "partition") {
-        if (spec.range.bounds === "full") {
+      if (spec.range.bounds && spec.range.bounds !== 'partition') {
+        if (spec.range.bounds === 'full') {
           // Use global min/max across all partitions
           // For simplicity, use partition bounds (same for this implementation)
         } else if (Array.isArray(spec.range.bounds)) {
@@ -1064,10 +1030,10 @@ export class AggregationCursor<T extends Document = Document> {
       // Check type consistency
       const isDate = values[0].value instanceof Date;
       if (isDate && !spec.range.unit) {
-        throw new Error("Unit required for date field");
+        throw new Error('Unit required for date field');
       }
       if (!isDate && spec.range.unit) {
-        throw new Error("Cannot specify unit for numeric field");
+        throw new Error('Cannot specify unit for numeric field');
       }
 
       // Generate sequence and merge with originals
@@ -1085,10 +1051,8 @@ export class AggregationCursor<T extends Document = Document> {
       const isExplicitBounds = Array.isArray(spec.range.bounds);
       let current = lowerBound;
       while (true) {
-        const currentKey =
-          current instanceof Date ? current.getTime() : current;
-        const upperKey =
-          upperBound instanceof Date ? upperBound.getTime() : upperBound;
+        const currentKey = current instanceof Date ? current.getTime() : current;
+        const upperKey = upperBound instanceof Date ? upperBound.getTime() : upperBound;
 
         // Exclusive upper bound for explicit bounds, inclusive for partition/full
         if (isExplicitBounds ? currentKey >= upperKey : currentKey > upperKey) break;
@@ -1114,11 +1078,7 @@ export class AggregationCursor<T extends Document = Document> {
 
         // Step to next value
         if (isDate) {
-          current = addDateStep(
-            current as Date,
-            spec.range.step,
-            spec.range.unit as TimeUnit
-          );
+          current = addDateStep(current as Date, spec.range.step, spec.range.unit as TimeUnit);
         } else {
           current = (current as number) + spec.range.step;
         }
@@ -1142,26 +1102,26 @@ export class AggregationCursor<T extends Document = Document> {
     },
     docs: Document[]
   ): Document[] {
-    if (!spec.output || typeof spec.output !== "object") {
+    if (!spec.output || typeof spec.output !== 'object') {
       throw new Error("$fill requires 'output' field");
     }
 
     // Check if sortBy is required (for locf/linear methods)
     const needsSort = Object.values(spec.output).some(
-      (out) => out.method === "locf" || out.method === "linear"
+      (out) => out.method === 'locf' || out.method === 'linear'
     );
     if (needsSort && !spec.sortBy) {
-      throw new Error("sortBy required for locf/linear methods");
+      throw new Error('sortBy required for locf/linear methods');
     }
 
     // Validate partitionBy if provided
     if (spec.partitionBy !== undefined) {
       if (
-        typeof spec.partitionBy !== "object" ||
+        typeof spec.partitionBy !== 'object' ||
         spec.partitionBy === null ||
         Array.isArray(spec.partitionBy)
       ) {
-        throw new Error("partitionBy must be an object, not a string or array");
+        throw new Error('partitionBy must be an object, not a string or array');
       }
     }
 
@@ -1189,9 +1149,7 @@ export class AggregationCursor<T extends Document = Document> {
       // Apply fill operations for each output field
       for (const [fieldPath, fillSpec] of Object.entries(spec.output)) {
         if (fillSpec.value !== undefined && fillSpec.method !== undefined) {
-          throw new Error(
-            "Cannot specify both 'value' and 'method' in $fill output"
-          );
+          throw new Error("Cannot specify both 'value' and 'method' in $fill output");
         }
 
         if (fillSpec.value !== undefined) {
@@ -1204,7 +1162,7 @@ export class AggregationCursor<T extends Document = Document> {
               setValueByPath(doc, fieldPath, fillValue);
             }
           }
-        } else if (fillSpec.method === "locf") {
+        } else if (fillSpec.method === 'locf') {
           // Last Observation Carried Forward
           const values = outputDocs.map((doc) => getValueByPath(doc, fieldPath));
           const filled = applyLocf(values);
@@ -1213,13 +1171,13 @@ export class AggregationCursor<T extends Document = Document> {
               setValueByPath(outputDocs[i], fieldPath, filled[i]);
             }
           }
-        } else if (fillSpec.method === "linear") {
+        } else if (fillSpec.method === 'linear') {
           // Linear interpolation - only works for numeric fields
           const values = outputDocs.map((doc) => {
             const val = getValueByPath(doc, fieldPath);
             if (val === null || val === undefined) return null;
-            if (typeof val !== "number") {
-              throw new Error("linear fill requires numeric field");
+            if (typeof val !== 'number') {
+              throw new Error('linear fill requires numeric field');
             }
             return val;
           });
@@ -1251,7 +1209,7 @@ export class AggregationCursor<T extends Document = Document> {
     },
     docs: Document[]
   ): Document[] {
-    if (!spec.output || typeof spec.output !== "object") {
+    if (!spec.output || typeof spec.output !== 'object') {
       throw new Error("$setWindowFields requires 'output' field");
     }
 
@@ -1275,8 +1233,8 @@ export class AggregationCursor<T extends Document = Document> {
 
       // Apply each window operator to each document
       for (const [outputField, opSpec] of Object.entries(spec.output)) {
-        if (typeof opSpec !== "object" || opSpec === null) {
-          throw new Error("Window field specification must be an object");
+        if (typeof opSpec !== 'object' || opSpec === null) {
+          throw new Error('Window field specification must be an object');
         }
 
         const opSpecObj = opSpec as Record<string, unknown>;
@@ -1292,7 +1250,7 @@ export class AggregationCursor<T extends Document = Document> {
         let operatorName: string | null = null;
         let operatorArg: unknown = null;
         for (const [key, value] of Object.entries(opSpecObj)) {
-          if (key.startsWith("$")) {
+          if (key.startsWith('$')) {
             operatorName = key;
             operatorArg = value;
             break;
@@ -1300,7 +1258,7 @@ export class AggregationCursor<T extends Document = Document> {
         }
 
         if (!operatorName) {
-          throw new Error("Window field must specify an operator");
+          throw new Error('Window field must specify an operator');
         }
 
         // Process each document
@@ -1309,12 +1267,7 @@ export class AggregationCursor<T extends Document = Document> {
           const vars = this.getSystemVars(doc);
 
           // Calculate window bounds
-          const windowDocs = this.getWindowDocuments(
-            outputDocs,
-            i,
-            windowSpec,
-            spec.sortBy
-          );
+          const windowDocs = this.getWindowDocuments(outputDocs, i, windowSpec, spec.sortBy);
 
           // Apply the operator
           const value = this.applyWindowOperator(
@@ -1363,15 +1316,15 @@ export class AggregationCursor<T extends Document = Document> {
       // Document-based window
       const [lower, upper] = windowSpec.documents;
       const lowerBound =
-        lower === "unbounded"
+        lower === 'unbounded'
           ? 0
-          : lower === "current"
+          : lower === 'current'
             ? currentIndex
             : currentIndex + (lower as number);
       const upperBound =
-        upper === "unbounded"
+        upper === 'unbounded'
           ? docs.length - 1
-          : upper === "current"
+          : upper === 'current'
             ? currentIndex
             : currentIndex + (upper as number);
 
@@ -1386,29 +1339,28 @@ export class AggregationCursor<T extends Document = Document> {
       const sortField = Object.keys(sortBy)[0];
       const currentValue = getValueByPath(docs[currentIndex], sortField);
 
-      if (typeof currentValue !== "number" && !(currentValue instanceof Date)) {
+      if (typeof currentValue !== 'number' && !(currentValue instanceof Date)) {
         // For non-numeric/date fields, fall back to full partition
         return docs;
       }
 
       const [lower, upper] = windowSpec.range;
-      const currentNum =
-        currentValue instanceof Date ? currentValue.getTime() : currentValue;
+      const currentNum = currentValue instanceof Date ? currentValue.getTime() : currentValue;
 
       let lowerBound: number;
       let upperBound: number;
 
-      if (lower === "unbounded") {
+      if (lower === 'unbounded') {
         lowerBound = -Infinity;
-      } else if (lower === "current") {
+      } else if (lower === 'current') {
         lowerBound = currentNum;
       } else {
         lowerBound = currentNum + (lower as number);
       }
 
-      if (upper === "unbounded") {
+      if (upper === 'unbounded') {
         upperBound = Infinity;
-      } else if (upper === "current") {
+      } else if (upper === 'current') {
         upperBound = currentNum;
       } else {
         upperBound = currentNum + (upper as number);
@@ -1440,10 +1392,10 @@ export class AggregationCursor<T extends Document = Document> {
   ): unknown {
     switch (operatorName) {
       // Rank operators
-      case "$documentNumber":
+      case '$documentNumber':
         return currentIndex + 1;
 
-      case "$rank": {
+      case '$rank': {
         // Rank with gaps for ties (1, 2, 2, 4)
         // Find the first document with the same sort values - that's the rank
         if (!sortBy) return currentIndex + 1;
@@ -1472,7 +1424,7 @@ export class AggregationCursor<T extends Document = Document> {
         return firstSameIdx + 1;
       }
 
-      case "$denseRank": {
+      case '$denseRank': {
         // Dense rank without gaps (1, 2, 2, 3)
         if (!sortBy) return currentIndex + 1;
 
@@ -1522,7 +1474,7 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Gap filling operators
-      case "$locf": {
+      case '$locf': {
         // Last Observation Carried Forward - use allDocs (full partition)
         const fieldExpr = operatorArg;
         const currentVal = evaluateExpression(fieldExpr, currentDoc, vars);
@@ -1540,7 +1492,7 @@ export class AggregationCursor<T extends Document = Document> {
         return null;
       }
 
-      case "$linearFill": {
+      case '$linearFill': {
         // Linear interpolation - use allDocs (full partition)
         const fieldExpr = operatorArg;
         const currentVal = evaluateExpression(fieldExpr, currentDoc, vars);
@@ -1554,7 +1506,7 @@ export class AggregationCursor<T extends Document = Document> {
         for (let i = currentIndex - 1; i >= 0; i--) {
           const docVars = this.getSystemVars(allDocs[i]);
           const val = evaluateExpression(fieldExpr, allDocs[i], docVars);
-          if (val !== null && val !== undefined && typeof val === "number") {
+          if (val !== null && val !== undefined && typeof val === 'number') {
             leftIdx = i;
             leftVal = val;
             break;
@@ -1567,7 +1519,7 @@ export class AggregationCursor<T extends Document = Document> {
         for (let i = currentIndex + 1; i < totalDocs; i++) {
           const docVars = this.getSystemVars(allDocs[i]);
           const val = evaluateExpression(fieldExpr, allDocs[i], docVars);
-          if (val !== null && val !== undefined && typeof val === "number") {
+          if (val !== null && val !== undefined && typeof val === 'number') {
             rightIdx = i;
             rightVal = val;
             break;
@@ -1584,7 +1536,7 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Shift operator
-      case "$shift": {
+      case '$shift': {
         const shiftSpec = operatorArg as {
           output: unknown;
           by: number;
@@ -1600,25 +1552,25 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Accumulator operators over window
-      case "$sum": {
+      case '$sum': {
         let sum = 0;
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
           const val = evaluateExpression(operatorArg, doc, docVars);
-          if (typeof val === "number") {
+          if (typeof val === 'number') {
             sum += val;
           }
         }
         return sum;
       }
 
-      case "$avg": {
+      case '$avg': {
         let sum = 0;
         let count = 0;
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
           const val = evaluateExpression(operatorArg, doc, docVars);
-          if (typeof val === "number") {
+          if (typeof val === 'number') {
             sum += val;
             count++;
           }
@@ -1626,7 +1578,7 @@ export class AggregationCursor<T extends Document = Document> {
         return count > 0 ? sum / count : null;
       }
 
-      case "$min": {
+      case '$min': {
         let min: unknown = null;
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
@@ -1635,11 +1587,15 @@ export class AggregationCursor<T extends Document = Document> {
             if (min === null) {
               min = val;
             } else if (typeof val === typeof min) {
-              if (typeof val === "number" && val < (min as number)) {
+              if (typeof val === 'number' && val < (min as number)) {
                 min = val;
-              } else if (typeof val === "string" && val < (min as string)) {
+              } else if (typeof val === 'string' && val < (min as string)) {
                 min = val;
-              } else if (val instanceof Date && min instanceof Date && val.getTime() < min.getTime()) {
+              } else if (
+                val instanceof Date &&
+                min instanceof Date &&
+                val.getTime() < min.getTime()
+              ) {
                 min = val;
               }
             }
@@ -1648,7 +1604,7 @@ export class AggregationCursor<T extends Document = Document> {
         return min;
       }
 
-      case "$max": {
+      case '$max': {
         let max: unknown = null;
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
@@ -1657,11 +1613,15 @@ export class AggregationCursor<T extends Document = Document> {
             if (max === null) {
               max = val;
             } else if (typeof val === typeof max) {
-              if (typeof val === "number" && val > (max as number)) {
+              if (typeof val === 'number' && val > (max as number)) {
                 max = val;
-              } else if (typeof val === "string" && val > (max as string)) {
+              } else if (typeof val === 'string' && val > (max as string)) {
                 max = val;
-              } else if (val instanceof Date && max instanceof Date && val.getTime() > max.getTime()) {
+              } else if (
+                val instanceof Date &&
+                max instanceof Date &&
+                val.getTime() > max.getTime()
+              ) {
                 max = val;
               }
             }
@@ -1670,24 +1630,24 @@ export class AggregationCursor<T extends Document = Document> {
         return max;
       }
 
-      case "$count": {
+      case '$count': {
         return windowDocs.length;
       }
 
-      case "$first": {
+      case '$first': {
         if (windowDocs.length === 0) return null;
         const docVars = this.getSystemVars(windowDocs[0]);
         return evaluateExpression(operatorArg, windowDocs[0], docVars);
       }
 
-      case "$last": {
+      case '$last': {
         if (windowDocs.length === 0) return null;
         const lastDoc = windowDocs[windowDocs.length - 1];
         const docVars = this.getSystemVars(lastDoc);
         return evaluateExpression(operatorArg, lastDoc, docVars);
       }
 
-      case "$push": {
+      case '$push': {
         const result: unknown[] = [];
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
@@ -1697,7 +1657,7 @@ export class AggregationCursor<T extends Document = Document> {
         return result;
       }
 
-      case "$addToSet": {
+      case '$addToSet': {
         const seen = new Set<string>();
         const result: unknown[] = [];
         for (const doc of windowDocs) {
@@ -1713,7 +1673,7 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Derivative operator - rate of change
-      case "$derivative": {
+      case '$derivative': {
         const derivSpec = operatorArg as {
           input: unknown;
           unit?: string;
@@ -1730,9 +1690,13 @@ export class AggregationCursor<T extends Document = Document> {
 
         const currentInputVal = evaluateExpression(derivSpec.input, currentDoc, vars);
         const prevVars = this.getSystemVars(allDocs[currentIndex - 1]);
-        const prevInputVal = evaluateExpression(derivSpec.input, allDocs[currentIndex - 1], prevVars);
+        const prevInputVal = evaluateExpression(
+          derivSpec.input,
+          allDocs[currentIndex - 1],
+          prevVars
+        );
 
-        if (typeof currentInputVal !== "number" || typeof prevInputVal !== "number") {
+        if (typeof currentInputVal !== 'number' || typeof prevInputVal !== 'number') {
           return null;
         }
 
@@ -1741,13 +1705,13 @@ export class AggregationCursor<T extends Document = Document> {
         if (currentSortVal instanceof Date && prevSortVal instanceof Date) {
           timeDiff = currentSortVal.getTime() - prevSortVal.getTime();
           // Convert based on unit
-          if (derivSpec.unit === "second") timeDiff /= 1000;
-          else if (derivSpec.unit === "minute") timeDiff /= 60000;
-          else if (derivSpec.unit === "hour") timeDiff /= 3600000;
-          else if (derivSpec.unit === "day") timeDiff /= 86400000;
-          else if (derivSpec.unit === "week") timeDiff /= 604800000;
+          if (derivSpec.unit === 'second') timeDiff /= 1000;
+          else if (derivSpec.unit === 'minute') timeDiff /= 60000;
+          else if (derivSpec.unit === 'hour') timeDiff /= 3600000;
+          else if (derivSpec.unit === 'day') timeDiff /= 86400000;
+          else if (derivSpec.unit === 'week') timeDiff /= 604800000;
           else timeDiff /= 1; // milliseconds default
-        } else if (typeof currentSortVal === "number" && typeof prevSortVal === "number") {
+        } else if (typeof currentSortVal === 'number' && typeof prevSortVal === 'number') {
           timeDiff = currentSortVal - prevSortVal;
         } else {
           return null;
@@ -1759,7 +1723,7 @@ export class AggregationCursor<T extends Document = Document> {
 
       // Integral operator - area under curve (trapezoidal rule)
       // Uses windowDocs to respect window bounds
-      case "$integral": {
+      case '$integral': {
         const integralSpec = operatorArg as {
           input: unknown;
           unit?: string;
@@ -1781,7 +1745,7 @@ export class AggregationCursor<T extends Document = Document> {
           const prevInput = evaluateExpression(integralSpec.input, prevDoc, prevVars);
           const currInput = evaluateExpression(integralSpec.input, currDoc, currVars);
 
-          if (typeof prevInput !== "number" || typeof currInput !== "number") {
+          if (typeof prevInput !== 'number' || typeof currInput !== 'number') {
             continue;
           }
 
@@ -1791,12 +1755,12 @@ export class AggregationCursor<T extends Document = Document> {
           let timeDiff: number;
           if (currSortVal instanceof Date && prevSortVal instanceof Date) {
             timeDiff = currSortVal.getTime() - prevSortVal.getTime();
-            if (integralSpec.unit === "second") timeDiff /= 1000;
-            else if (integralSpec.unit === "minute") timeDiff /= 60000;
-            else if (integralSpec.unit === "hour") timeDiff /= 3600000;
-            else if (integralSpec.unit === "day") timeDiff /= 86400000;
-            else if (integralSpec.unit === "week") timeDiff /= 604800000;
-          } else if (typeof currSortVal === "number" && typeof prevSortVal === "number") {
+            if (integralSpec.unit === 'second') timeDiff /= 1000;
+            else if (integralSpec.unit === 'minute') timeDiff /= 60000;
+            else if (integralSpec.unit === 'hour') timeDiff /= 3600000;
+            else if (integralSpec.unit === 'day') timeDiff /= 86400000;
+            else if (integralSpec.unit === 'week') timeDiff /= 604800000;
+          } else if (typeof currSortVal === 'number' && typeof prevSortVal === 'number') {
             timeDiff = currSortVal - prevSortVal;
           } else {
             continue;
@@ -1810,7 +1774,7 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Exponential moving average
-      case "$expMovingAvg": {
+      case '$expMovingAvg': {
         const emaSpec = operatorArg as {
           input: unknown;
           N?: number;
@@ -1828,7 +1792,7 @@ export class AggregationCursor<T extends Document = Document> {
         }
 
         if (alpha <= 0 || alpha > 1) {
-          throw new Error("alpha must be between 0 (exclusive) and 1 (inclusive)");
+          throw new Error('alpha must be between 0 (exclusive) and 1 (inclusive)');
         }
 
         // Calculate EMA up to current position
@@ -1837,7 +1801,7 @@ export class AggregationCursor<T extends Document = Document> {
           const docVars = this.getSystemVars(allDocs[i]);
           const val = evaluateExpression(emaSpec.input, allDocs[i], docVars);
 
-          if (typeof val !== "number") continue;
+          if (typeof val !== 'number') continue;
 
           if (ema === null) {
             ema = val;
@@ -1850,10 +1814,10 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Population covariance
-      case "$covariancePop": {
+      case '$covariancePop': {
         const covSpec = operatorArg as [unknown, unknown];
         if (!Array.isArray(covSpec) || covSpec.length !== 2) {
-          throw new Error("$covariancePop requires an array of two expressions");
+          throw new Error('$covariancePop requires an array of two expressions');
         }
 
         const xValues: number[] = [];
@@ -1864,7 +1828,7 @@ export class AggregationCursor<T extends Document = Document> {
           const x = evaluateExpression(covSpec[0], doc, docVars);
           const y = evaluateExpression(covSpec[1], doc, docVars);
 
-          if (typeof x === "number" && typeof y === "number") {
+          if (typeof x === 'number' && typeof y === 'number') {
             xValues.push(x);
             yValues.push(y);
           }
@@ -1885,10 +1849,10 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Sample covariance
-      case "$covarianceSamp": {
+      case '$covarianceSamp': {
         const covSpec = operatorArg as [unknown, unknown];
         if (!Array.isArray(covSpec) || covSpec.length !== 2) {
-          throw new Error("$covarianceSamp requires an array of two expressions");
+          throw new Error('$covarianceSamp requires an array of two expressions');
         }
 
         const xValues: number[] = [];
@@ -1899,7 +1863,7 @@ export class AggregationCursor<T extends Document = Document> {
           const x = evaluateExpression(covSpec[0], doc, docVars);
           const y = evaluateExpression(covSpec[1], doc, docVars);
 
-          if (typeof x === "number" && typeof y === "number") {
+          if (typeof x === 'number' && typeof y === 'number') {
             xValues.push(x);
             yValues.push(y);
           }
@@ -1920,12 +1884,12 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Population standard deviation
-      case "$stdDevPop": {
+      case '$stdDevPop': {
         const values: number[] = [];
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
           const val = evaluateExpression(operatorArg, doc, docVars);
-          if (typeof val === "number") {
+          if (typeof val === 'number') {
             values.push(val);
           }
         }
@@ -1940,12 +1904,12 @@ export class AggregationCursor<T extends Document = Document> {
       }
 
       // Sample standard deviation
-      case "$stdDevSamp": {
+      case '$stdDevSamp': {
         const values: number[] = [];
         for (const doc of windowDocs) {
           const docVars = this.getSystemVars(doc);
           const val = evaluateExpression(operatorArg, doc, docVars);
-          if (typeof val === "number") {
+          if (typeof val === 'number') {
             values.push(val);
           }
         }
@@ -1964,16 +1928,13 @@ export class AggregationCursor<T extends Document = Document> {
     }
   }
 
-  private execAddFields(
-    addFieldsSpec: Record<string, unknown>,
-    docs: Document[]
-  ): Document[] {
+  private execAddFields(addFieldsSpec: Record<string, unknown>, docs: Document[]): Document[] {
     return docs.map((doc) => {
       const result = cloneDocument(doc);
 
       for (const [field, expr] of Object.entries(addFieldsSpec)) {
         const value = evaluateExpression(expr, doc, this.getSystemVars(doc));
-        if (field.includes(".")) {
+        if (field.includes('.')) {
           setValueByPath(result, field, value);
         } else {
           result[field] = value;
@@ -1984,21 +1945,18 @@ export class AggregationCursor<T extends Document = Document> {
     });
   }
 
-  private execReplaceRoot(
-    spec: { newRoot: unknown },
-    docs: Document[]
-  ): Document[] {
+  private execReplaceRoot(spec: { newRoot: unknown }, docs: Document[]): Document[] {
     return docs.map((doc) => {
       const newRoot = evaluateExpression(spec.newRoot, doc, this.getSystemVars(doc));
 
       if (newRoot === null || newRoot === undefined) {
-        const typeName = newRoot === null ? "null" : "missing";
+        const typeName = newRoot === null ? 'null' : 'missing';
         throw new Error(
-          `'newRoot' expression must evaluate to an object, but resulting value was: ${typeName === "missing" ? "MISSING" : typeName}. Type of resulting value: '${typeName}'.`
+          `'newRoot' expression must evaluate to an object, but resulting value was: ${typeName === 'missing' ? 'MISSING' : typeName}. Type of resulting value: '${typeName}'.`
         );
       }
 
-      if (typeof newRoot !== "object" || Array.isArray(newRoot)) {
+      if (typeof newRoot !== 'object' || Array.isArray(newRoot)) {
         const typeName = getBSONTypeName(newRoot);
         throw new Error(
           `'newRoot' expression must evaluate to an object, but resulting value was of type: ${typeName}`
@@ -2009,12 +1967,9 @@ export class AggregationCursor<T extends Document = Document> {
     });
   }
 
-  private async execOut(
-    collectionName: string,
-    docs: Document[]
-  ): Promise<Document[]> {
+  private async execOut(collectionName: string, docs: Document[]): Promise<Document[]> {
     if (!this.dbContext) {
-      throw new Error("$out requires database context");
+      throw new Error('$out requires database context');
     }
 
     const targetCollection = this.dbContext.getCollection(collectionName);
@@ -2035,22 +1990,22 @@ export class AggregationCursor<T extends Document = Document> {
     spec: {
       into: string | { db?: string; coll: string };
       on?: string | string[];
-      whenMatched?: "replace" | "keepExisting" | "merge" | "fail" | PipelineStage[];
-      whenNotMatched?: "insert" | "discard" | "fail";
+      whenMatched?: 'replace' | 'keepExisting' | 'merge' | 'fail' | PipelineStage[];
+      whenNotMatched?: 'insert' | 'discard' | 'fail';
     },
     docs: Document[]
   ): Promise<Document[]> {
     if (!this.dbContext) {
-      throw new Error("$merge requires database context");
+      throw new Error('$merge requires database context');
     }
 
     // Get target collection name - cross-database merge not supported
     let collectionName: string;
-    if (typeof spec.into === "string") {
+    if (typeof spec.into === 'string') {
       collectionName = spec.into;
     } else {
       if (spec.into.db) {
-        throw new Error("$merge into a different database is not supported");
+        throw new Error('$merge into a different database is not supported');
       }
       collectionName = spec.into.coll;
     }
@@ -2058,13 +2013,11 @@ export class AggregationCursor<T extends Document = Document> {
     const targetCollection = this.dbContext.getCollection(collectionName);
 
     // Get match field(s) - default to _id
-    const matchFields = spec.on
-      ? (Array.isArray(spec.on) ? spec.on : [spec.on])
-      : ["_id"];
+    const matchFields = spec.on ? (Array.isArray(spec.on) ? spec.on : [spec.on]) : ['_id'];
 
     // Get behaviors - defaults
-    const whenMatched = spec.whenMatched || "merge";
-    const whenNotMatched = spec.whenNotMatched || "insert";
+    const whenMatched = spec.whenMatched || 'merge';
+    const whenNotMatched = spec.whenNotMatched || 'insert';
 
     // Process each document from the pipeline
     for (const doc of docs) {
@@ -2080,25 +2033,27 @@ export class AggregationCursor<T extends Document = Document> {
       if (existingDoc) {
         // Document exists - apply whenMatched behavior
         switch (whenMatched) {
-          case "replace":
+          case 'replace':
             await targetCollection.replaceOne(filter, doc);
             break;
-          case "keepExisting":
+          case 'keepExisting':
             // Do nothing - keep the existing document
             break;
-          case "merge": {
+          case 'merge': {
             // Merge source doc fields into existing doc
             const mergedDoc = { ...existingDoc, ...doc };
             await targetCollection.replaceOne(filter, mergedDoc);
             break;
           }
-          case "fail":
+          case 'fail':
             throw new Error(`$merge found matching document for ${JSON.stringify(filter)}`);
           default:
             // Pipeline form of whenMatched - execute pipeline with $$new available
             if (Array.isArray(whenMatched)) {
               // Substitute $$new references with the incoming document
-              const pipelineWithNew = this.substituteLetVars(whenMatched, { new: doc }) as PipelineStage[];
+              const pipelineWithNew = this.substituteLetVars(whenMatched, {
+                new: doc,
+              }) as PipelineStage[];
               const cursor = new AggregationCursor(
                 async () => [existingDoc],
                 pipelineWithNew,
@@ -2113,13 +2068,13 @@ export class AggregationCursor<T extends Document = Document> {
       } else {
         // No existing document - apply whenNotMatched behavior
         switch (whenNotMatched) {
-          case "insert":
+          case 'insert':
             await targetCollection.insertOne(doc);
             break;
-          case "discard":
+          case 'discard':
             // Do nothing - discard the document
             break;
-          case "fail":
+          case 'fail':
             throw new Error(`$merge found no matching document for ${JSON.stringify(filter)}`);
         }
       }
@@ -2161,11 +2116,11 @@ export class AggregationCursor<T extends Document = Document> {
     if (spec.size === undefined || spec.size === null) {
       throw new Error("$sample requires a 'size' field");
     }
-    if (typeof spec.size !== "number" || !Number.isInteger(spec.size)) {
-      throw new Error("size argument to $sample must be a positive integer");
+    if (typeof spec.size !== 'number' || !Number.isInteger(spec.size)) {
+      throw new Error('size argument to $sample must be a positive integer');
     }
     if (spec.size <= 0) {
-      throw new Error("size argument to $sample must be a positive integer");
+      throw new Error('size argument to $sample must be a positive integer');
     }
 
     if (docs.length === 0) {
@@ -2216,20 +2171,16 @@ export class AggregationCursor<T extends Document = Document> {
       // Validate that facet pipelines don't contain $out or $merge
       for (const stage of pipeline) {
         const stageKeys = Object.keys(stage);
-        if (stageKeys.includes("$out") || stageKeys.includes("$merge")) {
-          throw new Error("$out and $merge stages are not allowed within $facet");
+        if (stageKeys.includes('$out') || stageKeys.includes('$merge')) {
+          throw new Error('$out and $merge stages are not allowed within $facet');
         }
-        if (stageKeys.includes("$facet")) {
-          throw new Error("$facet is not allowed within $facet");
+        if (stageKeys.includes('$facet')) {
+          throw new Error('$facet is not allowed within $facet');
         }
       }
 
       // Create a new cursor for this sub-pipeline
-      const subCursor = new AggregationCursor(
-        async () => [...docs],
-        pipeline,
-        this.dbContext
-      );
+      const subCursor = new AggregationCursor(async () => [...docs], pipeline, this.dbContext);
 
       result[field] = await subCursor.toArray();
     }
@@ -2263,7 +2214,7 @@ export class AggregationCursor<T extends Document = Document> {
     for (let i = 1; i < spec.boundaries.length; i++) {
       const prev = spec.boundaries[i - 1];
       const curr = spec.boundaries[i];
-      if (typeof prev === "number" && typeof curr === "number") {
+      if (typeof prev === 'number' && typeof curr === 'number') {
         if (prev >= curr) {
           throw new Error("$bucket 'boundaries' must be in ascending order");
         }
@@ -2273,7 +2224,11 @@ export class AggregationCursor<T extends Document = Document> {
     const hasDefault = spec.default !== undefined;
     const buckets = new Map<
       string,
-      { _id: unknown; docs: Document[]; accumulators: Map<string, ReturnType<typeof createAccumulator>> }
+      {
+        _id: unknown;
+        docs: Document[];
+        accumulators: Map<string, ReturnType<typeof createAccumulator>>;
+      }
     >();
 
     // Initialize buckets for each boundary range
@@ -2285,13 +2240,13 @@ export class AggregationCursor<T extends Document = Document> {
         for (const [field, expr] of Object.entries(spec.output)) {
           const exprObj = expr as Record<string, unknown>;
           const opKeys = Object.keys(exprObj);
-          if (opKeys.length === 1 && opKeys[0].startsWith("$")) {
+          if (opKeys.length === 1 && opKeys[0].startsWith('$')) {
             accumulators.set(field, createAccumulator(opKeys[0], exprObj[opKeys[0]]));
           }
         }
       } else {
         // Default output: just count
-        accumulators.set("count", createAccumulator("$sum", 1));
+        accumulators.set('count', createAccumulator('$sum', 1));
       }
 
       buckets.set(key, {
@@ -2310,12 +2265,12 @@ export class AggregationCursor<T extends Document = Document> {
         for (const [field, expr] of Object.entries(spec.output)) {
           const exprObj = expr as Record<string, unknown>;
           const opKeys = Object.keys(exprObj);
-          if (opKeys.length === 1 && opKeys[0].startsWith("$")) {
+          if (opKeys.length === 1 && opKeys[0].startsWith('$')) {
             accumulators.set(field, createAccumulator(opKeys[0], exprObj[opKeys[0]]));
           }
         }
       } else {
-        accumulators.set("count", createAccumulator("$sum", 1));
+        accumulators.set('count', createAccumulator('$sum', 1));
       }
 
       buckets.set(defaultKey, {
@@ -2336,11 +2291,7 @@ export class AggregationCursor<T extends Document = Document> {
         const upper = spec.boundaries[i + 1];
 
         // Value is in bucket if lower <= value < upper
-        if (
-          typeof value === "number" &&
-          typeof lower === "number" &&
-          typeof upper === "number"
-        ) {
+        if (typeof value === 'number' && typeof lower === 'number' && typeof upper === 'number') {
           if (value >= lower && value < upper) {
             bucketKey = JSON.stringify(lower);
             break;
@@ -2382,7 +2333,7 @@ export class AggregationCursor<T extends Document = Document> {
     result.sort((a, b) => {
       const aId = a._id as number;
       const bId = b._id as number;
-      if (typeof aId === "number" && typeof bId === "number") {
+      if (typeof aId === 'number' && typeof bId === 'number') {
         return aId - bId;
       }
       return 0;
@@ -2406,7 +2357,7 @@ export class AggregationCursor<T extends Document = Document> {
     if (!spec.groupBy) {
       throw new Error("$bucketAuto requires a 'groupBy' field");
     }
-    if (spec.buckets === undefined || typeof spec.buckets !== "number") {
+    if (spec.buckets === undefined || typeof spec.buckets !== 'number') {
       throw new Error("$bucketAuto requires a 'buckets' field as a positive integer");
     }
     if (!Number.isInteger(spec.buckets) || spec.buckets < 1) {
@@ -2434,7 +2385,7 @@ export class AggregationCursor<T extends Document = Document> {
     valuesWithDocs.sort((a, b) => {
       const aVal = a.value as number;
       const bVal = b.value as number;
-      if (typeof aVal === "number" && typeof bVal === "number") {
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
         return aVal - bVal;
       }
       return 0;
@@ -2464,12 +2415,12 @@ export class AggregationCursor<T extends Document = Document> {
         for (const [field, expr] of Object.entries(spec.output)) {
           const exprObj = expr as Record<string, unknown>;
           const opKeys = Object.keys(exprObj);
-          if (opKeys.length === 1 && opKeys[0].startsWith("$")) {
+          if (opKeys.length === 1 && opKeys[0].startsWith('$')) {
             accumulators.set(field, createAccumulator(opKeys[0], exprObj[opKeys[0]]));
           }
         }
       } else {
-        accumulators.set("count", createAccumulator("$sum", 1));
+        accumulators.set('count', createAccumulator('$sum', 1));
       }
 
       // Accumulate for each doc in bucket
@@ -2518,10 +2469,10 @@ export class AggregationCursor<T extends Document = Document> {
     docs: Document[]
   ): Promise<Document[]> {
     if (!this.dbContext) {
-      throw new Error("$unionWith requires database context");
+      throw new Error('$unionWith requires database context');
     }
 
-    if (typeof spec !== "object" || !spec.coll) {
+    if (typeof spec !== 'object' || !spec.coll) {
       throw new Error("$unionWith requires a 'coll' field");
     }
 
@@ -2533,11 +2484,7 @@ export class AggregationCursor<T extends Document = Document> {
 
     // Apply pipeline to foreign docs if specified
     if (pipeline && pipeline.length > 0) {
-      const subCursor = new AggregationCursor(
-        async () => foreignDocs,
-        pipeline,
-        this.dbContext
-      );
+      const subCursor = new AggregationCursor(async () => foreignDocs, pipeline, this.dbContext);
       foreignDocs = await subCursor.toArray();
     }
 
@@ -2549,10 +2496,7 @@ export class AggregationCursor<T extends Document = Document> {
    * Execute $geoNear stage.
    * Returns documents sorted by distance from the specified point.
    */
-  private async execGeoNear(
-    spec: GeoNearSpec,
-    docs: Document[]
-  ): Promise<Document[]> {
+  private async execGeoNear(spec: GeoNearSpec, docs: Document[]): Promise<Document[]> {
     // Validate required fields
     if (spec.near === undefined) {
       throw new Error("$geoNear requires 'near' option");
@@ -2575,7 +2519,7 @@ export class AggregationCursor<T extends Document = Document> {
 
     // Determine the geo field - either specified by 'key' or find from index
     let geoField: string;
-    let indexType: "2d" | "2dsphere" = "2dsphere"; // default to spherical
+    let indexType: '2d' | '2dsphere' = '2dsphere'; // default to spherical
 
     if (spec.key) {
       geoField = spec.key;
@@ -2595,7 +2539,7 @@ export class AggregationCursor<T extends Document = Document> {
     }
 
     // Use spherical if specified or if using 2dsphere index
-    const useSpherical = spec.spherical ?? (indexType === "2dsphere");
+    const useSpherical = spec.spherical ?? indexType === '2dsphere';
     const multiplier = spec.distanceMultiplier ?? 1;
 
     // Apply optional query filter first

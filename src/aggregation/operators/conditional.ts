@@ -1,8 +1,8 @@
 /**
  * Conditional expression operators.
  */
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
 
 export function evalCond(
   args: unknown,
@@ -16,13 +16,13 @@ export function evalCond(
 
   if (Array.isArray(args)) {
     [condition, thenValue, elseValue] = args;
-  } else if (typeof args === "object" && args !== null) {
+  } else if (typeof args === 'object' && args !== null) {
     const obj = args as { if: unknown; then: unknown; else: unknown };
     condition = obj.if;
     thenValue = obj.then;
     elseValue = obj.else;
   } else {
-    throw new Error("$cond requires an array or object argument");
+    throw new Error('$cond requires an array or object argument');
   }
 
   const evalCondition = evaluate(condition, doc, vars);
@@ -59,8 +59,8 @@ export function evalSwitch(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown {
-  if (typeof args !== "object" || args === null) {
-    throw new Error("$switch requires an object as an argument");
+  if (typeof args !== 'object' || args === null) {
+    throw new Error('$switch requires an object as an argument');
   }
 
   const spec = args as { branches?: unknown[]; default?: unknown };
@@ -70,8 +70,8 @@ export function evalSwitch(
   }
 
   for (const branch of spec.branches) {
-    if (typeof branch !== "object" || branch === null) {
-      throw new Error("$switch requires each branch to be an object");
+    if (typeof branch !== 'object' || branch === null) {
+      throw new Error('$switch requires each branch to be an object');
     }
 
     const branchObj = branch as { case?: unknown; then?: unknown };
@@ -94,7 +94,7 @@ export function evalSwitch(
     return evaluate(spec.default, doc, vars);
   }
 
-  throw new Error("$switch could not find a matching branch, and no default was specified");
+  throw new Error('$switch could not find a matching branch, and no default was specified');
 }
 
 /**
@@ -111,8 +111,8 @@ export function evalLet(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown {
-  if (typeof args !== "object" || args === null) {
-    throw new Error("$let requires an object as an argument");
+  if (typeof args !== 'object' || args === null) {
+    throw new Error('$let requires an object as an argument');
   }
 
   const spec = args as { vars?: unknown; in?: unknown };
@@ -125,7 +125,7 @@ export function evalLet(
     throw new Error("Missing 'in' parameter to $let");
   }
 
-  if (typeof spec.vars !== "object" || spec.vars === null || Array.isArray(spec.vars)) {
+  if (typeof spec.vars !== 'object' || spec.vars === null || Array.isArray(spec.vars)) {
     throw new Error("'vars' argument to $let must be an object");
   }
 
@@ -133,7 +133,7 @@ export function evalLet(
   const newVars: VariableContext = { ...vars };
   for (const [varName, varExpr] of Object.entries(spec.vars as Record<string, unknown>)) {
     // Variable names should not start with $ in the definition
-    if (varName.startsWith("$")) {
+    if (varName.startsWith('$')) {
       throw new Error(`Variable names cannot start with '$': ${varName}`);
     }
     newVars[varName] = evaluate(varExpr, doc, vars);

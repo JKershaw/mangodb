@@ -6,13 +6,9 @@
  * Set MONGODB_URI environment variable to run against MongoDB.
  */
 
-import { describe, it, before, after } from "node:test";
-import assert from "node:assert";
-import {
-  createTestClient,
-  getTestModeName,
-  type TestClient,
-} from "../../test-harness.ts";
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import { createTestClient, getTestModeName, type TestClient } from '../../test-harness.ts';
 
 describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
   let client: TestClient;
@@ -31,22 +27,22 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
     await cleanup();
   });
 
-  describe("$sum with expressions", () => {
-    it("should support $sum with $ifNull (null-safe sum)", async () => {
-      const collection = client.db(dbName).collection("sum_ifnull");
+  describe('$sum with expressions', () => {
+    it('should support $sum with $ifNull (null-safe sum)', async () => {
+      const collection = client.db(dbName).collection('sum_ifnull');
       await collection.insertMany([
-        { _id: 1, category: "A", value: 10 },
-        { _id: 2, category: "A", value: null },
-        { _id: 3, category: "A" }, // missing value
-        { _id: 4, category: "A", value: 20 },
+        { _id: 1, category: 'A', value: 10 },
+        { _id: 2, category: 'A', value: null },
+        { _id: 3, category: 'A' }, // missing value
+        { _id: 4, category: 'A', value: 20 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              total: { $sum: { $ifNull: ["$value", 0] } },
+              _id: '$category',
+              total: { $sum: { $ifNull: ['$value', 0] } },
             },
           },
         ])
@@ -55,13 +51,13 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].total, 30); // 10 + 0 + 0 + 20
     });
 
-    it("should support $sum with $cond (conditional sum)", async () => {
-      const collection = client.db(dbName).collection("sum_cond");
+    it('should support $sum with $cond (conditional sum)', async () => {
+      const collection = client.db(dbName).collection('sum_cond');
       await collection.insertMany([
-        { _id: 1, category: "A", amount: 100, status: "active" },
-        { _id: 2, category: "A", amount: 50, status: "inactive" },
-        { _id: 3, category: "A", amount: 75, status: "active" },
-        { _id: 4, category: "A", amount: 25, status: "inactive" },
+        { _id: 1, category: 'A', amount: 100, status: 'active' },
+        { _id: 2, category: 'A', amount: 50, status: 'inactive' },
+        { _id: 3, category: 'A', amount: 75, status: 'active' },
+        { _id: 4, category: 'A', amount: 25, status: 'inactive' },
       ]);
 
       // Sum only active amounts
@@ -69,10 +65,10 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
         .aggregate([
           {
             $group: {
-              _id: "$category",
+              _id: '$category',
               activeTotal: {
                 $sum: {
-                  $cond: [{ $eq: ["$status", "active"] }, "$amount", 0],
+                  $cond: [{ $eq: ['$status', 'active'] }, '$amount', 0],
                 },
               },
             },
@@ -83,20 +79,20 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].activeTotal, 175); // 100 + 75
     });
 
-    it("should support $sum with $multiply", async () => {
-      const collection = client.db(dbName).collection("sum_multiply");
+    it('should support $sum with $multiply', async () => {
+      const collection = client.db(dbName).collection('sum_multiply');
       await collection.insertMany([
-        { _id: 1, category: "A", price: 10, qty: 2 },
-        { _id: 2, category: "A", price: 15, qty: 3 },
-        { _id: 3, category: "A", price: 20, qty: 1 },
+        { _id: 1, category: 'A', price: 10, qty: 2 },
+        { _id: 2, category: 'A', price: 15, qty: 3 },
+        { _id: 3, category: 'A', price: 20, qty: 1 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              revenue: { $sum: { $multiply: ["$price", "$qty"] } },
+              _id: '$category',
+              revenue: { $sum: { $multiply: ['$price', '$qty'] } },
             },
           },
         ])
@@ -105,20 +101,20 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].revenue, 85); // (10*2) + (15*3) + (20*1)
     });
 
-    it("should support $sum with $subtract (profit calculation)", async () => {
-      const collection = client.db(dbName).collection("sum_subtract");
+    it('should support $sum with $subtract (profit calculation)', async () => {
+      const collection = client.db(dbName).collection('sum_subtract');
       await collection.insertMany([
-        { _id: 1, category: "A", revenue: 100, cost: 60 },
-        { _id: 2, category: "A", revenue: 80, cost: 50 },
-        { _id: 3, category: "A", revenue: 120, cost: 70 },
+        { _id: 1, category: 'A', revenue: 100, cost: 60 },
+        { _id: 2, category: 'A', revenue: 80, cost: 50 },
+        { _id: 3, category: 'A', revenue: 120, cost: 70 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              totalProfit: { $sum: { $subtract: ["$revenue", "$cost"] } },
+              _id: '$category',
+              totalProfit: { $sum: { $subtract: ['$revenue', '$cost'] } },
             },
           },
         ])
@@ -127,21 +123,21 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].totalProfit, 120); // 40 + 30 + 50
     });
 
-    it("should support $sum with $abs", async () => {
-      const collection = client.db(dbName).collection("sum_abs");
+    it('should support $sum with $abs', async () => {
+      const collection = client.db(dbName).collection('sum_abs');
       await collection.insertMany([
-        { _id: 1, category: "A", delta: 10 },
-        { _id: 2, category: "A", delta: -15 },
-        { _id: 3, category: "A", delta: 5 },
-        { _id: 4, category: "A", delta: -20 },
+        { _id: 1, category: 'A', delta: 10 },
+        { _id: 2, category: 'A', delta: -15 },
+        { _id: 3, category: 'A', delta: 5 },
+        { _id: 4, category: 'A', delta: -20 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              totalMovement: { $sum: { $abs: "$delta" } },
+              _id: '$category',
+              totalMovement: { $sum: { $abs: '$delta' } },
             },
           },
         ])
@@ -151,22 +147,22 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
     });
   });
 
-  describe("$avg with expressions", () => {
-    it("should support $avg with $ifNull", async () => {
-      const collection = client.db(dbName).collection("avg_ifnull");
+  describe('$avg with expressions', () => {
+    it('should support $avg with $ifNull', async () => {
+      const collection = client.db(dbName).collection('avg_ifnull');
       await collection.insertMany([
-        { _id: 1, category: "A", score: 80 },
-        { _id: 2, category: "A", score: null },
-        { _id: 3, category: "A", score: 90 },
-        { _id: 4, category: "A" }, // missing
+        { _id: 1, category: 'A', score: 80 },
+        { _id: 2, category: 'A', score: null },
+        { _id: 3, category: 'A', score: 90 },
+        { _id: 4, category: 'A' }, // missing
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              avgScore: { $avg: { $ifNull: ["$score", 0] } },
+              _id: '$category',
+              avgScore: { $avg: { $ifNull: ['$score', 0] } },
             },
           },
         ])
@@ -175,13 +171,13 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].avgScore, 42.5); // (80 + 0 + 90 + 0) / 4
     });
 
-    it("should support $avg with $cond", async () => {
-      const collection = client.db(dbName).collection("avg_cond");
+    it('should support $avg with $cond', async () => {
+      const collection = client.db(dbName).collection('avg_cond');
       await collection.insertMany([
-        { _id: 1, category: "A", score: 80, valid: true },
-        { _id: 2, category: "A", score: 50, valid: false },
-        { _id: 3, category: "A", score: 90, valid: true },
-        { _id: 4, category: "A", score: 30, valid: false },
+        { _id: 1, category: 'A', score: 80, valid: true },
+        { _id: 2, category: 'A', score: 50, valid: false },
+        { _id: 3, category: 'A', score: 90, valid: true },
+        { _id: 4, category: 'A', score: 30, valid: false },
       ]);
 
       // Average only valid scores, using null for invalid (which $avg ignores)
@@ -189,10 +185,10 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
         .aggregate([
           {
             $group: {
-              _id: "$category",
+              _id: '$category',
               avgValidScore: {
                 $avg: {
-                  $cond: [{ $eq: ["$valid", true] }, "$score", null],
+                  $cond: [{ $eq: ['$valid', true] }, '$score', null],
                 },
               },
             },
@@ -203,20 +199,20 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].avgValidScore, 85); // (80 + 90) / 2
     });
 
-    it("should support $avg with division", async () => {
-      const collection = client.db(dbName).collection("avg_divide");
+    it('should support $avg with division', async () => {
+      const collection = client.db(dbName).collection('avg_divide');
       await collection.insertMany([
-        { _id: 1, category: "A", total: 100, count: 4 },
-        { _id: 2, category: "A", total: 150, count: 5 },
-        { _id: 3, category: "A", total: 200, count: 8 },
+        { _id: 1, category: 'A', total: 100, count: 4 },
+        { _id: 2, category: 'A', total: 150, count: 5 },
+        { _id: 3, category: 'A', total: 200, count: 8 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              avgPerItem: { $avg: { $divide: ["$total", "$count"] } },
+              _id: '$category',
+              avgPerItem: { $avg: { $divide: ['$total', '$count'] } },
             },
           },
         ])
@@ -227,46 +223,46 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
     });
   });
 
-  describe("$push/$addToSet with expressions", () => {
-    it("should support $push with computed value", async () => {
-      const collection = client.db(dbName).collection("push_computed");
+  describe('$push/$addToSet with expressions', () => {
+    it('should support $push with computed value', async () => {
+      const collection = client.db(dbName).collection('push_computed');
       await collection.insertMany([
-        { _id: 1, category: "A", firstName: "John", lastName: "Doe" },
-        { _id: 2, category: "A", firstName: "Jane", lastName: "Smith" },
+        { _id: 1, category: 'A', firstName: 'John', lastName: 'Doe' },
+        { _id: 2, category: 'A', firstName: 'Jane', lastName: 'Smith' },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
+              _id: '$category',
               names: {
-                $push: { $concat: ["$firstName", " ", "$lastName"] },
+                $push: { $concat: ['$firstName', ' ', '$lastName'] },
               },
             },
           },
         ])
         .toArray();
 
-      assert.deepStrictEqual((result[0].names as string[]).sort(), ["Jane Smith", "John Doe"]);
+      assert.deepStrictEqual((result[0].names as string[]).sort(), ['Jane Smith', 'John Doe']);
     });
 
-    it("should support $push with computed object", async () => {
-      const collection = client.db(dbName).collection("push_object");
+    it('should support $push with computed object', async () => {
+      const collection = client.db(dbName).collection('push_object');
       await collection.insertMany([
-        { _id: 1, category: "A", name: "Item1", price: 10, qty: 2 },
-        { _id: 2, category: "A", name: "Item2", price: 15, qty: 3 },
+        { _id: 1, category: 'A', name: 'Item1', price: 10, qty: 2 },
+        { _id: 2, category: 'A', name: 'Item2', price: 15, qty: 3 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
+              _id: '$category',
               items: {
                 $push: {
-                  name: "$name",
-                  total: { $multiply: ["$price", "$qty"] },
+                  name: '$name',
+                  total: { $multiply: ['$price', '$qty'] },
                 },
               },
             },
@@ -277,27 +273,27 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       const items = result[0].items as Array<{ name: string; total: number }>;
       assert.strictEqual(items.length, 2);
 
-      const item1 = items.find((i) => i.name === "Item1");
-      const item2 = items.find((i) => i.name === "Item2");
+      const item1 = items.find((i) => i.name === 'Item1');
+      const item2 = items.find((i) => i.name === 'Item2');
       assert.strictEqual(item1?.total, 20);
       assert.strictEqual(item2?.total, 45);
     });
 
-    it("should support $addToSet with $toLower", async () => {
-      const collection = client.db(dbName).collection("addtoset_lower");
+    it('should support $addToSet with $toLower', async () => {
+      const collection = client.db(dbName).collection('addtoset_lower');
       await collection.insertMany([
-        { _id: 1, category: "A", tag: "JavaScript" },
-        { _id: 2, category: "A", tag: "javascript" },
-        { _id: 3, category: "A", tag: "JAVASCRIPT" },
-        { _id: 4, category: "A", tag: "TypeScript" },
+        { _id: 1, category: 'A', tag: 'JavaScript' },
+        { _id: 2, category: 'A', tag: 'javascript' },
+        { _id: 3, category: 'A', tag: 'JAVASCRIPT' },
+        { _id: 4, category: 'A', tag: 'TypeScript' },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              uniqueTags: { $addToSet: { $toLower: "$tag" } },
+              _id: '$category',
+              uniqueTags: { $addToSet: { $toLower: '$tag' } },
             },
           },
         ])
@@ -305,17 +301,17 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
 
       const tags = result[0].uniqueTags as string[];
       assert.strictEqual(tags.length, 2);
-      assert.ok(tags.includes("javascript"));
-      assert.ok(tags.includes("typescript"));
+      assert.ok(tags.includes('javascript'));
+      assert.ok(tags.includes('typescript'));
     });
   });
 
-  describe("$first/$last with expressions", () => {
-    it("should support $first with $ifNull", async () => {
-      const collection = client.db(dbName).collection("first_ifnull");
+  describe('$first/$last with expressions', () => {
+    it('should support $first with $ifNull', async () => {
+      const collection = client.db(dbName).collection('first_ifnull');
       await collection.insertMany([
-        { _id: 1, category: "A", value: null, order: 1 },
-        { _id: 2, category: "A", value: 10, order: 2 },
+        { _id: 1, category: 'A', value: null, order: 1 },
+        { _id: 2, category: 'A', value: 10, order: 2 },
       ]);
 
       const result = await collection
@@ -323,21 +319,21 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
           { $sort: { order: 1 } },
           {
             $group: {
-              _id: "$category",
-              firstValue: { $first: { $ifNull: ["$value", "default"] } },
+              _id: '$category',
+              firstValue: { $first: { $ifNull: ['$value', 'default'] } },
             },
           },
         ])
         .toArray();
 
-      assert.strictEqual(result[0].firstValue, "default");
+      assert.strictEqual(result[0].firstValue, 'default');
     });
 
-    it("should support $first with $concat", async () => {
-      const collection = client.db(dbName).collection("first_concat");
+    it('should support $first with $concat', async () => {
+      const collection = client.db(dbName).collection('first_concat');
       await collection.insertMany([
-        { _id: 1, category: "A", prefix: "ID", num: "001", order: 1 },
-        { _id: 2, category: "A", prefix: "ID", num: "002", order: 2 },
+        { _id: 1, category: 'A', prefix: 'ID', num: '001', order: 1 },
+        { _id: 2, category: 'A', prefix: 'ID', num: '002', order: 2 },
       ]);
 
       const result = await collection
@@ -345,22 +341,22 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
           { $sort: { order: 1 } },
           {
             $group: {
-              _id: "$category",
-              firstId: { $first: { $concat: ["$prefix", "-", "$num"] } },
+              _id: '$category',
+              firstId: { $first: { $concat: ['$prefix', '-', '$num'] } },
             },
           },
         ])
         .toArray();
 
-      assert.strictEqual(result[0].firstId, "ID-001");
+      assert.strictEqual(result[0].firstId, 'ID-001');
     });
 
-    it("should support $last with computed value", async () => {
-      const collection = client.db(dbName).collection("last_computed");
+    it('should support $last with computed value', async () => {
+      const collection = client.db(dbName).collection('last_computed');
       await collection.insertMany([
-        { _id: 1, category: "A", price: 10, qty: 2, order: 1 },
-        { _id: 2, category: "A", price: 15, qty: 3, order: 2 },
-        { _id: 3, category: "A", price: 20, qty: 1, order: 3 },
+        { _id: 1, category: 'A', price: 10, qty: 2, order: 1 },
+        { _id: 2, category: 'A', price: 15, qty: 3, order: 2 },
+        { _id: 3, category: 'A', price: 20, qty: 1, order: 3 },
       ]);
 
       const result = await collection
@@ -368,8 +364,8 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
           { $sort: { order: 1 } },
           {
             $group: {
-              _id: "$category",
-              lastTotal: { $last: { $multiply: ["$price", "$qty"] } },
+              _id: '$category',
+              lastTotal: { $last: { $multiply: ['$price', '$qty'] } },
             },
           },
         ])
@@ -379,21 +375,21 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
     });
   });
 
-  describe("$max/$min with expressions", () => {
-    it("should support $max with computed value", async () => {
-      const collection = client.db(dbName).collection("max_computed");
+  describe('$max/$min with expressions', () => {
+    it('should support $max with computed value', async () => {
+      const collection = client.db(dbName).collection('max_computed');
       await collection.insertMany([
-        { _id: 1, category: "A", price: 10, qty: 5 },
-        { _id: 2, category: "A", price: 8, qty: 10 },
-        { _id: 3, category: "A", price: 15, qty: 2 },
+        { _id: 1, category: 'A', price: 10, qty: 5 },
+        { _id: 2, category: 'A', price: 8, qty: 10 },
+        { _id: 3, category: 'A', price: 15, qty: 2 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              maxRevenue: { $max: { $multiply: ["$price", "$qty"] } },
+              _id: '$category',
+              maxRevenue: { $max: { $multiply: ['$price', '$qty'] } },
             },
           },
         ])
@@ -402,20 +398,20 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].maxRevenue, 80); // 8 * 10
     });
 
-    it("should support $min with $subtract", async () => {
-      const collection = client.db(dbName).collection("min_subtract");
+    it('should support $min with $subtract', async () => {
+      const collection = client.db(dbName).collection('min_subtract');
       await collection.insertMany([
-        { _id: 1, category: "A", price: 100, cost: 80 },
-        { _id: 2, category: "A", price: 50, cost: 45 },
-        { _id: 3, category: "A", price: 200, cost: 120 },
+        { _id: 1, category: 'A', price: 100, cost: 80 },
+        { _id: 2, category: 'A', price: 50, cost: 45 },
+        { _id: 3, category: 'A', price: 200, cost: 120 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              minProfit: { $min: { $subtract: ["$price", "$cost"] } },
+              _id: '$category',
+              minProfit: { $min: { $subtract: ['$price', '$cost'] } },
             },
           },
         ])
@@ -425,28 +421,28 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
     });
   });
 
-  describe("Multiple accumulators with expressions", () => {
-    it("should support multiple accumulators in one $group", async () => {
-      const collection = client.db(dbName).collection("multi_accum");
+  describe('Multiple accumulators with expressions', () => {
+    it('should support multiple accumulators in one $group', async () => {
+      const collection = client.db(dbName).collection('multi_accum');
       await collection.insertMany([
-        { _id: 1, category: "A", price: 10, qty: 2, discount: 0.1 },
-        { _id: 2, category: "A", price: 20, qty: 3, discount: null },
-        { _id: 3, category: "A", price: 15, qty: 4, discount: 0.2 },
+        { _id: 1, category: 'A', price: 10, qty: 2, discount: 0.1 },
+        { _id: 2, category: 'A', price: 20, qty: 3, discount: null },
+        { _id: 3, category: 'A', price: 15, qty: 4, discount: 0.2 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
-              totalRevenue: { $sum: { $multiply: ["$price", "$qty"] } },
-              avgDiscount: { $avg: { $ifNull: ["$discount", 0] } },
-              items: { $push: "$price" },
+              _id: '$category',
+              totalRevenue: { $sum: { $multiply: ['$price', '$qty'] } },
+              avgDiscount: { $avg: { $ifNull: ['$discount', 0] } },
+              items: { $push: '$price' },
               maxProfit: {
                 $max: {
                   $multiply: [
-                    { $multiply: ["$price", "$qty"] },
-                    { $subtract: [1, { $ifNull: ["$discount", 0] }] },
+                    { $multiply: ['$price', '$qty'] },
+                    { $subtract: [1, { $ifNull: ['$discount', 0] }] },
                   ],
                 },
               },
@@ -468,24 +464,24 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].maxProfit, 60);
     });
 
-    it("should support nested expressions in all accumulators", async () => {
-      const collection = client.db(dbName).collection("nested_all_accum");
+    it('should support nested expressions in all accumulators', async () => {
+      const collection = client.db(dbName).collection('nested_all_accum');
       await collection.insertMany([
-        { _id: 1, cat: "X", a: 10, b: 5, c: 2 },
-        { _id: 2, cat: "X", a: 20, b: 10, c: 4 },
-        { _id: 3, cat: "X", a: 30, b: 15, c: 6 },
+        { _id: 1, cat: 'X', a: 10, b: 5, c: 2 },
+        { _id: 2, cat: 'X', a: 20, b: 10, c: 4 },
+        { _id: 3, cat: 'X', a: 30, b: 15, c: 6 },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$cat",
-              sumProduct: { $sum: { $multiply: ["$a", "$b"] } },
-              avgRatio: { $avg: { $divide: ["$a", "$c"] } },
-              firstDiff: { $first: { $subtract: ["$a", "$b"] } },
-              maxSum: { $max: { $add: ["$a", "$b", "$c"] } },
-              minMod: { $min: { $mod: ["$a", "$c"] } },
+              _id: '$cat',
+              sumProduct: { $sum: { $multiply: ['$a', '$b'] } },
+              avgRatio: { $avg: { $divide: ['$a', '$c'] } },
+              firstDiff: { $first: { $subtract: ['$a', '$b'] } },
+              maxSum: { $max: { $add: ['$a', '$b', '$c'] } },
+              minMod: { $min: { $mod: ['$a', '$c'] } },
             },
           },
         ])
@@ -509,25 +505,25 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
     });
   });
 
-  describe("$count accumulator", () => {
-    it("should work alongside complex accumulators", async () => {
-      const collection = client.db(dbName).collection("count_with_complex");
+  describe('$count accumulator', () => {
+    it('should work alongside complex accumulators', async () => {
+      const collection = client.db(dbName).collection('count_with_complex');
       await collection.insertMany([
-        { _id: 1, category: "A", value: 10, active: true },
-        { _id: 2, category: "A", value: 20, active: true },
-        { _id: 3, category: "A", value: 30, active: false },
-        { _id: 4, category: "B", value: 40, active: true },
+        { _id: 1, category: 'A', value: 10, active: true },
+        { _id: 2, category: 'A', value: 20, active: true },
+        { _id: 3, category: 'A', value: 30, active: false },
+        { _id: 4, category: 'B', value: 40, active: true },
       ]);
 
       const result = await collection
         .aggregate([
           {
             $group: {
-              _id: "$category",
+              _id: '$category',
               count: { $count: {} },
               activeSum: {
                 $sum: {
-                  $cond: [{ $eq: ["$active", true] }, "$value", 0],
+                  $cond: [{ $eq: ['$active', true] }, '$value', 0],
                 },
               },
             },
@@ -536,11 +532,11 @@ describe(`Accumulator Expression Composition (${getTestModeName()})`, () => {
         ])
         .toArray();
 
-      assert.strictEqual(result[0]._id, "A");
+      assert.strictEqual(result[0]._id, 'A');
       assert.strictEqual(result[0].count, 3);
       assert.strictEqual(result[0].activeSum, 30); // 10 + 20
 
-      assert.strictEqual(result[1]._id, "B");
+      assert.strictEqual(result[1]._id, 'B');
       assert.strictEqual(result[1].count, 1);
       assert.strictEqual(result[1].activeSum, 40);
     });

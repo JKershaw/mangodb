@@ -3,20 +3,16 @@
  * These functions are used by query-matcher.ts and collection.ts.
  */
 
-import type { Position, GeoJSONGeometry } from "./geometry.ts";
-import { extractCoordinates, isValidGeoJSON } from "./geometry.ts";
-import {
-  haversineDistance,
-  euclideanDistance,
-  geometriesIntersect,
-} from "./calculations.ts";
+import type { Position, GeoJSONGeometry } from './geometry.ts';
+import { extractCoordinates, isValidGeoJSON } from './geometry.ts';
+import { haversineDistance, euclideanDistance, geometriesIntersect } from './calculations.ts';
 import {
   parseNearQuery,
   pointWithinShape,
   validateGeoWithinShape,
   validateGeoIntersectsShape,
-} from "./shapes.ts";
-import { InvalidGeoJSONError } from "./errors.ts";
+} from './shapes.ts';
+import { InvalidGeoJSONError } from './errors.ts';
 
 /**
  * Extract a point from a document field value.
@@ -46,7 +42,7 @@ export function extractGeometryFromDocument(value: unknown): GeoJSONGeometry | n
   const point = extractCoordinates(value);
   if (point) {
     return {
-      type: "Point",
+      type: 'Point',
       coordinates: point,
     };
   }
@@ -112,15 +108,11 @@ export interface NearResult {
  * @param spherical Whether to use spherical (true) or planar (false) geometry
  * @returns NearResult with match status and distance
  */
-export function evaluateNear(
-  docValue: unknown,
-  nearSpec: unknown,
-  spherical: boolean
-): NearResult {
+export function evaluateNear(docValue: unknown, nearSpec: unknown, spherical: boolean): NearResult {
   // Parse the near query
   const nearQuery = parseNearQuery(nearSpec);
   if (!nearQuery) {
-    throw new InvalidGeoJSONError("$near requires a valid point");
+    throw new InvalidGeoJSONError('$near requires a valid point');
   }
 
   // Extract point from document
@@ -156,18 +148,16 @@ export interface ExtractedNearQuery {
   remainingFilter: Record<string, unknown>;
 }
 
-export function extractNearQuery(
-  filter: Record<string, unknown>
-): ExtractedNearQuery | null {
+export function extractNearQuery(filter: Record<string, unknown>): ExtractedNearQuery | null {
   for (const [field, value] of Object.entries(filter)) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
       continue;
     }
 
     const fieldOps = value as Record<string, unknown>;
 
     // Check for $near
-    if ("$near" in fieldOps) {
+    if ('$near' in fieldOps) {
       const remaining = { ...filter };
       delete remaining[field];
 
@@ -179,10 +169,10 @@ export function extractNearQuery(
         Object.assign(nearSpec, fieldOps.$near);
       }
 
-      if ("$maxDistance" in fieldOps && !("$maxDistance" in nearSpec)) {
+      if ('$maxDistance' in fieldOps && !('$maxDistance' in nearSpec)) {
         nearSpec.$maxDistance = fieldOps.$maxDistance;
       }
-      if ("$minDistance" in fieldOps && !("$minDistance" in nearSpec)) {
+      if ('$minDistance' in fieldOps && !('$minDistance' in nearSpec)) {
         nearSpec.$minDistance = fieldOps.$minDistance;
       }
 
@@ -195,7 +185,7 @@ export function extractNearQuery(
     }
 
     // Check for $nearSphere
-    if ("$nearSphere" in fieldOps) {
+    if ('$nearSphere' in fieldOps) {
       const remaining = { ...filter };
       delete remaining[field];
 
@@ -206,10 +196,10 @@ export function extractNearQuery(
         Object.assign(nearSpec, fieldOps.$nearSphere);
       }
 
-      if ("$maxDistance" in fieldOps && !("$maxDistance" in nearSpec)) {
+      if ('$maxDistance' in fieldOps && !('$maxDistance' in nearSpec)) {
         nearSpec.$maxDistance = fieldOps.$maxDistance;
       }
-      if ("$minDistance" in fieldOps && !("$minDistance" in nearSpec)) {
+      if ('$minDistance' in fieldOps && !('$minDistance' in nearSpec)) {
         nearSpec.$minDistance = fieldOps.$minDistance;
       }
 
@@ -237,9 +227,9 @@ export function hasNearQuery(filter: Record<string, unknown>): boolean {
  */
 function isPlainGeoJSONOrArray(value: unknown): boolean {
   if (Array.isArray(value)) return true;
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
-  return obj.type === "Point" && !("$geometry" in obj);
+  return obj.type === 'Point' && !('$geometry' in obj);
 }
 
 /**
@@ -261,7 +251,7 @@ export function calculateDistance(p1: Position, p2: Position, spherical: boolean
 export function validateNearPoint(value: unknown): Position {
   const point = extractCoordinates(value);
   if (!point) {
-    throw new InvalidGeoJSONError("$near requires a valid point");
+    throw new InvalidGeoJSONError('$near requires a valid point');
   }
   return point;
 }
@@ -275,7 +265,7 @@ export function getGeoFieldFromIndexes(
 ): string | null {
   for (const index of indexes) {
     for (const [field, type] of Object.entries(index.key)) {
-      if (type === "2d" || type === "2dsphere") {
+      if (type === '2d' || type === '2dsphere') {
         return field;
       }
     }

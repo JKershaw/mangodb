@@ -1,5 +1,5 @@
-import { MangoDb } from "./db.ts";
-import { mkdir } from "node:fs/promises";
+import { MangoDb } from './db.ts';
+import { mkdir } from 'node:fs/promises';
 
 /**
  * MangoClient is the entry point for using MangoDB.

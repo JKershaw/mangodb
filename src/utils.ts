@@ -1,16 +1,12 @@
-import { ObjectId } from "bson";
-import {
-  getValueByPath,
-  setValueByPath,
-  cloneValue,
-} from "./document-utils.ts";
+import { ObjectId } from 'bson';
+import { getValueByPath, setValueByPath, cloneValue } from './document-utils.ts';
 import {
   type ProjectionSpec,
   type ProjectionSlice,
   type ProjectionElemMatch,
   type ProjectionMeta,
-} from "./types.ts";
-import { matchesFilter } from "./query-matcher.ts";
+} from './types.ts';
+import { matchesFilter } from './query-matcher.ts';
 
 type Document = Record<string, unknown>;
 
@@ -59,7 +55,7 @@ export { cloneValue };
  * const arr = [];
  * const sortKey = getArraySortKey(arr, 1); // Returns EMPTY_ARRAY_MARKER
  */
-export const EMPTY_ARRAY_MARKER = Symbol("emptyArray");
+export const EMPTY_ARRAY_MARKER = Symbol('emptyArray');
 
 /**
  * Get the MongoDB BSON type ordering number for a value.
@@ -104,15 +100,15 @@ export const EMPTY_ARRAY_MARKER = Symbol("emptyArray");
 export function getTypeOrder(value: unknown): number {
   if (value === EMPTY_ARRAY_MARKER) return 1.5; // Empty array sorts before null
   if (value === undefined || value === null) return 2; // Null (and missing)
-  if (typeof value === "number") return 3; // Numbers
-  if (typeof value === "string") return 4; // String
-  if (typeof value === "object" && !Array.isArray(value)) {
+  if (typeof value === 'number') return 3; // Numbers
+  if (typeof value === 'string') return 4; // String
+  if (typeof value === 'object' && !Array.isArray(value)) {
     if (value instanceof ObjectId) return 8; // ObjectId
     if (value instanceof Date) return 10; // Date
     return 5; // Plain object
   }
   if (Array.isArray(value)) return 6; // Array
-  if (typeof value === "boolean") return 9; // Boolean
+  if (typeof value === 'boolean') return 9; // Boolean
   return 13; // Other types (MaxKey equivalent)
 }
 
@@ -162,18 +158,18 @@ export function compareScalarValues(a: unknown, b: unknown): number {
   // Same type: compare values
   if (a === null || a === undefined) return 0;
 
-  if (typeof a === "number" && typeof b === "number") {
+  if (typeof a === 'number' && typeof b === 'number') {
     return a - b;
   }
 
-  if (typeof a === "string" && typeof b === "string") {
+  if (typeof a === 'string' && typeof b === 'string') {
     // MongoDB uses binary comparison by default (not locale-aware)
     if (a < b) return -1;
     if (a > b) return 1;
     return 0;
   }
 
-  if (typeof a === "boolean" && typeof b === "boolean") {
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
     // false < true
     if (a === b) return 0;
     return a ? 1 : -1;
@@ -192,7 +188,7 @@ export function compareScalarValues(a: unknown, b: unknown): number {
   }
 
   // For objects, use JSON string comparison as fallback
-  if (typeof a === "object" && typeof b === "object") {
+  if (typeof a === 'object' && typeof b === 'object') {
     const aStr = JSON.stringify(a);
     const bStr = JSON.stringify(b);
     if (aStr < bStr) return -1;
@@ -290,11 +286,7 @@ export function getArraySortKey(arr: unknown[], direction: 1 | -1): unknown {
  * compareValuesForSort([], null, 1);      // Returns negative
  * compareValuesForSort([], 0, 1);         // Returns negative (empty array < number)
  */
-export function compareValuesForSort(
-  a: unknown,
-  b: unknown,
-  direction: 1 | -1
-): number {
+export function compareValuesForSort(a: unknown, b: unknown, direction: 1 | -1): number {
   // Handle arrays specially - extract sort key based on direction
   const aKey = Array.isArray(a) ? getArraySortKey(a, direction) : a;
   const bKey = Array.isArray(b) ? getArraySortKey(b, direction) : b;
@@ -364,10 +356,10 @@ export function compareValuesForSort(
  */
 function isSliceProjection(value: unknown): value is ProjectionSlice {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "$slice" in value &&
-    (typeof (value as ProjectionSlice).$slice === "number" ||
+    '$slice' in value &&
+    (typeof (value as ProjectionSlice).$slice === 'number' ||
       Array.isArray((value as ProjectionSlice).$slice))
   );
 }
@@ -377,10 +369,10 @@ function isSliceProjection(value: unknown): value is ProjectionSlice {
  */
 function isElemMatchProjection(value: unknown): value is ProjectionElemMatch {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "$elemMatch" in value &&
-    typeof (value as ProjectionElemMatch).$elemMatch === "object"
+    '$elemMatch' in value &&
+    typeof (value as ProjectionElemMatch).$elemMatch === 'object'
   );
 }
 
@@ -389,10 +381,10 @@ function isElemMatchProjection(value: unknown): value is ProjectionElemMatch {
  */
 function isMetaProjection(value: unknown): value is ProjectionMeta {
   return (
-    typeof value === "object" &&
+    typeof value === 'object' &&
     value !== null &&
-    "$meta" in value &&
-    typeof (value as ProjectionMeta).$meta === "string"
+    '$meta' in value &&
+    typeof (value as ProjectionMeta).$meta === 'string'
   );
 }
 
@@ -400,21 +392,14 @@ function isMetaProjection(value: unknown): value is ProjectionMeta {
  * Check if a projection value is a projection operator (not 0 or 1).
  */
 function isProjectionOperator(value: unknown): boolean {
-  return (
-    isSliceProjection(value) ||
-    isElemMatchProjection(value) ||
-    isMetaProjection(value)
-  );
+  return isSliceProjection(value) || isElemMatchProjection(value) || isMetaProjection(value);
 }
 
 /**
  * Apply $slice projection to an array.
  */
-function applySliceProjection(
-  arr: unknown[],
-  sliceSpec: number | [number, number]
-): unknown[] {
-  if (typeof sliceSpec === "number") {
+function applySliceProjection(arr: unknown[], sliceSpec: number | [number, number]): unknown[] {
+  if (typeof sliceSpec === 'number') {
     if (sliceSpec >= 0) {
       return arr.slice(0, sliceSpec);
     } else {
@@ -440,7 +425,7 @@ function applyElemMatchProjection(
 ): unknown[] {
   for (const elem of arr) {
     if (
-      typeof elem === "object" &&
+      typeof elem === 'object' &&
       elem !== null &&
       matchesFilter(elem as Document, elemMatchQuery)
     ) {
@@ -461,7 +446,7 @@ export function applyProjection<T extends Document>(
   // Determine if this is inclusion or exclusion mode
   // _id: 0 doesn't count for determining mode
   // Projection operators ($slice, $elemMatch, $meta) are treated as inclusion
-  const nonIdKeys = keys.filter((k) => k !== "_id");
+  const nonIdKeys = keys.filter((k) => k !== '_id');
   const hasInclusion = nonIdKeys.some(
     (k) => projection[k] === 1 || isProjectionOperator(projection[k])
   );
@@ -469,7 +454,7 @@ export function applyProjection<T extends Document>(
 
   // Can't mix inclusion and exclusion (except for _id)
   if (hasInclusion && hasExclusion) {
-    throw new Error("Cannot mix inclusion and exclusion in projection");
+    throw new Error('Cannot mix inclusion and exclusion in projection');
   }
 
   const result: Record<string, unknown> = {};
@@ -488,7 +473,7 @@ export function applyProjection<T extends Document>(
         // Simple inclusion
         const value = getValueByPath(doc, key);
         if (value !== undefined) {
-          if (key.includes(".")) {
+          if (key.includes('.')) {
             setValueByPath(result, key, value);
           } else {
             result[key] = value;
@@ -513,7 +498,7 @@ export function applyProjection<T extends Document>(
         }
       } else if (isMetaProjection(projValue)) {
         // $meta projection
-        if (projValue.$meta === "textScore" && metadata?.textScore !== undefined) {
+        if (projValue.$meta === 'textScore' && metadata?.textScore !== undefined) {
           result[key] = metadata.textScore;
         }
         // indexKey not implemented
@@ -529,12 +514,12 @@ export function applyProjection<T extends Document>(
     // Remove excluded fields
     for (const key of keys) {
       if (projection[key] === 0) {
-        if (key.includes(".")) {
+        if (key.includes('.')) {
           // Handle nested field exclusion
-          const parts = key.split(".");
+          const parts = key.split('.');
           let current: Record<string, unknown> = result;
           for (let i = 0; i < parts.length - 1; i++) {
-            if (current[parts[i]] && typeof current[parts[i]] === "object") {
+            if (current[parts[i]] && typeof current[parts[i]] === 'object') {
               current = current[parts[i]] as Record<string, unknown>;
             } else {
               break;

@@ -1,9 +1,9 @@
 /**
  * Arithmetic expression operators.
  */
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
-import { getBSONTypeName } from "../helpers.ts";
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
+import { getBSONTypeName } from '../helpers.ts';
 
 export function evalAdd(
   args: unknown[],
@@ -19,8 +19,8 @@ export function evalAdd(
 
   let sum = 0;
   for (const v of values) {
-    if (typeof v !== "number") {
-      throw new Error("$add only supports numeric types");
+    if (typeof v !== 'number') {
+      throw new Error('$add only supports numeric types');
     }
     sum += v;
   }
@@ -39,8 +39,8 @@ export function evalSubtract(
     return null;
   }
 
-  if (typeof arg1 !== "number" || typeof arg2 !== "number") {
-    throw new Error("$subtract only supports numeric types");
+  if (typeof arg1 !== 'number' || typeof arg2 !== 'number') {
+    throw new Error('$subtract only supports numeric types');
   }
 
   return arg1 - arg2;
@@ -60,8 +60,8 @@ export function evalMultiply(
 
   let product = 1;
   for (const v of values) {
-    if (typeof v !== "number") {
-      throw new Error("$multiply only supports numeric types");
+    if (typeof v !== 'number') {
+      throw new Error('$multiply only supports numeric types');
     }
     product *= v;
   }
@@ -80,8 +80,8 @@ export function evalDivide(
     return null;
   }
 
-  if (typeof dividend !== "number" || typeof divisor !== "number") {
-    throw new Error("$divide only supports numeric types");
+  if (typeof dividend !== 'number' || typeof divisor !== 'number') {
+    throw new Error('$divide only supports numeric types');
   }
 
   // MongoDB returns Infinity for division by zero
@@ -104,7 +104,7 @@ export function evalAbs(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$abs only supports numeric types, not ${typeName}`);
   }
@@ -124,7 +124,7 @@ export function evalCeil(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$ceil only supports numeric types, not ${typeName}`);
   }
@@ -144,7 +144,7 @@ export function evalFloor(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$floor only supports numeric types, not ${typeName}`);
   }
@@ -194,7 +194,7 @@ export function evalRound(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$round only supports numeric types, not ${typeName}`);
   }
@@ -216,7 +216,7 @@ export function evalMod(
     return null;
   }
 
-  if (typeof dividend !== "number" || typeof divisor !== "number") {
+  if (typeof dividend !== 'number' || typeof divisor !== 'number') {
     const dividendType = getBSONTypeName(dividend);
     const divisorType = getBSONTypeName(divisor);
     throw new Error(`$mod only supports numeric types, not ${dividendType} and ${divisorType}`);
@@ -260,7 +260,7 @@ export function evalExp(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$exp only supports numeric types, not ${typeName}`);
   }
@@ -283,7 +283,7 @@ export function evalLn(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$ln only supports numeric types, not ${typeName}`);
   }
@@ -312,7 +312,7 @@ export function evalLog(
     return null;
   }
 
-  if (typeof number !== "number" || typeof base !== "number") {
+  if (typeof number !== 'number' || typeof base !== 'number') {
     throw new Error("$log's arguments must be numbers");
   }
 
@@ -342,7 +342,7 @@ export function evalLog10(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$log10 only supports numeric types, not ${typeName}`);
   }
@@ -371,7 +371,7 @@ export function evalPow(
     return null;
   }
 
-  if (typeof base !== "number" || typeof exponent !== "number") {
+  if (typeof base !== 'number' || typeof exponent !== 'number') {
     throw new Error("$pow's arguments must be numbers");
   }
 
@@ -393,7 +393,7 @@ export function evalSqrt(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$sqrt only supports numeric types, not ${typeName}`);
   }
@@ -430,7 +430,7 @@ export function evalTrunc(
     return null;
   }
 
-  if (typeof value !== "number") {
+  if (typeof value !== 'number') {
     const typeName = getBSONTypeName(value);
     throw new Error(`$trunc only supports numeric types, not ${typeName}`);
   }

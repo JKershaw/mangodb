@@ -2,33 +2,30 @@
  * Unit tests for partition utilities.
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
-import {
-  partitionDocuments,
-  sortPartition,
-} from "../../../src/aggregation/partition.ts";
-import { evaluateExpression } from "../../../src/aggregation/expression.ts";
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+import { partitionDocuments, sortPartition } from '../../../src/aggregation/partition.ts';
+import { evaluateExpression } from '../../../src/aggregation/expression.ts';
 
-describe("Partition Utilities", () => {
-  describe("partitionDocuments", () => {
-    it("should put all docs in single partition when no options", () => {
+describe('Partition Utilities', () => {
+  describe('partitionDocuments', () => {
+    it('should put all docs in single partition when no options', () => {
       const docs = [{ x: 1 }, { x: 2 }, { x: 3 }];
       const result = partitionDocuments(docs, {}, evaluateExpression);
 
       assert.strictEqual(result.size, 1);
-      assert.strictEqual(result.get("")!.length, 3);
+      assert.strictEqual(result.get('')!.length, 3);
     });
 
-    it("should partition by single field using partitionByFields", () => {
+    it('should partition by single field using partitionByFields', () => {
       const docs = [
-        { category: "A", value: 1 },
-        { category: "B", value: 2 },
-        { category: "A", value: 3 },
+        { category: 'A', value: 1 },
+        { category: 'B', value: 2 },
+        { category: 'A', value: 3 },
       ];
       const result = partitionDocuments(
         docs,
-        { partitionByFields: ["category"] },
+        { partitionByFields: ['category'] },
         evaluateExpression
       );
 
@@ -39,16 +36,16 @@ describe("Partition Utilities", () => {
       assert.strictEqual(groupB.length, 1);
     });
 
-    it("should partition by multiple fields using partitionByFields", () => {
+    it('should partition by multiple fields using partitionByFields', () => {
       const docs = [
-        { a: 1, b: "x", val: 10 },
-        { a: 1, b: "y", val: 20 },
-        { a: 1, b: "x", val: 30 },
-        { a: 2, b: "x", val: 40 },
+        { a: 1, b: 'x', val: 10 },
+        { a: 1, b: 'y', val: 20 },
+        { a: 1, b: 'x', val: 30 },
+        { a: 2, b: 'x', val: 40 },
       ];
       const result = partitionDocuments(
         docs,
-        { partitionByFields: ["a", "b"] },
+        { partitionByFields: ['a', 'b'] },
         evaluateExpression
       );
 
@@ -58,39 +55,35 @@ describe("Partition Utilities", () => {
       assert.strictEqual(result.get('[2,"x"]')!.length, 1);
     });
 
-    it("should partition using partitionBy expression object", () => {
+    it('should partition using partitionBy expression object', () => {
       const docs = [
         { x: 1, y: 10 },
         { x: 2, y: 20 },
         { x: 1, y: 30 },
       ];
-      const result = partitionDocuments(
-        docs,
-        { partitionBy: { key: "$x" } },
-        evaluateExpression
-      );
+      const result = partitionDocuments(docs, { partitionBy: { key: '$x' } }, evaluateExpression);
 
       assert.strictEqual(result.size, 2);
     });
 
-    it("should throw error if partitionBy is a string", () => {
+    it('should throw error if partitionBy is a string', () => {
       const docs = [{ x: 1 }];
       assert.throws(
         () =>
           partitionDocuments(
             docs,
-            { partitionBy: "$x" as unknown as Record<string, unknown> },
+            { partitionBy: '$x' as unknown as Record<string, unknown> },
             evaluateExpression
           ),
         /partitionBy must be an object expression/
       );
     });
 
-    it("should handle undefined field values", () => {
+    it('should handle undefined field values', () => {
       const docs = [{ a: 1, b: 10 }, { a: 1 }, { a: 2, b: 20 }];
       const result = partitionDocuments(
         docs,
-        { partitionByFields: ["a", "b"] },
+        { partitionByFields: ['a', 'b'] },
         evaluateExpression
       );
 
@@ -99,8 +92,8 @@ describe("Partition Utilities", () => {
     });
   });
 
-  describe("sortPartition", () => {
-    it("should sort by single field ascending", () => {
+  describe('sortPartition', () => {
+    it('should sort by single field ascending', () => {
       const docs = [{ x: 3 }, { x: 1 }, { x: 2 }];
       const result = sortPartition(docs, { x: 1 });
 
@@ -110,7 +103,7 @@ describe("Partition Utilities", () => {
       );
     });
 
-    it("should sort by single field descending", () => {
+    it('should sort by single field descending', () => {
       const docs = [{ x: 1 }, { x: 3 }, { x: 2 }];
       const result = sortPartition(docs, { x: -1 });
 
@@ -120,7 +113,7 @@ describe("Partition Utilities", () => {
       );
     });
 
-    it("should sort by multiple fields", () => {
+    it('should sort by multiple fields', () => {
       const docs = [
         { a: 1, b: 2 },
         { a: 2, b: 1 },
@@ -138,7 +131,7 @@ describe("Partition Utilities", () => {
       );
     });
 
-    it("should not mutate original array", () => {
+    it('should not mutate original array', () => {
       const docs = [{ x: 3 }, { x: 1 }, { x: 2 }];
       const original = [...docs];
       sortPartition(docs, { x: 1 });

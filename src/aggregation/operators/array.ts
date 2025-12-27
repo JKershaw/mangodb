@@ -1,10 +1,10 @@
 /**
  * Array expression operators.
  */
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
-import { compareValues } from "../../document-utils.ts";
-import { getBSONTypeName } from "../helpers.ts";
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
+import { compareValues } from '../../document-utils.ts';
+import { getBSONTypeName } from '../helpers.ts';
 
 export function evalSize(
   args: unknown,
@@ -119,7 +119,7 @@ export function evalFilter(
 ): unknown[] | null {
   const spec = args as { input: unknown; as?: string; cond: unknown };
   const input = evaluate(spec.input, doc, vars);
-  const varName = spec.as || "this";
+  const varName = spec.as || 'this';
   const condExpr = spec.cond;
 
   if (input === null || input === undefined) {
@@ -151,7 +151,7 @@ export function evalMap(
 ): unknown[] | null {
   const spec = args as { input: unknown; as?: string; in: unknown };
   const input = evaluate(spec.input, doc, vars);
-  const varName = spec.as || "this";
+  const varName = spec.as || 'this';
   const inExpr = spec.in;
 
   if (input === null || input === undefined) {
@@ -312,14 +312,14 @@ export function evalIndexOfArray(
   if (startExpr !== undefined) {
     start = evaluate(startExpr, doc, vars) as number;
     if (start < 0) {
-      throw new Error("$indexOfArray start index cannot be negative");
+      throw new Error('$indexOfArray start index cannot be negative');
     }
   }
 
   if (endExpr !== undefined) {
     end = evaluate(endExpr, doc, vars) as number;
     if (end < 0) {
-      throw new Error("$indexOfArray end index cannot be negative");
+      throw new Error('$indexOfArray end index cannot be negative');
     }
   }
 
@@ -367,11 +367,11 @@ export function evalRange(
   const step = stepExpr !== undefined ? (evaluate(stepExpr, doc, vars) as number) : 1;
 
   if (!Number.isInteger(start) || !Number.isInteger(end) || !Number.isInteger(step)) {
-    throw new Error("$range requires integer arguments");
+    throw new Error('$range requires integer arguments');
   }
 
   if (step === 0) {
-    throw new Error("$range step cannot be zero");
+    throw new Error('$range step cannot be zero');
   }
 
   const result: number[] = [];
@@ -438,26 +438,26 @@ export function evalArrayToObject(
     if (Array.isArray(item)) {
       // Format: [[k1, v1], [k2, v2]]
       if (item.length !== 2) {
-        throw new Error("$arrayToObject requires array elements with exactly 2 elements");
+        throw new Error('$arrayToObject requires array elements with exactly 2 elements');
       }
       const [k, v] = item;
-      if (typeof k !== "string") {
-        throw new Error("$arrayToObject requires string keys");
+      if (typeof k !== 'string') {
+        throw new Error('$arrayToObject requires string keys');
       }
       result[k] = v;
-    } else if (item && typeof item === "object") {
+    } else if (item && typeof item === 'object') {
       // Format: [{k: "key1", v: "value1"}, {k: "key2", v: "value2"}]
       const obj = item as Record<string, unknown>;
-      if ("k" in obj && "v" in obj) {
-        if (typeof obj.k !== "string") {
-          throw new Error("$arrayToObject requires string keys");
+      if ('k' in obj && 'v' in obj) {
+        if (typeof obj.k !== 'string') {
+          throw new Error('$arrayToObject requires string keys');
         }
         result[obj.k] = obj.v;
       } else {
         throw new Error("$arrayToObject requires objects with 'k' and 'v' fields");
       }
     } else {
-      throw new Error("$arrayToObject requires array elements to be arrays or objects");
+      throw new Error('$arrayToObject requires array elements to be arrays or objects');
     }
   }
 
@@ -479,7 +479,7 @@ export function evalObjectToArray(
     return null;
   }
 
-  if (typeof obj !== "object" || Array.isArray(obj)) {
+  if (typeof obj !== 'object' || Array.isArray(obj)) {
     const typeName = getBSONTypeName(obj);
     throw new Error(`$objectToArray requires an object, not ${typeName}`);
   }
@@ -517,9 +517,7 @@ export function evalZip(
 
   const arrays = inputs as unknown[][];
   const useLongestLength = spec.useLongestLength === true;
-  const defaults = spec.defaults
-    ? spec.defaults.map((d) => evaluate(d, doc, vars))
-    : undefined;
+  const defaults = spec.defaults ? spec.defaults.map((d) => evaluate(d, doc, vars)) : undefined;
 
   if (arrays.length === 0) {
     return [];
@@ -570,7 +568,7 @@ export function evalSortArray(
   const sorted = [...input];
   const sortBy = spec.sortBy;
 
-  if (typeof sortBy === "number") {
+  if (typeof sortBy === 'number') {
     // Sort primitives
     sorted.sort((a, b) => {
       const cmp = compareValues(a, b);
@@ -583,11 +581,15 @@ export function evalSortArray(
       for (const [field, dir] of sortFields) {
         const aObj = a as Record<string, unknown>;
         const bObj = b as Record<string, unknown>;
-        const aVal = field.includes(".")
-          ? field.split(".").reduce((obj: unknown, key) => (obj as Record<string, unknown>)?.[key], aObj)
+        const aVal = field.includes('.')
+          ? field
+              .split('.')
+              .reduce((obj: unknown, key) => (obj as Record<string, unknown>)?.[key], aObj)
           : aObj[field];
-        const bVal = field.includes(".")
-          ? field.split(".").reduce((obj: unknown, key) => (obj as Record<string, unknown>)?.[key], bObj)
+        const bVal = field.includes('.')
+          ? field
+              .split('.')
+              .reduce((obj: unknown, key) => (obj as Record<string, unknown>)?.[key], bObj)
           : bObj[field];
         const cmp = compareValues(aVal, bVal);
         if (cmp !== 0) {
@@ -706,7 +708,7 @@ export function evalSetDifference(
   evaluate: EvaluateExpressionFn
 ): unknown[] | null {
   if (args.length !== 2) {
-    throw new Error("$setDifference requires exactly 2 arguments");
+    throw new Error('$setDifference requires exactly 2 arguments');
   }
 
   const [firstExpr, secondExpr] = args;
@@ -749,7 +751,7 @@ export function evalSetEquals(
   const arrays = args.map((a) => evaluate(a, doc, vars));
 
   if (arrays.length < 2) {
-    throw new Error("$setEquals requires at least 2 arguments");
+    throw new Error('$setEquals requires at least 2 arguments');
   }
 
   // Check for null/undefined - MongoDB throws error for these
@@ -757,11 +759,15 @@ export function evalSetEquals(
     const arr = arrays[i];
     if (arr === null || arr === undefined) {
       const typeName = getBSONTypeName(arr);
-      throw new Error(`All operands of $setEquals must be arrays. ${i + 1}-th argument is of type: ${typeName}`);
+      throw new Error(
+        `All operands of $setEquals must be arrays. ${i + 1}-th argument is of type: ${typeName}`
+      );
     }
     if (!Array.isArray(arr)) {
       const typeName = getBSONTypeName(arr);
-      throw new Error(`All operands of $setEquals must be arrays. ${i + 1}-th argument is of type: ${typeName}`);
+      throw new Error(
+        `All operands of $setEquals must be arrays. ${i + 1}-th argument is of type: ${typeName}`
+      );
     }
   }
 
@@ -808,7 +814,7 @@ export function evalSetIsSubset(
   evaluate: EvaluateExpressionFn
 ): boolean {
   if (args.length !== 2) {
-    throw new Error("$setIsSubset requires exactly 2 arguments");
+    throw new Error('$setIsSubset requires exactly 2 arguments');
   }
 
   const [firstExpr, secondExpr] = args;
@@ -818,11 +824,15 @@ export function evalSetIsSubset(
   // MongoDB throws errors for null/non-array inputs
   if (first === null || first === undefined || !Array.isArray(first)) {
     const typeName = getBSONTypeName(first);
-    throw new Error(`both operands of $setIsSubset must be arrays. First argument is of type: ${typeName}`);
+    throw new Error(
+      `both operands of $setIsSubset must be arrays. First argument is of type: ${typeName}`
+    );
   }
   if (second === null || second === undefined || !Array.isArray(second)) {
     const typeName = getBSONTypeName(second);
-    throw new Error(`both operands of $setIsSubset must be arrays. Second argument is of type: ${typeName}`);
+    throw new Error(
+      `both operands of $setIsSubset must be arrays. Second argument is of type: ${typeName}`
+    );
   }
 
   // Check if every element in first exists in second
@@ -846,7 +856,7 @@ export function evalAllElementsTrue(
 ): boolean {
   // $allElementsTrue takes an array with a single element that is the array to check
   if (args.length !== 1) {
-    throw new Error("$allElementsTrue requires exactly 1 argument");
+    throw new Error('$allElementsTrue requires exactly 1 argument');
   }
 
   const arr = evaluate(args[0], doc, vars);
@@ -882,7 +892,7 @@ export function evalAnyElementTrue(
 ): boolean {
   // $anyElementTrue takes an array with a single element that is the array to check
   if (args.length !== 1) {
-    throw new Error("$anyElementTrue requires exactly 1 argument");
+    throw new Error('$anyElementTrue requires exactly 1 argument');
   }
 
   const arr = evaluate(args[0], doc, vars);
@@ -919,8 +929,8 @@ export function evalFirstN(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown[] | null {
-  if (typeof args !== "object" || args === null || Array.isArray(args)) {
-    throw new Error("$firstN requires an object argument");
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('$firstN requires an object argument');
   }
 
   const spec = args as { n?: unknown; input?: unknown };
@@ -937,7 +947,7 @@ export function evalFirstN(
   if (n === null || n === undefined) {
     return null;
   }
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
     throw new Error("$firstN 'n' must be a non-negative integer");
   }
 
@@ -963,8 +973,8 @@ export function evalLastN(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown[] | null {
-  if (typeof args !== "object" || args === null || Array.isArray(args)) {
-    throw new Error("$lastN requires an object argument");
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('$lastN requires an object argument');
   }
 
   const spec = args as { n?: unknown; input?: unknown };
@@ -981,7 +991,7 @@ export function evalLastN(
   if (n === null || n === undefined) {
     return null;
   }
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
     throw new Error("$lastN 'n' must be a non-negative integer");
   }
 
@@ -1013,8 +1023,8 @@ export function evalMinN(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown[] | null {
-  if (typeof args !== "object" || args === null || Array.isArray(args)) {
-    throw new Error("$minN requires an object argument");
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('$minN requires an object argument');
   }
 
   const spec = args as { n?: unknown; input?: unknown };
@@ -1031,7 +1041,7 @@ export function evalMinN(
   if (n === null || n === undefined) {
     return null;
   }
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
     throw new Error("$minN 'n' must be a non-negative integer");
   }
 
@@ -1059,8 +1069,8 @@ export function evalMaxN(
   vars: VariableContext | undefined,
   evaluate: EvaluateExpressionFn
 ): unknown[] | null {
-  if (typeof args !== "object" || args === null || Array.isArray(args)) {
-    throw new Error("$maxN requires an object argument");
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('$maxN requires an object argument');
   }
 
   const spec = args as { n?: unknown; input?: unknown };
@@ -1077,7 +1087,7 @@ export function evalMaxN(
   if (n === null || n === undefined) {
     return null;
   }
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
     throw new Error("$maxN 'n' must be a non-negative integer");
   }
 

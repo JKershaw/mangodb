@@ -1,9 +1,9 @@
 /**
  * Comparison expression operators.
  */
-import type { Document } from "../../types.ts";
-import type { VariableContext, EvaluateExpressionFn } from "../types.ts";
-import { compareValues } from "../../document-utils.ts";
+import type { Document } from '../../types.ts';
+import type { VariableContext, EvaluateExpressionFn } from '../types.ts';
+import { compareValues } from '../../document-utils.ts';
 
 export function evalGt(
   args: unknown[],
@@ -103,7 +103,7 @@ export function evalAnd(
   evaluate: EvaluateExpressionFn
 ): boolean {
   if (!Array.isArray(args)) {
-    throw new Error("$and requires an array argument");
+    throw new Error('$and requires an array argument');
   }
   for (const expr of args) {
     const val = evaluate(expr, doc, vars);
@@ -124,7 +124,7 @@ export function evalOr(
   evaluate: EvaluateExpressionFn
 ): boolean {
   if (!Array.isArray(args)) {
-    throw new Error("$or requires an array argument");
+    throw new Error('$or requires an array argument');
   }
   for (const expr of args) {
     const val = evaluate(expr, doc, vars);

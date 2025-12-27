@@ -2,27 +2,27 @@
  * Unit tests for document traversal utilities.
  */
 
-import { describe, it } from "node:test";
-import assert from "node:assert";
-import { traverseDocument } from "../../../src/aggregation/traverse.ts";
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+import { traverseDocument } from '../../../src/aggregation/traverse.ts';
 
-describe("Document Traversal Utilities", () => {
-  describe("traverseDocument", () => {
-    it("should return document as-is when callback returns keep", () => {
+describe('Document Traversal Utilities', () => {
+  describe('traverseDocument', () => {
+    it('should return document as-is when callback returns keep', () => {
       const doc = { a: 1, b: { c: 2 } };
-      const result = traverseDocument(doc, () => "keep");
+      const result = traverseDocument(doc, () => 'keep');
 
       assert.deepStrictEqual(result, doc);
     });
 
-    it("should return null when callback returns prune", () => {
+    it('should return null when callback returns prune', () => {
       const doc = { a: 1 };
-      const result = traverseDocument(doc, () => "prune");
+      const result = traverseDocument(doc, () => 'prune');
 
       assert.strictEqual(result, null);
     });
 
-    it("should recurse into nested documents when callback returns descend", () => {
+    it('should recurse into nested documents when callback returns descend', () => {
       const doc = {
         level: 1,
         secret: true,
@@ -35,37 +35,37 @@ describe("Document Traversal Utilities", () => {
       // Prune any sub-document where secret is true
       const result = traverseDocument(doc, (subdoc) => {
         if (subdoc.secret === true) {
-          return "prune";
+          return 'prune';
         }
-        return "descend";
+        return 'descend';
       });
 
       // Outer doc has secret=true, so entire doc is pruned
       assert.strictEqual(result, null);
     });
 
-    it("should keep nested doc when callback returns descend and nested passes", () => {
+    it('should keep nested doc when callback returns descend and nested passes', () => {
       const doc = {
         level: 1,
         secret: false,
         nested: {
           level: 2,
           secret: false,
-          data: "visible",
+          data: 'visible',
         },
       };
 
       const result = traverseDocument(doc, (subdoc) => {
         if (subdoc.secret === true) {
-          return "prune";
+          return 'prune';
         }
-        return "descend";
+        return 'descend';
       });
 
       assert.deepStrictEqual(result, doc);
     });
 
-    it("should prune nested documents that fail callback", () => {
+    it('should prune nested documents that fail callback', () => {
       const doc = {
         level: 1,
         secret: false,
@@ -77,16 +77,16 @@ describe("Document Traversal Utilities", () => {
 
       const result = traverseDocument(doc, (subdoc) => {
         if (subdoc.secret === true) {
-          return "prune";
+          return 'prune';
         }
-        return "descend";
+        return 'descend';
       });
 
       // Nested is pruned, but top level remains without nested field
       assert.deepStrictEqual(result, { level: 1, secret: false });
     });
 
-    it("should handle arrays of documents", () => {
+    it('should handle arrays of documents', () => {
       const doc = {
         items: [
           { value: 1, public: true },
@@ -97,9 +97,9 @@ describe("Document Traversal Utilities", () => {
 
       const result = traverseDocument(doc, (subdoc) => {
         if (subdoc.public === false) {
-          return "prune";
+          return 'prune';
         }
-        return "descend";
+        return 'descend';
       });
 
       assert.deepStrictEqual(result, {
@@ -110,18 +110,18 @@ describe("Document Traversal Utilities", () => {
       });
     });
 
-    it("should keep scalar array elements when descending", () => {
+    it('should keep scalar array elements when descending', () => {
       const doc = {
-        tags: ["a", "b", "c"],
+        tags: ['a', 'b', 'c'],
         nested: { data: 123 },
       };
 
-      const result = traverseDocument(doc, () => "descend");
+      const result = traverseDocument(doc, () => 'descend');
 
       assert.deepStrictEqual(result, doc);
     });
 
-    it("should handle deeply nested structures", () => {
+    it('should handle deeply nested structures', () => {
       const doc = {
         a: {
           b: {
@@ -134,19 +134,19 @@ describe("Document Traversal Utilities", () => {
 
       const result = traverseDocument(doc, (subdoc) => {
         if (subdoc.secret === true) {
-          return "prune";
+          return 'prune';
         }
-        return "descend";
+        return 'descend';
       });
 
       assert.deepStrictEqual(result, { a: { b: {} } });
     });
 
-    it("should preserve Date objects in documents", () => {
+    it('should preserve Date objects in documents', () => {
       const now = new Date();
       const doc = { created: now, nested: { updated: now } };
 
-      const result = traverseDocument(doc, () => "descend");
+      const result = traverseDocument(doc, () => 'descend');
 
       assert.strictEqual(result!.created, now);
       assert.strictEqual((result!.nested as { updated: Date }).updated, now);

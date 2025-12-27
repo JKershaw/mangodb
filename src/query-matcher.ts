@@ -1,16 +1,11 @@
 /**
  * Query matching logic for MongoDB-compatible filters.
  */
-import { ObjectId } from "bson";
-import type { Document, Filter, QueryOperators } from "./types.ts";
-import {
-  getValuesByPath,
-  getValueByPath,
-  compareValues,
-  valuesEqual,
-} from "./document-utils.ts";
-import { evaluateExpression } from "./aggregation/index.ts";
-import { evaluateGeoWithin, evaluateGeoIntersects } from "./geo/index.ts";
+import { ObjectId } from 'bson';
+import type { Document, Filter, QueryOperators } from './types.ts';
+import { getValuesByPath, getValueByPath, compareValues, valuesEqual } from './document-utils.ts';
+import { evaluateExpression } from './aggregation/index.ts';
+import { evaluateGeoWithin, evaluateGeoIntersects } from './geo/index.ts';
 
 // BSON type name to numeric code mapping
 const BSON_TYPE_ALIASES: Record<string, number> = {
@@ -51,19 +46,22 @@ const VALID_TYPE_CODES = new Set(Object.values(BSON_TYPE_ALIASES));
 function getBSONTypeCode(value: unknown): number {
   if (value === undefined) return BSON_TYPE_ALIASES.undefined;
   if (value === null) return BSON_TYPE_ALIASES.null;
-  if (typeof value === "string") return BSON_TYPE_ALIASES.string;
-  if (typeof value === "boolean") return BSON_TYPE_ALIASES.bool;
-  if (typeof value === "number") {
+  if (typeof value === 'string') return BSON_TYPE_ALIASES.string;
+  if (typeof value === 'boolean') return BSON_TYPE_ALIASES.bool;
+  if (typeof value === 'number') {
     // In JavaScript, we can distinguish integers from floats
     return Number.isInteger(value) ? BSON_TYPE_ALIASES.int : BSON_TYPE_ALIASES.double;
   }
   if (Array.isArray(value)) return BSON_TYPE_ALIASES.array;
   if (value instanceof Date) return BSON_TYPE_ALIASES.date;
   if (value instanceof RegExp) return BSON_TYPE_ALIASES.regex;
-  if (value instanceof ObjectId || (value && typeof (value as { toHexString?: unknown }).toHexString === "function")) {
+  if (
+    value instanceof ObjectId ||
+    (value && typeof (value as { toHexString?: unknown }).toHexString === 'function')
+  ) {
     return BSON_TYPE_ALIASES.objectId;
   }
-  if (typeof value === "object") return BSON_TYPE_ALIASES.object;
+  if (typeof value === 'object') return BSON_TYPE_ALIASES.object;
   return -999; // unknown type (should not happen)
 }
 
@@ -72,14 +70,14 @@ function getBSONTypeCode(value: unknown): number {
  */
 function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
   // Handle "number" alias specially
-  if (typeSpec === "number") {
+  if (typeSpec === 'number') {
     const valueType = getBSONTypeCode(value);
     return NUMBER_TYPE_CODES.has(valueType);
   }
 
   // Convert string alias to numeric code
   let targetCode: number;
-  if (typeof typeSpec === "string") {
+  if (typeof typeSpec === 'string') {
     if (!(typeSpec in BSON_TYPE_ALIASES)) {
       throw new Error(`Unknown type name alias: ${typeSpec}`);
     }
@@ -101,7 +99,7 @@ function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
  * Only numbers (int, double) are valid.
  */
 function isValidBitwiseValue(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 /**
@@ -115,13 +113,13 @@ function parseBitOperatorArgument(value: unknown, opName: string): number[] {
   if (Array.isArray(value)) {
     const positions: number[] = [];
     for (const item of value) {
-      if (typeof item !== "number" || !Number.isInteger(item)) {
+      if (typeof item !== 'number' || !Number.isInteger(item)) {
         throw new Error(
-          `bit position must be an integer but was given: ${typeof item === "number" ? item : typeof item}`
+          `bit position must be an integer but was given: ${typeof item === 'number' ? item : typeof item}`
         );
       }
       if (item < 0) {
-        throw new Error("bit positions must be >= 0");
+        throw new Error('bit positions must be >= 0');
       }
       positions.push(item);
     }
@@ -129,11 +127,11 @@ function parseBitOperatorArgument(value: unknown, opName: string): number[] {
   }
 
   // Handle numeric bitmask
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       throw new Error(
         `${opName} bitmask value is invalid :: caused by :: ${
-          Number.isNaN(value) ? "NaN" : "Infinity"
+          Number.isNaN(value) ? 'NaN' : 'Infinity'
         } is an invalid argument`
       );
     }
@@ -154,9 +152,7 @@ function parseBitOperatorArgument(value: unknown, opName: string): number[] {
     return positions;
   }
 
-  throw new Error(
-    `${opName} takes an array of bit positions or an integer bitmask`
-  );
+  throw new Error(`${opName} takes an array of bit positions or an integer bitmask`);
 }
 
 /**
@@ -185,7 +181,7 @@ function isBitSet(value: number, position: number): boolean {
 /**
  * Bitwise operator modes for evaluateBitwiseOperator.
  */
-type BitwiseMode = "allSet" | "allClear" | "anySet" | "anyClear";
+type BitwiseMode = 'allSet' | 'allClear' | 'anySet' | 'anyClear';
 
 /**
  * Evaluate a bitwise operator against a document value.
@@ -200,7 +196,7 @@ function evaluateBitwiseOperator(
   const bitPositions = parseBitOperatorArgument(opValue, opName);
 
   // For "any" modes, empty bit positions means no match
-  if ((mode === "anySet" || mode === "anyClear") && bitPositions.length === 0) {
+  if ((mode === 'anySet' || mode === 'anyClear') && bitPositions.length === 0) {
     return false;
   }
 
@@ -214,16 +210,16 @@ function evaluateBitwiseOperator(
     let matches: boolean;
 
     switch (mode) {
-      case "allSet":
+      case 'allSet':
         matches = bitPositions.every((pos) => isBitSet(numValue, pos));
         break;
-      case "allClear":
+      case 'allClear':
         matches = bitPositions.every((pos) => !isBitSet(numValue, pos));
         break;
-      case "anySet":
+      case 'anySet':
         matches = bitPositions.some((pos) => isBitSet(numValue, pos));
         break;
-      case "anyClear":
+      case 'anyClear':
         matches = bitPositions.some((pos) => !isBitSet(numValue, pos));
         break;
     }
@@ -251,11 +247,11 @@ function evaluateBitwiseOperator(
  * isOperatorObject([1, 2, 3]) // false
  */
 export function isOperatorObject(value: unknown): value is QueryOperators {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
   const keys = Object.keys(value as object);
-  return keys.length > 0 && keys.every((k) => k.startsWith("$"));
+  return keys.length > 0 && keys.every((k) => k.startsWith('$'));
 }
 
 /**
@@ -266,7 +262,7 @@ function matchesIn(docValue: unknown, inValues: unknown[]): boolean {
   const testValue = (dv: unknown, iv: unknown): boolean => {
     // Handle RegExp in $in array
     if (iv instanceof RegExp) {
-      return typeof dv === "string" && iv.test(dv);
+      return typeof dv === 'string' && iv.test(dv);
     }
     return valuesEqual(dv, iv);
   };
@@ -289,14 +285,12 @@ function matchesSingleValue(docValue: unknown, filterValue: unknown): boolean {
 
   // Handle RegExp filter value
   if (filterValue instanceof RegExp) {
-    if (typeof docValue === "string") {
+    if (typeof docValue === 'string') {
       return filterValue.test(docValue);
     }
     // For arrays, match if any string element matches
     if (Array.isArray(docValue)) {
-      return docValue.some(
-        (elem) => typeof elem === "string" && filterValue.test(elem)
-      );
+      return docValue.some((elem) => typeof elem === 'string' && filterValue.test(elem));
     }
     // Non-string, non-array values don't match regex
     return false;
@@ -318,25 +312,22 @@ function matchesSingleValue(docValue: unknown, filterValue: unknown): boolean {
  * The condition can contain field queries (for objects) or operators (for primitives).
  * Also supports logical operators ($and, $or, $nor) at the element level.
  */
-function matchesElemMatchCondition(
-  element: unknown,
-  condition: Record<string, unknown>
-): boolean {
+function matchesElemMatchCondition(element: unknown, condition: Record<string, unknown>): boolean {
   for (const [key, value] of Object.entries(condition)) {
-    if (key === "$and") {
+    if (key === '$and') {
       // Handle $and inside $elemMatch
       if (!Array.isArray(value)) {
-        throw new Error("$and must be an array");
+        throw new Error('$and must be an array');
       }
       for (const subCondition of value) {
         if (!matchesElemMatchCondition(element, subCondition as Record<string, unknown>)) {
           return false;
         }
       }
-    } else if (key === "$or") {
+    } else if (key === '$or') {
       // Handle $or inside $elemMatch
       if (!Array.isArray(value)) {
-        throw new Error("$or must be an array");
+        throw new Error('$or must be an array');
       }
       let anyMatch = false;
       for (const subCondition of value) {
@@ -346,23 +337,23 @@ function matchesElemMatchCondition(
         }
       }
       if (!anyMatch) return false;
-    } else if (key === "$nor") {
+    } else if (key === '$nor') {
       // Handle $nor inside $elemMatch
       if (!Array.isArray(value)) {
-        throw new Error("$nor must be an array");
+        throw new Error('$nor must be an array');
       }
       for (const subCondition of value) {
         if (matchesElemMatchCondition(element, subCondition as Record<string, unknown>)) {
           return false;
         }
       }
-    } else if (key.startsWith("$")) {
+    } else if (key.startsWith('$')) {
       const operators: QueryOperators = { [key]: value };
       if (!matchesOperators(element, operators)) {
         return false;
       }
     } else {
-      if (element === null || typeof element !== "object" || Array.isArray(element)) {
+      if (element === null || typeof element !== 'object' || Array.isArray(element)) {
         return false;
       }
       const elemObj = element as Record<string, unknown>;
@@ -405,95 +396,88 @@ function matchesElemMatchCondition(
  * matchesOperators('hello', { $in: ['hello', 'world'] }) // true
  * matchesOperators(10, { $not: { $lt: 5 } }) // true
  */
-export function matchesOperators(
-  docValue: unknown,
-  operators: QueryOperators
-): boolean {
+export function matchesOperators(docValue: unknown, operators: QueryOperators): boolean {
   for (const [op, opValue] of Object.entries(operators)) {
     switch (op) {
-      case "$eq":
+      case '$eq':
         if (!matchesSingleValue(docValue, opValue)) return false;
         break;
 
-      case "$ne":
+      case '$ne':
         if (matchesSingleValue(docValue, opValue)) return false;
         break;
 
-      case "$gt": {
+      case '$gt': {
         const cmp = compareValues(docValue, opValue);
         if (isNaN(cmp) || cmp <= 0) return false;
         break;
       }
 
-      case "$gte": {
+      case '$gte': {
         const cmp = compareValues(docValue, opValue);
         if (isNaN(cmp) || cmp < 0) return false;
         break;
       }
 
-      case "$lt": {
+      case '$lt': {
         const cmp = compareValues(docValue, opValue);
         if (isNaN(cmp) || cmp >= 0) return false;
         break;
       }
 
-      case "$lte": {
+      case '$lte': {
         const cmp = compareValues(docValue, opValue);
         if (isNaN(cmp) || cmp > 0) return false;
         break;
       }
 
-      case "$in": {
+      case '$in': {
         if (!Array.isArray(opValue)) {
-          throw new Error("$in needs an array");
+          throw new Error('$in needs an array');
         }
         if (!matchesIn(docValue, opValue)) return false;
         break;
       }
 
-      case "$nin": {
+      case '$nin': {
         if (!Array.isArray(opValue)) {
-          throw new Error("$nin needs an array");
+          throw new Error('$nin needs an array');
         }
         if (matchesIn(docValue, opValue)) return false;
         break;
       }
 
-      case "$exists": {
+      case '$exists': {
         const shouldExist = opValue as boolean;
         const exists = docValue !== undefined;
         if (shouldExist !== exists) return false;
         break;
       }
 
-      case "$not": {
+      case '$not': {
         // Handle RegExp directly in $not
         if (opValue instanceof RegExp) {
           if (docValue === undefined) break;
-          if (typeof docValue === "string" && opValue.test(docValue)) {
+          if (typeof docValue === 'string' && opValue.test(docValue)) {
             return false;
           }
           // For arrays, check if any string element matches
           if (Array.isArray(docValue)) {
             const anyMatch = docValue.some(
-              (elem) => typeof elem === "string" && opValue.test(elem)
+              (elem) => typeof elem === 'string' && opValue.test(elem)
             );
             if (anyMatch) return false;
           }
           break;
         }
 
-        if (
-          opValue === null ||
-          typeof opValue !== "object" ||
-          Array.isArray(opValue)
-        ) {
-          throw new Error("$not argument must be a regex or an object");
+        if (opValue === null || typeof opValue !== 'object' || Array.isArray(opValue)) {
+          throw new Error('$not argument must be a regex or an object');
         }
         const notOps = opValue as QueryOperators;
         const notKeys = Object.keys(notOps);
-        if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith("$"))) {
-          throw new Error("$not argument must be a regex or an object");
+        if (notKeys.length === 0 || !notKeys.every((k) => k.startsWith('$'))) {
+          throw new Error('$not argument must be a regex or an object');
         }
         if (docValue === undefined) break;
         if (matchesOperators(docValue, notOps)) {
@@ -502,36 +486,30 @@ export function matchesOperators(
         break;
       }
 
-      case "$size": {
+      case '$size': {
         const size = opValue as number;
         if (!Number.isInteger(size)) {
-          throw new Error("$size must be a whole number");
+          throw new Error('$size must be a whole number');
         }
         if (size < 0) {
-          throw new Error("$size may not be negative");
+          throw new Error('$size may not be negative');
         }
         if (!Array.isArray(docValue)) return false;
         if (docValue.length !== size) return false;
         break;
       }
 
-      case "$all": {
+      case '$all': {
         if (!Array.isArray(opValue)) {
-          throw new Error("$all needs an array");
+          throw new Error('$all needs an array');
         }
         const allValues = opValue as unknown[];
         // Empty $all matches nothing (MongoDB behavior)
         if (allValues.length === 0) return false;
         const valueArray = Array.isArray(docValue) ? docValue : [docValue];
         for (const val of allValues) {
-          if (
-            val &&
-            typeof val === "object" &&
-            !Array.isArray(val) &&
-            "$elemMatch" in val
-          ) {
-            const elemMatchCond = (val as { $elemMatch: Record<string, unknown> })
-              .$elemMatch;
+          if (val && typeof val === 'object' && !Array.isArray(val) && '$elemMatch' in val) {
+            const elemMatchCond = (val as { $elemMatch: Record<string, unknown> }).$elemMatch;
             const hasMatch = valueArray.some((elem) =>
               matchesElemMatchCondition(elem, elemMatchCond)
             );
@@ -544,9 +522,9 @@ export function matchesOperators(
         break;
       }
 
-      case "$elemMatch": {
-        if (opValue === null || typeof opValue !== "object" || Array.isArray(opValue)) {
-          throw new Error("$elemMatch needs an Object");
+      case '$elemMatch': {
+        if (opValue === null || typeof opValue !== 'object' || Array.isArray(opValue)) {
+          throw new Error('$elemMatch needs an Object');
         }
         if (!Array.isArray(docValue)) return false;
         if (docValue.length === 0) return false;
@@ -559,19 +537,19 @@ export function matchesOperators(
         break;
       }
 
-      case "$regex": {
+      case '$regex': {
         const pattern = opValue;
-        const options = (operators as QueryOperators).$options || "";
+        const options = (operators as QueryOperators).$options || '';
 
         // Handle RegExp object directly
         if (pattern instanceof RegExp) {
           // For string values
-          if (typeof docValue === "string") {
+          if (typeof docValue === 'string') {
             if (!pattern.test(docValue)) return false;
           } else if (Array.isArray(docValue)) {
             // For arrays, match if any string element matches
             const anyMatch = docValue.some(
-              (elem) => typeof elem === "string" && pattern.test(elem)
+              (elem) => typeof elem === 'string' && pattern.test(elem)
             );
             if (!anyMatch) return false;
           } else {
@@ -582,13 +560,13 @@ export function matchesOperators(
         }
 
         // Handle string pattern
-        if (typeof pattern !== "string") {
-          throw new Error("$regex has to be a string");
+        if (typeof pattern !== 'string') {
+          throw new Error('$regex has to be a string');
         }
 
         // Validate options - MongoDB only supports i, m, s, x (not g, u, y)
         // Note: x (extended) is not supported in JavaScript but is in MongoDB
-        const validMongoOptions = new Set(["i", "m", "s"]);
+        const validMongoOptions = new Set(['i', 'm', 's']);
         for (const char of options) {
           if (!validMongoOptions.has(char)) {
             throw new Error(`invalid flag in regex options: ${char}`);
@@ -604,13 +582,11 @@ export function matchesOperators(
         }
 
         // For string values
-        if (typeof docValue === "string") {
+        if (typeof docValue === 'string') {
           if (!regex.test(docValue)) return false;
         } else if (Array.isArray(docValue)) {
           // For arrays, match if any string element matches
-          const anyMatch = docValue.some(
-            (elem) => typeof elem === "string" && regex.test(elem)
-          );
+          const anyMatch = docValue.some((elem) => typeof elem === 'string' && regex.test(elem));
           if (!anyMatch) return false;
         } else {
           // Non-string, non-array values don't match
@@ -619,17 +595,17 @@ export function matchesOperators(
         break;
       }
 
-      case "$options": {
+      case '$options': {
         // $options is handled in $regex case
         // If we get here without $regex, it's an error
-        if (!("$regex" in operators)) {
-          throw new Error("$options needs a $regex");
+        if (!('$regex' in operators)) {
+          throw new Error('$options needs a $regex');
         }
         // Otherwise, it was already handled in $regex case
         break;
       }
 
-      case "$type": {
+      case '$type': {
         // Missing fields (undefined) don't match any type
         if (docValue === undefined) return false;
 
@@ -640,7 +616,7 @@ export function matchesOperators(
           // For array fields: check if any element matches the type
           // Exception: $type: "array" (4) checks if the field itself is an array
           if (Array.isArray(val)) {
-            const isArrayTypeCheck = spec === "array" || spec === 4;
+            const isArrayTypeCheck = spec === 'array' || spec === 4;
             if (isArrayTypeCheck) {
               return true; // The field IS an array
             }
@@ -660,49 +636,49 @@ export function matchesOperators(
         break;
       }
 
-      case "$mod": {
+      case '$mod': {
         // Validate $mod argument
         if (!Array.isArray(opValue)) {
-          throw new Error("malformed mod, needs to be an array");
+          throw new Error('malformed mod, needs to be an array');
         }
         if (opValue.length < 2) {
-          throw new Error("malformed mod, not enough elements");
+          throw new Error('malformed mod, not enough elements');
         }
         if (opValue.length > 2) {
-          throw new Error("malformed mod, too many elements");
+          throw new Error('malformed mod, too many elements');
         }
 
         const [divisor, remainder] = opValue as [unknown, unknown];
 
         // Validate divisor
-        if (typeof divisor !== "number") {
-          throw new Error("malformed mod, divisor not a number");
+        if (typeof divisor !== 'number') {
+          throw new Error('malformed mod, divisor not a number');
         }
         if (!Number.isFinite(divisor)) {
           throw new Error(
             `malformed mod, divisor value is invalid :: caused by :: ${
-              Number.isNaN(divisor) ? "NaN" : "Infinity"
+              Number.isNaN(divisor) ? 'NaN' : 'Infinity'
             } is an invalid argument`
           );
         }
         if (Math.trunc(divisor) === 0) {
-          throw new Error("divisor cannot be 0");
+          throw new Error('divisor cannot be 0');
         }
 
         // Validate remainder
-        if (typeof remainder !== "number") {
-          throw new Error("malformed mod, remainder not a number");
+        if (typeof remainder !== 'number') {
+          throw new Error('malformed mod, remainder not a number');
         }
         if (!Number.isFinite(remainder)) {
           throw new Error(
             `malformed mod, remainder value is invalid :: caused by :: ${
-              Number.isNaN(remainder) ? "NaN" : "Infinity"
+              Number.isNaN(remainder) ? 'NaN' : 'Infinity'
             } is an invalid argument`
           );
         }
 
         // Non-numeric document values don't match
-        if (typeof docValue !== "number" || !Number.isFinite(docValue)) {
+        if (typeof docValue !== 'number' || !Number.isFinite(docValue)) {
           return false;
         }
 
@@ -717,46 +693,46 @@ export function matchesOperators(
         break;
       }
 
-      case "$bitsAllSet":
-        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAllSet", "allSet")) return false;
+      case '$bitsAllSet':
+        if (!evaluateBitwiseOperator(docValue, opValue, '$bitsAllSet', 'allSet')) return false;
         break;
 
-      case "$bitsAllClear":
-        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAllClear", "allClear")) return false;
+      case '$bitsAllClear':
+        if (!evaluateBitwiseOperator(docValue, opValue, '$bitsAllClear', 'allClear')) return false;
         break;
 
-      case "$bitsAnySet":
-        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAnySet", "anySet")) return false;
+      case '$bitsAnySet':
+        if (!evaluateBitwiseOperator(docValue, opValue, '$bitsAnySet', 'anySet')) return false;
         break;
 
-      case "$bitsAnyClear":
-        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAnyClear", "anyClear")) return false;
+      case '$bitsAnyClear':
+        if (!evaluateBitwiseOperator(docValue, opValue, '$bitsAnyClear', 'anyClear')) return false;
         break;
 
-      case "$and":
-        throw new Error("unknown operator: $and");
+      case '$and':
+        throw new Error('unknown operator: $and');
 
-      case "$or":
-        throw new Error("unknown operator: $or");
+      case '$or':
+        throw new Error('unknown operator: $or');
 
-      case "$nor":
-        throw new Error("unknown operator: $nor");
+      case '$nor':
+        throw new Error('unknown operator: $nor');
 
-      case "$geoWithin": {
+      case '$geoWithin': {
         // Note: Index validation happens at collection level, not here
         // This just evaluates whether the document matches
         if (!evaluateGeoWithin(docValue, opValue)) return false;
         break;
       }
 
-      case "$geoIntersects": {
+      case '$geoIntersects': {
         // Note: Index validation happens at collection level, not here
         if (!evaluateGeoIntersects(docValue, opValue)) return false;
         break;
       }
 
-      case "$near":
-      case "$nearSphere":
+      case '$near':
+      case '$nearSphere':
         // $near and $nearSphere are handled at collection level because they
         // require sorting by distance. Throw error if they reach here.
         throw new Error(
@@ -774,11 +750,7 @@ export function matchesOperators(
  * Check if ANY of the values matches a filter condition.
  * Special case: $exists: false requires ALL values to be undefined.
  */
-function anyValueMatches(
-  values: unknown[],
-  filterValue: unknown,
-  isOperator: boolean
-): boolean {
+function anyValueMatches(values: unknown[], filterValue: unknown, isOperator: boolean): boolean {
   if (isOperator) {
     const ops = filterValue as QueryOperators;
 
@@ -809,11 +781,11 @@ function evaluateLogicalOperator<T extends Document>(
   const filters = conditions as Filter<T>[];
 
   switch (operator) {
-    case "$and":
+    case '$and':
       return filters.every((cond) => matchesFilter(doc, cond));
-    case "$or":
+    case '$or':
       return filters.some((cond) => matchesFilter(doc, cond));
-    case "$nor":
+    case '$nor':
       return !filters.some((cond) => matchesFilter(doc, cond));
     default:
       return true;
@@ -865,12 +837,9 @@ function evaluateLogicalOperator<T extends Document>(
  * matchesFilter({ tags: ['js', 'ts'] }, { tags: 'js' }) // true
  * matchesFilter({ scores: [85, 90, 95] }, { scores: { $gt: 80 } }) // true
  */
-export function matchesFilter<T extends Document>(
-  doc: T,
-  filter: Filter<T>
-): boolean {
+export function matchesFilter<T extends Document>(doc: T, filter: Filter<T>): boolean {
   for (const [key, filterValue] of Object.entries(filter)) {
-    if (key === "$and" || key === "$or" || key === "$nor") {
+    if (key === '$and' || key === '$or' || key === '$nor') {
       if (!evaluateLogicalOperator(doc, key, filterValue)) {
         return false;
       }
@@ -878,7 +847,7 @@ export function matchesFilter<T extends Document>(
     }
 
     // Handle $expr - evaluates aggregation expression against the document
-    if (key === "$expr") {
+    if (key === '$expr') {
       const result = evaluateExpression(filterValue, doc);
       // Truthy result means match, falsy means no match
       if (!result) {
@@ -888,7 +857,7 @@ export function matchesFilter<T extends Document>(
     }
 
     // Handle $comment - purely for logging/profiling, does not affect query results
-    if (key === "$comment") {
+    if (key === '$comment') {
       // No-op: comments are ignored in query matching
       continue;
     }

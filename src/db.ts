@@ -1,8 +1,8 @@
-import { MangoCollection } from "./collection.ts";
-import { AggregationCursor, type AggregationDbContext } from "./aggregation/index.ts";
-import { rm, readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
-import { matchesFilter } from "./query-matcher.ts";
+import { MangoCollection } from './collection.ts';
+import { AggregationCursor, type AggregationDbContext } from './aggregation/index.ts';
+import { rm, readdir, readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { matchesFilter } from './query-matcher.ts';
 import type {
   Document,
   Filter,
@@ -11,7 +11,7 @@ import type {
   DbStats,
   PipelineStage,
   AggregateOptions,
-} from "./types.ts";
+} from './types.ts';
 
 /**
  * MangoDb represents a database in MangoDB.
@@ -73,10 +73,7 @@ export class MangoDb {
    */
   collection<T extends Document = Document>(name: string): MangoCollection<T> {
     if (!this.collections.has(name)) {
-      this.collections.set(
-        name,
-        new MangoCollection<Document>(this.dataDir, this.name, name)
-      );
+      this.collections.set(name, new MangoCollection<Document>(this.dataDir, this.name, name));
     }
     return this.collections.get(name)! as MangoCollection<T>;
   }
@@ -129,17 +126,17 @@ export class MangoDb {
         try {
           const files = await readdir(dbPath);
           const collectionNames = files
-            .filter((f) => f.endsWith(".json") && !f.endsWith(".indexes.json"))
-            .map((f) => f.replace(".json", ""));
+            .filter((f) => f.endsWith('.json') && !f.endsWith('.indexes.json'))
+            .map((f) => f.replace('.json', ''));
 
           return collectionNames.map((name) => ({
             name,
-            type: "collection" as const,
+            type: 'collection' as const,
             options: {},
             info: { readOnly: false },
           }));
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             return [];
           }
           throw error;
@@ -181,21 +178,21 @@ export class MangoDb {
         const filePath = join(dbPath, file);
         const fileStat = await stat(filePath);
 
-        if (file.endsWith(".indexes.json")) {
+        if (file.endsWith('.indexes.json')) {
           // Read index count from file
           try {
-            const content = JSON.parse(await readFile(filePath, "utf-8"));
+            const content = JSON.parse(await readFile(filePath, 'utf-8'));
             indexes += content.indexes?.length || 0;
           } catch {
             // If file can't be parsed, assume 0 indexes
           }
           indexSize += fileStat.size;
-        } else if (file.endsWith(".json")) {
+        } else if (file.endsWith('.json')) {
           collections++;
           dataSize += fileStat.size;
           // Read document count
           try {
-            const content = JSON.parse(await readFile(filePath, "utf-8"));
+            const content = JSON.parse(await readFile(filePath, 'utf-8'));
             objects += Array.isArray(content) ? content.length : 0;
           } catch {
             // If file can't be parsed, assume 0 documents
@@ -203,7 +200,7 @@ export class MangoDb {
         }
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error;
       }
       // Database doesn't exist, all values stay at 0
@@ -254,11 +251,7 @@ export class MangoDb {
 
     // For database-level aggregate, start with empty documents
     // Stages like $documents will inject their own documents
-    return new AggregationCursor<T>(
-      async () => [],
-      pipeline,
-      dbContext
-    );
+    return new AggregationCursor<T>(async () => [], pipeline, dbContext);
   }
 }
 
