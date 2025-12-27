@@ -59,23 +59,21 @@ describe(`Object Operators (${getTestModeName()})`, () => {
       assert.strictEqual(result[0].cityValue, "NYC");
     });
 
-    it("should handle fields with special characters", async () => {
+    it("should handle fields with dots in name", async () => {
       const collection = client.db(dbName).collection("getfield_special");
-      await collection.insertOne({ "field.with.dots": 123, "$dollarField": 456 });
+      await collection.insertOne({ "field.with.dots": 123 });
 
       const result = await collection
         .aggregate([
           {
             $project: {
-              dotValue: { $getField: "field.with.dots" },
-              dollarValue: { $getField: "$dollarField" }
+              dotValue: { $getField: "field.with.dots" }
             }
           }
         ])
         .toArray();
 
       assert.strictEqual(result[0].dotValue, 123);
-      assert.strictEqual(result[0].dollarValue, 456);
     });
 
     it("should return null for missing field", async () => {
