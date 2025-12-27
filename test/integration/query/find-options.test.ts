@@ -13,7 +13,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Find Options Parity Tests (${getTestModeName()})`, () => {
   let client: TestClient;

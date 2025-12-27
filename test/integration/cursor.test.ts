@@ -11,7 +11,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../test-harness.ts";
 
 describe(`Cursor Operation Tests (${getTestModeName()})`, () => {
   let client: TestClient;

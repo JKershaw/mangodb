@@ -73,6 +73,7 @@ export const operators = {
   $cond: conditional.evalCond,
   $ifNull: conditional.evalIfNull,
   $switch: conditional.evalSwitch,
+  $let: conditional.evalLet,
 
   // Array
   $size: array.evalSize,

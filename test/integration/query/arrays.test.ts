@@ -11,7 +11,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Array Query Tests (${getTestModeName()})`, () => {
   let client: TestClient;
@@ -193,7 +193,7 @@ describe(`Array Query Tests (${getTestModeName()})`, () => {
 
       const docs = await collection.find({ tags: { $all: [] } }).toArray();
 
-      // Empty $all matches nothing (per MongoDB behavior)
+      // Empty $all matches nothing (MongoDB behavior)
       assert.strictEqual(docs.length, 0);
     });
 

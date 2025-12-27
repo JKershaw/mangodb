@@ -13,7 +13,7 @@ import {
   type TestClient,
   type TestCollection,
   type Document,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Advanced Aggregation Pipeline Tests (${getTestModeName()})`, () => {
   let client: TestClient;

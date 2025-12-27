@@ -118,7 +118,7 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 - `$and`, `$or`, `$not`
 
 ### Conditional (All Implemented)
-- `$cond`, `$ifNull`, `$switch`
+- `$cond`, `$ifNull`, `$switch`, `$let`
 
 ### Date (All Implemented)
 - `$year`, `$month`, `$dayOfMonth`, `$hour`, `$minute`, `$second`, `$millisecond`
@@ -191,6 +191,11 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 - `$where` JavaScript evaluation not implemented
 - `$jsonSchema` validation not implemented
 
+### Update
+- Pipeline updates (aggregation pipeline as update argument) not supported
+  - Example: `updateMany({}, [{ $set: { field: { $cond: [...] } } }])`
+  - Use regular update operators or aggregation `$out`/`$merge` instead
+
 ### Aggregation
 - `$merge` cross-database writes not supported
 - Atlas Search stages not implemented
@@ -213,7 +218,7 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 MangoDB is tested against both its own implementation and real MongoDB to ensure compatibility:
 
-- **MangoDB tests**: 1289 passing
-- **MongoDB tests**: 1282 passing (7 MangoDB-specific tests skipped)
+- **MangoDB tests**: 1458 passing (1 skipped - pipeline updates)
+- **MongoDB tests**: 1458 passing
 
-The test suite covers all implemented features with edge cases.
+The test suite covers all implemented features with edge cases, including comprehensive operator composition tests.

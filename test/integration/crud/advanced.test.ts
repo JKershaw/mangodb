@@ -12,7 +12,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
   let client: TestClient;

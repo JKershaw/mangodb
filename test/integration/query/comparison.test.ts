@@ -1,8 +1,8 @@
 /**
- * Phase 2: Basic Query Tests
+ * Basic Query Tests - Comparison Operators
  *
+ * Tests for equality, comparison, and range operators.
  * These tests run against both real MongoDB and MangoDB to ensure compatibility.
- * Set MONGODB_URI environment variable to run against MongoDB.
  */
 
 import { describe, it, before, after, beforeEach } from "node:test";
@@ -12,7 +12,7 @@ import {
   getTestModeName,
   type TestClient,
   type TestCollection,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Basic Query Tests (${getTestModeName()})`, () => {
   let client: TestClient;

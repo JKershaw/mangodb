@@ -12,7 +12,7 @@ import {
   getTestModeName,
   type TestClient,
   type TestCollection,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 import { ObjectId } from "bson";
 
 describe(`Foundation Tests (${getTestModeName()})`, () => {

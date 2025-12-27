@@ -12,7 +12,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Positional Update Operators (${getTestModeName()})`, () => {
   let client: TestClient;

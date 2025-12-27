@@ -96,3 +96,49 @@ export function evalSwitch(
 
   throw new Error("$switch could not find a matching branch, and no default was specified");
 }
+
+/**
+ * $let - Binds variables for use within a specified expression.
+ *
+ * Syntax: { $let: { vars: { <var1>: <expr1>, ... }, in: <expression> } }
+ *
+ * The vars field defines variables. The in expression uses these variables
+ * with $$varName syntax. Variables defined in $let can shadow outer variables.
+ */
+export function evalLet(
+  args: unknown,
+  doc: Document,
+  vars: VariableContext | undefined,
+  evaluate: EvaluateExpressionFn
+): unknown {
+  if (typeof args !== "object" || args === null) {
+    throw new Error("$let requires an object as an argument");
+  }
+
+  const spec = args as { vars?: unknown; in?: unknown };
+
+  if (spec.vars === undefined) {
+    throw new Error("Missing 'vars' parameter to $let");
+  }
+
+  if (spec.in === undefined) {
+    throw new Error("Missing 'in' parameter to $let");
+  }
+
+  if (typeof spec.vars !== "object" || spec.vars === null || Array.isArray(spec.vars)) {
+    throw new Error("'vars' argument to $let must be an object");
+  }
+
+  // Evaluate each variable definition and merge with existing vars
+  const newVars: VariableContext = { ...vars };
+  for (const [varName, varExpr] of Object.entries(spec.vars as Record<string, unknown>)) {
+    // Variable names should not start with $ in the definition
+    if (varName.startsWith("$")) {
+      throw new Error(`Variable names cannot start with '$': ${varName}`);
+    }
+    newVars[varName] = evaluate(varExpr, doc, vars);
+  }
+
+  // Evaluate the 'in' expression with the new variables
+  return evaluate(spec.in, doc, newVars);
+}

@@ -12,7 +12,7 @@ import {
   getTestModeName,
   type TestClient,
   type Document,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Text Search (${getTestModeName()})`, () => {
   let client: TestClient;

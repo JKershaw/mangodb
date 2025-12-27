@@ -259,13 +259,47 @@ function matchesSingleValue(docValue: unknown, filterValue: unknown): boolean {
 /**
  * Check if an array element matches an $elemMatch condition.
  * The condition can contain field queries (for objects) or operators (for primitives).
+ * Also supports logical operators ($and, $or, $nor) at the element level.
  */
 function matchesElemMatchCondition(
   element: unknown,
   condition: Record<string, unknown>
 ): boolean {
   for (const [key, value] of Object.entries(condition)) {
-    if (key.startsWith("$")) {
+    if (key === "$and") {
+      // Handle $and inside $elemMatch
+      if (!Array.isArray(value)) {
+        throw new Error("$and must be an array");
+      }
+      for (const subCondition of value) {
+        if (!matchesElemMatchCondition(element, subCondition as Record<string, unknown>)) {
+          return false;
+        }
+      }
+    } else if (key === "$or") {
+      // Handle $or inside $elemMatch
+      if (!Array.isArray(value)) {
+        throw new Error("$or must be an array");
+      }
+      let anyMatch = false;
+      for (const subCondition of value) {
+        if (matchesElemMatchCondition(element, subCondition as Record<string, unknown>)) {
+          anyMatch = true;
+          break;
+        }
+      }
+      if (!anyMatch) return false;
+    } else if (key === "$nor") {
+      // Handle $nor inside $elemMatch
+      if (!Array.isArray(value)) {
+        throw new Error("$nor must be an array");
+      }
+      for (const subCondition of value) {
+        if (matchesElemMatchCondition(element, subCondition as Record<string, unknown>)) {
+          return false;
+        }
+      }
+    } else if (key.startsWith("$")) {
       const operators: QueryOperators = { [key]: value };
       if (!matchesOperators(element, operators)) {
         return false;
@@ -425,6 +459,7 @@ export function matchesOperators(
           throw new Error("$all needs an array");
         }
         const allValues = opValue as unknown[];
+        // Empty $all matches nothing (MongoDB behavior)
         if (allValues.length === 0) return false;
         const valueArray = Array.isArray(docValue) ? docValue : [docValue];
         for (const val of allValues) {

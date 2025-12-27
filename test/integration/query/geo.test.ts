@@ -12,7 +12,7 @@ import {
   getTestModeName,
   type TestClient,
   type TestCollection,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 import { ObjectId } from "bson";
 
 // Helper type for documents with geo data

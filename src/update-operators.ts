@@ -502,6 +502,17 @@ export function applyUpdateOperators<T extends Document>(
 
       const filteredArray = currentValue.filter((elem) => {
         if (isOperatorObject(condition)) {
+          const condObj = condition as Record<string, unknown>;
+          // Check if condition contains top-level logical operators
+          if ("$and" in condObj || "$or" in condObj || "$nor" in condObj) {
+            // Use matchesFilter to handle top-level logical operators
+            // Treat the element as a document for matching
+            if (elem !== null && typeof elem === "object" && !Array.isArray(elem)) {
+              return !matchesFilter(elem as Document, condObj as Filter<Document>);
+            }
+            // For primitives with logical operators, they can't match
+            return true;
+          }
           return !matchesOperators(elem, condition as QueryOperators);
         } else if (
           condition !== null &&

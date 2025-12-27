@@ -20,7 +20,7 @@ import {
   getTestModeName,
   isMongoDBMode,
   type TestClient,
-} from "./test-harness.ts";
+} from "../test-harness.ts";
 
 describe(`Administrative Operations Tests (${getTestModeName()})`, () => {
   let client: TestClient;

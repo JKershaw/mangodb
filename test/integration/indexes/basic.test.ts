@@ -1,8 +1,8 @@
 /**
- * Phase 7: Index Tests
+ * Basic Index Management Tests
  *
+ * Tests for index creation, deletion, listing, and unique constraints.
  * These tests run against both real MongoDB and MangoDB to ensure compatibility.
- * Set MONGODB_URI environment variable to run against MongoDB.
  */
 
 import { describe, it, before, after } from "node:test";
@@ -11,7 +11,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Index Management Tests (${getTestModeName()})`, () => {
   let client: TestClient;

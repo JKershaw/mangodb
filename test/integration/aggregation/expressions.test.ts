@@ -1,8 +1,8 @@
 /**
- * Phase 16: Extended Expression Operators Tests
+ * Expression Operators Tests
  *
- * These tests verify aggregation expression operators.
- * Tests run against MangoDB (MongoDB not available in this environment).
+ * Tests for aggregation expression operators: arithmetic, string, array,
+ * type conversion, date, set, and boolean/logical operators.
  */
 
 import { describe, it, before, after } from "node:test";
@@ -13,7 +13,7 @@ import {
   type TestClient,
   type TestCollection,
   type Document,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Expression Operators (${getTestModeName()})`, () => {
   let client: TestClient;

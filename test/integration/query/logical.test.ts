@@ -11,7 +11,7 @@ import {
   createTestClient,
   getTestModeName,
   type TestClient,
-} from "./test-harness.ts";
+} from "../../test-harness.ts";
 
 describe(`Logical Operator Tests (${getTestModeName()})`, () => {
   let client: TestClient;
