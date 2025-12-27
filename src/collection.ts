@@ -79,6 +79,23 @@ import {
 export type { IndexKeySpec, CreateIndexOptions, IndexInfo };
 
 /**
+ * Compare two _id values for equality.
+ * Handles both ObjectId (with .equals()) and primitive types (string, number).
+ */
+function idsEqual(id1: unknown, id2: unknown): boolean {
+  if (id1 === undefined || id2 === undefined) return false;
+  // Use .equals() if both are ObjectIds
+  if (
+    typeof (id1 as ObjectId).equals === "function" &&
+    typeof (id2 as ObjectId).equals === "function"
+  ) {
+    return (id1 as ObjectId).equals(id2 as ObjectId);
+  }
+  // Fallback to strict equality for primitives
+  return id1 === id2;
+}
+
+/**
  * MangoCollection - A file-based MongoDB-compatible collection.
  *
  * This class provides MongoDB Collection API methods backed by JSON file storage.
@@ -1341,12 +1358,7 @@ export class MangoCollection<T extends Document = Document> {
 
     const idx = documents.findIndex((doc) => {
       const id = (doc as { _id?: unknown })._id;
-      if (id === undefined || originalId === undefined) return false;
-      // Handle both ObjectId and primitive _id values
-      if (typeof (id as ObjectId).equals === "function" && typeof (originalId as ObjectId).equals === "function") {
-        return (id as ObjectId).equals(originalId as ObjectId);
-      }
-      return id === originalId;
+      return idsEqual(id, originalId);
     });
 
     if (idx !== -1) {
@@ -1420,8 +1432,8 @@ export class MangoCollection<T extends Document = Document> {
     }
 
     const remaining = documents.filter((doc) => {
-      const id = (doc as { _id?: ObjectId })._id;
-      return !id || !id.equals(docId);
+      const id = (doc as { _id?: unknown })._id;
+      return !idsEqual(id, docId);
     });
 
     await this.writeDocuments(remaining);
@@ -1522,8 +1534,8 @@ export class MangoCollection<T extends Document = Document> {
     let replaced = false;
 
     for (const doc of documents) {
-      const id = (doc as { _id?: ObjectId })._id;
-      if (!replaced && id && originalId && id.equals(originalId)) {
+      const id = (doc as { _id?: unknown })._id;
+      if (!replaced && idsEqual(id, originalId)) {
         updatedDocuments.push(newDoc);
         replaced = true;
       } else {
@@ -1643,8 +1655,8 @@ export class MangoCollection<T extends Document = Document> {
     let updated = false;
 
     for (const doc of documents) {
-      const id = (doc as { _id?: ObjectId })._id;
-      if (!updated && id && originalId && id.equals(originalId)) {
+      const id = (doc as { _id?: unknown })._id;
+      if (!updated && idsEqual(id, originalId)) {
         updatedDocuments.push(updatedDoc);
         updated = true;
       } else {
@@ -1810,8 +1822,8 @@ export class MangoCollection<T extends Document = Document> {
             let replaced = false;
 
             for (const doc of documents) {
-              const id = (doc as { _id?: ObjectId })._id;
-              if (!replaced && id && originalId && id.equals(originalId)) {
+              const id = (doc as { _id?: unknown })._id;
+              if (!replaced && idsEqual(id, originalId)) {
                 updatedDocuments.push(newDoc);
                 replaced = true;
               } else {

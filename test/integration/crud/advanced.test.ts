@@ -644,4 +644,84 @@ describe(`Advanced Operations Tests (${getTestModeName()})`, () => {
       });
     });
   });
+
+  describe("String _id support", () => {
+    it("findOneAndDelete should work with string _id", async () => {
+      const collection = client.db(dbName).collection("string_id_delete");
+      await collection.insertOne({ _id: "my-string-id", name: "Test" } as any);
+
+      const result = await collection.findOneAndDelete({ _id: "my-string-id" } as any);
+
+      assert.strictEqual(result?.name, "Test");
+      assert.strictEqual((result as any)?._id, "my-string-id");
+
+      const doc = await collection.findOne({ _id: "my-string-id" } as any);
+      assert.strictEqual(doc, null);
+    });
+
+    it("findOneAndReplace should work with string _id", async () => {
+      const collection = client.db(dbName).collection("string_id_replace");
+      await collection.insertOne({ _id: "replace-id", name: "Original" } as any);
+
+      const result = await collection.findOneAndReplace(
+        { _id: "replace-id" } as any,
+        { name: "Replaced" },
+        { returnDocument: "after" }
+      );
+
+      assert.strictEqual(result?.name, "Replaced");
+      assert.strictEqual((result as any)?._id, "replace-id");
+    });
+
+    it("findOneAndUpdate should work with string _id", async () => {
+      const collection = client.db(dbName).collection("string_id_update");
+      await collection.insertOne({ _id: "update-id", count: 0 } as any);
+
+      const result = await collection.findOneAndUpdate(
+        { _id: "update-id" } as any,
+        { $inc: { count: 1 } },
+        { returnDocument: "after" }
+      );
+
+      assert.strictEqual(result?.count, 1);
+      assert.strictEqual((result as any)?._id, "update-id");
+    });
+
+    it("bulkWrite replaceOne should work with string _id", async () => {
+      const collection = client.db(dbName).collection("string_id_bulk");
+      await collection.insertOne({ _id: "bulk-id", value: "old" } as any);
+
+      const result = await collection.bulkWrite([
+        {
+          replaceOne: {
+            filter: { _id: "bulk-id" } as any,
+            replacement: { value: "new" },
+          },
+        },
+      ]);
+
+      assert.strictEqual(result.matchedCount, 1);
+      assert.strictEqual(result.modifiedCount, 1);
+
+      const doc = await collection.findOne({ _id: "bulk-id" } as any);
+      assert.strictEqual(doc?.value, "new");
+    });
+
+    it("should work with numeric _id", async () => {
+      const collection = client.db(dbName).collection("numeric_id");
+      await collection.insertOne({ _id: 12345, name: "Numeric" } as any);
+
+      const result = await collection.findOneAndUpdate(
+        { _id: 12345 } as any,
+        { $set: { name: "Updated" } },
+        { returnDocument: "after" }
+      );
+
+      assert.strictEqual(result?.name, "Updated");
+      assert.strictEqual((result as any)?._id, 12345);
+
+      const deleted = await collection.findOneAndDelete({ _id: 12345 } as any);
+      assert.strictEqual(deleted?.name, "Updated");
+    });
+  });
 });
