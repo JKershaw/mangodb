@@ -5,6 +5,22 @@
 import type { IndexKeySpec } from "./types.ts";
 
 /**
+ * MongoDB error codes used by MangoDB error classes.
+ * @see https://github.com/mongodb/mongo/blob/master/src/mongo/base/error_codes.yml
+ */
+export const MONGO_ERROR_CODES = {
+  ILLEGAL_OPERATION: 20,
+  INDEX_NOT_FOUND: 27,
+  NAMESPACE_NOT_FOUND: 26,
+  NAMESPACE_EXISTS: 48,
+  INVALID_OPTIONS: 67,
+  INVALID_NAMESPACE: 73,
+  CANNOT_DROP_ID_INDEX: 72,
+  DUPLICATE_KEY: 11000,
+  BAD_VALUE: 17007,
+} as const;
+
+/**
  * Error thrown when a duplicate key violation occurs on a unique index.
  * Matches MongoDB's E11000 error format.
  *
@@ -23,7 +39,7 @@ import type { IndexKeySpec } from "./types.ts";
  */
 export class DuplicateKeyError extends Error {
   /** MongoDB error code for duplicate key */
-  readonly code = 11000;
+  readonly code = MONGO_ERROR_CODES.DUPLICATE_KEY;
 
   /** The index key pattern that was violated */
   readonly keyPattern: IndexKeySpec;
@@ -76,7 +92,7 @@ export class DuplicateKeyError extends Error {
  */
 export class IndexNotFoundError extends Error {
   /** MongoDB error code for IndexNotFound */
-  readonly code = 27;
+  readonly code = MONGO_ERROR_CODES.INDEX_NOT_FOUND;
   readonly codeName = "IndexNotFound";
 
   /**
@@ -109,7 +125,7 @@ export class IndexNotFoundError extends Error {
  */
 export class CannotDropIdIndexError extends Error {
   /** MongoDB error code for InvalidOptions */
-  readonly code = 72;
+  readonly code = MONGO_ERROR_CODES.CANNOT_DROP_ID_INDEX;
   readonly codeName = "InvalidOptions";
 
   /**
@@ -138,7 +154,7 @@ export class CannotDropIdIndexError extends Error {
  */
 export class TextIndexRequiredError extends Error {
   /** MongoDB error code for IndexNotFound */
-  readonly code = 27;
+  readonly code = MONGO_ERROR_CODES.INDEX_NOT_FOUND;
   readonly codeName = "IndexNotFound";
 
   /**
@@ -171,7 +187,7 @@ export class TextIndexRequiredError extends Error {
  */
 export class InvalidIndexOptionsError extends Error {
   /** MongoDB error code for InvalidOptions */
-  readonly code = 67;
+  readonly code = MONGO_ERROR_CODES.INVALID_OPTIONS;
   readonly codeName = "InvalidOptions";
 
   /**
@@ -202,7 +218,7 @@ export class InvalidIndexOptionsError extends Error {
  */
 export class BadHintError extends Error {
   /** MongoDB error code for bad hint */
-  readonly code = 17007;
+  readonly code = MONGO_ERROR_CODES.BAD_VALUE;
   readonly codeName = "BadValue";
 
   /**
@@ -236,7 +252,7 @@ export class BadHintError extends Error {
  */
 export class NamespaceNotFoundError extends Error {
   /** MongoDB error code for NamespaceNotFound */
-  readonly code = 26;
+  readonly code = MONGO_ERROR_CODES.NAMESPACE_NOT_FOUND;
   readonly codeName = "NamespaceNotFound";
 
   /**
@@ -269,7 +285,7 @@ export class NamespaceNotFoundError extends Error {
  */
 export class TargetNamespaceExistsError extends Error {
   /** MongoDB error code for NamespaceExists */
-  readonly code = 48;
+  readonly code = MONGO_ERROR_CODES.NAMESPACE_EXISTS;
   readonly codeName = "NamespaceExists";
 
   /**
@@ -301,7 +317,7 @@ export class TargetNamespaceExistsError extends Error {
  */
 export class IllegalOperationError extends Error {
   /** MongoDB error code for IllegalOperation */
-  readonly code = 20;
+  readonly code = MONGO_ERROR_CODES.ILLEGAL_OPERATION;
   readonly codeName = "IllegalOperation";
 
   /**
@@ -332,7 +348,7 @@ export class IllegalOperationError extends Error {
  */
 export class InvalidNamespaceError extends Error {
   /** MongoDB error code for InvalidNamespace */
-  readonly code = 73;
+  readonly code = MONGO_ERROR_CODES.INVALID_NAMESPACE;
   readonly codeName = "InvalidNamespace";
 
   /**

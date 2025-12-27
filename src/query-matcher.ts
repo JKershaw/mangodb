@@ -35,7 +35,12 @@ const BSON_TYPE_ALIASES: Record<string, number> = {
 };
 
 // Special "number" alias matches these types
-const NUMBER_TYPE_CODES = new Set([1, 16, 18, 19]); // double, int, long, decimal
+const NUMBER_TYPE_CODES = new Set([
+  BSON_TYPE_ALIASES.double,
+  BSON_TYPE_ALIASES.int,
+  BSON_TYPE_ALIASES.long,
+  BSON_TYPE_ALIASES.decimal,
+]);
 
 // Valid numeric type codes
 const VALID_TYPE_CODES = new Set(Object.values(BSON_TYPE_ALIASES));
@@ -44,21 +49,21 @@ const VALID_TYPE_CODES = new Set(Object.values(BSON_TYPE_ALIASES));
  * Get the BSON type code for a JavaScript value.
  */
 function getBSONTypeCode(value: unknown): number {
-  if (value === undefined) return 6; // undefined
-  if (value === null) return 10; // null
-  if (typeof value === "string") return 2; // string
-  if (typeof value === "boolean") return 8; // bool
+  if (value === undefined) return BSON_TYPE_ALIASES.undefined;
+  if (value === null) return BSON_TYPE_ALIASES.null;
+  if (typeof value === "string") return BSON_TYPE_ALIASES.string;
+  if (typeof value === "boolean") return BSON_TYPE_ALIASES.bool;
   if (typeof value === "number") {
     // In JavaScript, we can distinguish integers from floats
-    return Number.isInteger(value) ? 16 : 1; // int or double
+    return Number.isInteger(value) ? BSON_TYPE_ALIASES.int : BSON_TYPE_ALIASES.double;
   }
-  if (Array.isArray(value)) return 4; // array
-  if (value instanceof Date) return 9; // date
-  if (value instanceof RegExp) return 11; // regex
+  if (Array.isArray(value)) return BSON_TYPE_ALIASES.array;
+  if (value instanceof Date) return BSON_TYPE_ALIASES.date;
+  if (value instanceof RegExp) return BSON_TYPE_ALIASES.regex;
   if (value instanceof ObjectId || (value && typeof (value as { toHexString?: unknown }).toHexString === "function")) {
-    return 7; // objectId
+    return BSON_TYPE_ALIASES.objectId;
   }
-  if (typeof value === "object") return 3; // object
+  if (typeof value === "object") return BSON_TYPE_ALIASES.object;
   return -999; // unknown type (should not happen)
 }
 
@@ -175,6 +180,58 @@ function isBitSet(value: number, position: number): boolean {
     const bigPos = BigInt(position);
     return ((bigValue >> bigPos) & 1n) === 1n;
   }
+}
+
+/**
+ * Bitwise operator modes for evaluateBitwiseOperator.
+ */
+type BitwiseMode = "allSet" | "allClear" | "anySet" | "anyClear";
+
+/**
+ * Evaluate a bitwise operator against a document value.
+ * Consolidates the shared logic for $bitsAllSet, $bitsAllClear, $bitsAnySet, $bitsAnyClear.
+ */
+function evaluateBitwiseOperator(
+  docValue: unknown,
+  opValue: unknown,
+  opName: string,
+  mode: BitwiseMode
+): boolean {
+  const bitPositions = parseBitOperatorArgument(opValue, opName);
+
+  // For "any" modes, empty bit positions means no match
+  if ((mode === "anySet" || mode === "anyClear") && bitPositions.length === 0) {
+    return false;
+  }
+
+  // For arrays, check if any element matches
+  const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
+
+  for (const val of valuesToCheck) {
+    if (!isValidBitwiseValue(val)) continue;
+
+    const numValue = val as number;
+    let matches: boolean;
+
+    switch (mode) {
+      case "allSet":
+        matches = bitPositions.every((pos) => isBitSet(numValue, pos));
+        break;
+      case "allClear":
+        matches = bitPositions.every((pos) => !isBitSet(numValue, pos));
+        break;
+      case "anySet":
+        matches = bitPositions.some((pos) => isBitSet(numValue, pos));
+        break;
+      case "anyClear":
+        matches = bitPositions.some((pos) => !isBitSet(numValue, pos));
+        break;
+    }
+
+    if (matches) return true;
+  }
+
+  return false;
 }
 
 /**
@@ -660,99 +717,21 @@ export function matchesOperators(
         break;
       }
 
-      case "$bitsAllSet": {
-        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAllSet");
-        // For arrays, check if any element matches
-        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
-        let anyMatch = false;
-        for (const val of valuesToCheck) {
-          if (isValidBitwiseValue(val)) {
-            const numValue = val as number;
-            let allSet = true;
-            for (const pos of bitPositions) {
-              if (!isBitSet(numValue, pos)) {
-                allSet = false;
-                break;
-              }
-            }
-            if (allSet) {
-              anyMatch = true;
-              break;
-            }
-          }
-        }
-        if (!anyMatch) return false;
+      case "$bitsAllSet":
+        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAllSet", "allSet")) return false;
         break;
-      }
 
-      case "$bitsAllClear": {
-        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAllClear");
-        // For arrays, check if any element matches
-        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
-        let anyMatch = false;
-        for (const val of valuesToCheck) {
-          if (isValidBitwiseValue(val)) {
-            const numValue = val as number;
-            let allClear = true;
-            for (const pos of bitPositions) {
-              if (isBitSet(numValue, pos)) {
-                allClear = false;
-                break;
-              }
-            }
-            if (allClear) {
-              anyMatch = true;
-              break;
-            }
-          }
-        }
-        if (!anyMatch) return false;
+      case "$bitsAllClear":
+        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAllClear", "allClear")) return false;
         break;
-      }
 
-      case "$bitsAnySet": {
-        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAnySet");
-        if (bitPositions.length === 0) return false; // No bits to check = no match
-        // For arrays, check if any element matches
-        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
-        let anyMatch = false;
-        for (const val of valuesToCheck) {
-          if (isValidBitwiseValue(val)) {
-            const numValue = val as number;
-            for (const pos of bitPositions) {
-              if (isBitSet(numValue, pos)) {
-                anyMatch = true;
-                break;
-              }
-            }
-            if (anyMatch) break;
-          }
-        }
-        if (!anyMatch) return false;
+      case "$bitsAnySet":
+        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAnySet", "anySet")) return false;
         break;
-      }
 
-      case "$bitsAnyClear": {
-        const bitPositions = parseBitOperatorArgument(opValue, "$bitsAnyClear");
-        if (bitPositions.length === 0) return false; // No bits to check = no match
-        // For arrays, check if any element matches
-        const valuesToCheck = Array.isArray(docValue) ? docValue : [docValue];
-        let anyMatch = false;
-        for (const val of valuesToCheck) {
-          if (isValidBitwiseValue(val)) {
-            const numValue = val as number;
-            for (const pos of bitPositions) {
-              if (!isBitSet(numValue, pos)) {
-                anyMatch = true;
-                break;
-              }
-            }
-            if (anyMatch) break;
-          }
-        }
-        if (!anyMatch) return false;
+      case "$bitsAnyClear":
+        if (!evaluateBitwiseOperator(docValue, opValue, "$bitsAnyClear", "anyClear")) return false;
         break;
-      }
 
       case "$and":
         throw new Error("unknown operator: $and");
