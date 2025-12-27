@@ -6,9 +6,11 @@ import type { Document, Filter, QueryOperators } from './types.ts';
 import { getValuesByPath, getValueByPath, compareValues, valuesEqual } from './document-utils.ts';
 import { evaluateExpression } from './aggregation/index.ts';
 import { evaluateGeoWithin, evaluateGeoIntersects } from './geo/index.ts';
+import { validateDocument } from './schema/index.ts';
+import type { MongoJSONSchema } from './schema/types.ts';
 
-// BSON type name to numeric code mapping
-const BSON_TYPE_ALIASES: Record<string, number> = {
+// BSON type name to numeric code mapping (exported for schema validation)
+export const BSON_TYPE_ALIASES: Record<string, number> = {
   double: 1,
   string: 2,
   object: 3,
@@ -29,21 +31,21 @@ const BSON_TYPE_ALIASES: Record<string, number> = {
   maxKey: 127,
 };
 
-// Special "number" alias matches these types
-const NUMBER_TYPE_CODES = new Set([
+// Special "number" alias matches these types (exported for schema validation)
+export const NUMBER_TYPE_CODES = new Set([
   BSON_TYPE_ALIASES.double,
   BSON_TYPE_ALIASES.int,
   BSON_TYPE_ALIASES.long,
   BSON_TYPE_ALIASES.decimal,
 ]);
 
-// Valid numeric type codes
-const VALID_TYPE_CODES = new Set(Object.values(BSON_TYPE_ALIASES));
+// Valid numeric type codes (exported for schema validation)
+export const VALID_TYPE_CODES = new Set(Object.values(BSON_TYPE_ALIASES));
 
 /**
  * Get the BSON type code for a JavaScript value.
  */
-function getBSONTypeCode(value: unknown): number {
+export function getBSONTypeCode(value: unknown): number {
   if (value === undefined) return BSON_TYPE_ALIASES.undefined;
   if (value === null) return BSON_TYPE_ALIASES.null;
   if (typeof value === 'string') return BSON_TYPE_ALIASES.string;
@@ -68,7 +70,7 @@ function getBSONTypeCode(value: unknown): number {
 /**
  * Check if a value matches a BSON type specification.
  */
-function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
+export function matchesBSONType(value: unknown, typeSpec: string | number): boolean {
   // Handle "number" alias specially
   if (typeSpec === 'number') {
     const valueType = getBSONTypeCode(value);
@@ -859,6 +861,14 @@ export function matchesFilter<T extends Document>(doc: T, filter: Filter<T>): bo
     // Handle $comment - purely for logging/profiling, does not affect query results
     if (key === '$comment') {
       // No-op: comments are ignored in query matching
+      continue;
+    }
+
+    // Handle $jsonSchema - validate document against JSON Schema
+    if (key === '$jsonSchema') {
+      if (!validateDocument(doc, filterValue as MongoJSONSchema)) {
+        return false;
+      }
       continue;
     }
 

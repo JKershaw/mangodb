@@ -2,6 +2,7 @@
  * Common types and interfaces for MangoDB.
  */
 import type { ObjectId } from 'bson';
+import type { MongoJSONSchema } from './schema/types.ts';
 
 /**
  * Base document type used throughout MangoDB.
@@ -132,6 +133,7 @@ export type Filter<T> = {
   $or?: Filter<T>[];
   $nor?: Filter<T>[];
   $expr?: unknown;
+  $jsonSchema?: MongoJSONSchema;
 };
 
 /**

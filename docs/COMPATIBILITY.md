@@ -6,7 +6,7 @@ MangoDB aims to be a drop-in replacement for MongoDB during development and test
 
 | Category | Coverage | Notes |
 |----------|----------|-------|
-| Query Operators | 30/32 | Missing `$where`, `$jsonSchema` |
+| Query Operators | 31/32 | Missing `$where` |
 | Update Operators | 20/20 | Full coverage including positional |
 | Aggregation Stages | 28/34 | Core stages + window functions |
 | Expression Operators | 121/127 | Nearly complete |
@@ -63,8 +63,8 @@ MangoDB aims to be a drop-in replacement for MongoDB during development and test
 | `$regex` | Yes | With `$options` support |
 | `$text` | Yes | Requires text index |
 | `$comment` | Yes | No-op, for logging/profiling |
+| `$jsonSchema` | Yes | JSON Schema draft 4 with BSON extensions |
 | `$where` | No | JavaScript execution not supported |
-| `$jsonSchema` | No | Schema validation not implemented |
 
 ### Geospatial
 

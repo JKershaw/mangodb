@@ -72,7 +72,7 @@ await client.connect();
 
 | Category | Coverage |
 |----------|----------|
-| Query Operators | 30/32 (94%) |
+| Query Operators | 31/32 (97%) |
 | Update Operators | 20/20 (100%) |
 | Aggregation Stages | 28/34 (82%) |
 | Expression Operators | 121/127 (95%) |
