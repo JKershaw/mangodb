@@ -222,8 +222,8 @@ This document outlines the MongoDB API coverage and known limitations of MangoDB
 
 MangoDB is tested against both its own implementation and real MongoDB to ensure compatibility:
 
-- **MangoDB tests**: 1512 passing (1 skipped - pipeline updates)
-- **MongoDB tests**: 1512 passing
+- **MangoDB tests**: 1505 passing (1 skipped - pipeline updates)
+- **MongoDB tests**: 1505 passing
 
 The test suite covers all implemented features with edge cases, including:
 - Comprehensive operator composition tests
