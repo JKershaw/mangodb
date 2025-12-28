@@ -32,7 +32,7 @@
     "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'test/**/*.ts'",
     "test:types": "tsd",
-    "test:fuzz": "export $(cat .env.mongodb 2>/dev/null) && node --experimental-strip-types --test 'test/fuzz/**/*.fuzz.test.ts'"
+    "test:fuzz": "[ -f .env.mongodb ] && export $(cat .env.mongodb); node --experimental-strip-types --test 'test/fuzz/**/*.fuzz.test.ts'"
   },
   "tsd": {
     "directory": "test/types"
