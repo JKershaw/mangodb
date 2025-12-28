@@ -12,7 +12,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -28,7 +29,11 @@
     "lint": "eslint src/ test/",
     "lint:fix": "eslint src/ test/ --fix",
     "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts'",
-    "format:check": "prettier --check 'src/**/*.ts' 'test/**/*.ts'"
+    "format:check": "prettier --check 'src/**/*.ts' 'test/**/*.ts'",
+    "test:types": "tsd"
+  },
+  "tsd": {
+    "directory": "test/types"
   },
   "keywords": [
     "mongodb",
@@ -40,7 +45,7 @@
     "local",
     "testing"
   ],
-  "author": "",
+  "author": "J Kershaw",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -63,6 +68,7 @@
     "mongodb": "^6.21.0",
     "mongodb-memory-server": "^11.0.1",
     "prettier": "^3.7.4",
+    "tsd": "^0.33.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.50.1"
   },
