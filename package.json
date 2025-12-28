@@ -31,7 +31,8 @@
     "lint:fix": "eslint src/ test/ --fix",
     "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'test/**/*.ts'",
-    "test:types": "tsd"
+    "test:types": "tsd",
+    "test:fuzz": "[ -f .env.mongodb ] && export $(cat .env.mongodb); node --experimental-strip-types --test 'test/fuzz/**/*.fuzz.test.ts'"
   },
   "tsd": {
     "directory": "test/types"
@@ -65,6 +66,7 @@
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "fast-check": "^4.5.2",
     "husky": "^9.1.7",
     "mongodb": "^6.21.0",
     "mongodb-memory-server": "^11.0.1",
