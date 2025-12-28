@@ -20,6 +20,7 @@ A file-based MongoDB drop-in replacement. See @README.md for overview.
 - Run `npm test` before committing
 - Run `npm run typecheck` and `npm run lint` to verify code quality
 - Push branch and create PR for review
+- Mark Linear tasks as "Done" only after PR is merged to main
 
 ## Testing Requirements
 
