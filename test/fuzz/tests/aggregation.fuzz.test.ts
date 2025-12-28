@@ -21,7 +21,7 @@ import {
   type DualTargetContext,
   type ComparisonResult,
 } from '../fuzz-harness.ts';
-import { simpleDocument, documentWithArrays } from '../arbitraries/documents.ts';
+import { simpleDocument } from '../arbitraries/documents.ts';
 import { bsonNumber, bsonString } from '../arbitraries/values.ts';
 
 /**
@@ -335,9 +335,9 @@ describe(`Aggregation Fuzz Tests (${getTestModeName()})`, () => {
         }),
         async ({ docs, limit }, ctx) => {
           // Use multiple sort keys for stable ordering
-          // (sort on value alone is unstable when values are equal)
+          // _id as final key guarantees determinism (same _id passed to both DBs)
           return compareAggregationResults(ctx, 'fuzz_limit', docs, [
-            { $sort: { value: 1, name: 1, active: 1 } },
+            { $sort: { value: 1, name: 1, active: 1, _id: 1 } },
             { $limit: limit },
           ]);
         }
