@@ -334,10 +334,10 @@ describe(`Aggregation Fuzz Tests (${getTestModeName()})`, () => {
           limit: fc.integer({ min: 1, max: 10 }),
         }),
         async ({ docs, limit }, ctx) => {
-          // Use name as secondary sort key for stable ordering
+          // Use multiple sort keys for stable ordering
           // (sort on value alone is unstable when values are equal)
           return compareAggregationResults(ctx, 'fuzz_limit', docs, [
-            { $sort: { value: 1, name: 1 } },
+            { $sort: { value: 1, name: 1, active: 1 } },
             { $limit: limit },
           ]);
         }
