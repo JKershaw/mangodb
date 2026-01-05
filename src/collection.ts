@@ -66,6 +66,7 @@ import {
 } from './update-operators.ts';
 
 import { IndexManager } from './index-manager.ts';
+import { Mutex } from './mutex.ts';
 
 import {
   TextIndexRequiredError,
@@ -118,6 +119,7 @@ export class MangoCollection<T extends Document = Document> {
   private readonly indexManager: IndexManager;
   private readonly dataDir: string;
   private readonly dbName: string;
+  private readonly mutex = new Mutex();
 
   /**
    * Create a new MangoCollection instance.
@@ -406,7 +408,9 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async createIndex(keySpec: IndexKeySpec, options: CreateIndexOptions = {}): Promise<string> {
-    return this.indexManager.createIndex(keySpec, options);
+    return this.mutex.runExclusive(async () => {
+      return this.indexManager.createIndex(keySpec, options);
+    });
   }
 
   /**
@@ -425,7 +429,9 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async dropIndex(indexNameOrSpec: string | IndexKeySpec): Promise<void> {
-    return this.indexManager.dropIndex(indexNameOrSpec);
+    return this.mutex.runExclusive(async () => {
+      return this.indexManager.dropIndex(indexNameOrSpec);
+    });
   }
 
   /**
@@ -446,13 +452,15 @@ export class MangoCollection<T extends Document = Document> {
   async createIndexes(
     indexSpecs: Array<{ key: IndexKeySpec } & CreateIndexOptions>
   ): Promise<string[]> {
-    const names: string[] = [];
-    for (const spec of indexSpecs) {
-      const { key, ...options } = spec;
-      const name = await this.indexManager.createIndex(key, options);
-      names.push(name);
-    }
-    return names;
+    return this.mutex.runExclusive(async () => {
+      const names: string[] = [];
+      for (const spec of indexSpecs) {
+        const { key, ...options } = spec;
+        const name = await this.indexManager.createIndex(key, options);
+        names.push(name);
+      }
+      return names;
+    });
   }
 
   /**
@@ -477,21 +485,23 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async dropIndexes(indexNames?: '*' | string[]): Promise<void> {
-    const indexes = await this.indexManager.indexes();
+    return this.mutex.runExclusive(async () => {
+      const indexes = await this.indexManager.indexes();
 
-    if (indexNames === '*' || indexNames === undefined) {
-      // Drop all non-_id indexes
-      for (const idx of indexes) {
-        if (idx.name !== '_id_') {
-          await this.indexManager.dropIndex(idx.name);
+      if (indexNames === '*' || indexNames === undefined) {
+        // Drop all non-_id indexes
+        for (const idx of indexes) {
+          if (idx.name !== '_id_') {
+            await this.indexManager.dropIndex(idx.name);
+          }
+        }
+      } else {
+        // Drop specific indexes
+        for (const name of indexNames) {
+          await this.indexManager.dropIndex(name);
         }
       }
-    } else {
-      // Drop specific indexes
-      for (const name of indexNames) {
-        await this.indexManager.dropIndex(name);
-      }
-    }
+    });
   }
 
   /**
@@ -546,22 +556,24 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async insertOne(doc: T): Promise<InsertOneResult> {
-    const documents = await this.readDocuments();
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
 
-    const docWithId = { ...doc };
-    if (!('_id' in docWithId)) {
-      (docWithId as Record<string, unknown>)._id = new ObjectId();
-    }
+      const docWithId = { ...doc };
+      if (!('_id' in docWithId)) {
+        (docWithId as Record<string, unknown>)._id = new ObjectId();
+      }
 
-    await this.indexManager.checkUniqueConstraints([docWithId], documents);
+      await this.indexManager.checkUniqueConstraints([docWithId], documents);
 
-    documents.push(docWithId);
-    await this.writeDocuments(documents);
+      documents.push(docWithId);
+      await this.writeDocuments(documents);
 
-    return {
-      acknowledged: true,
-      insertedId: (docWithId as unknown as { _id: ObjectId })._id,
-    };
+      return {
+        acknowledged: true,
+        insertedId: (docWithId as unknown as { _id: ObjectId })._id,
+      };
+    });
   }
 
   /**
@@ -585,28 +597,30 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async insertMany(docs: T[]): Promise<InsertManyResult> {
-    const documents = await this.readDocuments();
-    const insertedIds: Record<number, ObjectId> = {};
-    const docsWithIds: T[] = [];
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      const insertedIds: Record<number, ObjectId> = {};
+      const docsWithIds: T[] = [];
 
-    for (let i = 0; i < docs.length; i++) {
-      const docWithId = { ...docs[i] };
-      if (!('_id' in docWithId)) {
-        (docWithId as Record<string, unknown>)._id = new ObjectId();
+      for (let i = 0; i < docs.length; i++) {
+        const docWithId = { ...docs[i] };
+        if (!('_id' in docWithId)) {
+          (docWithId as Record<string, unknown>)._id = new ObjectId();
+        }
+        docsWithIds.push(docWithId);
+        insertedIds[i] = (docWithId as unknown as { _id: ObjectId })._id;
       }
-      docsWithIds.push(docWithId);
-      insertedIds[i] = (docWithId as unknown as { _id: ObjectId })._id;
-    }
 
-    await this.indexManager.checkUniqueConstraints(docsWithIds, documents);
+      await this.indexManager.checkUniqueConstraints(docsWithIds, documents);
 
-    documents.push(...docsWithIds);
-    await this.writeDocuments(documents);
+      documents.push(...docsWithIds);
+      await this.writeDocuments(documents);
 
-    return {
-      acknowledged: true,
-      insertedIds,
-    };
+      return {
+        acknowledged: true,
+        insertedIds,
+      };
+    });
   }
 
   // ==================== Query Operations ====================
@@ -909,27 +923,29 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async deleteOne(filter: Filter<T>): Promise<DeleteResult> {
-    const documents = await this.readDocuments();
-    let deletedCount = 0;
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      let deletedCount = 0;
 
-    const remaining: T[] = [];
-    let deleted = false;
+      const remaining: T[] = [];
+      let deleted = false;
 
-    for (const doc of documents) {
-      if (!deleted && matchesFilter(doc, filter)) {
-        deleted = true;
-        deletedCount = 1;
-      } else {
-        remaining.push(doc);
+      for (const doc of documents) {
+        if (!deleted && matchesFilter(doc, filter)) {
+          deleted = true;
+          deletedCount = 1;
+        } else {
+          remaining.push(doc);
+        }
       }
-    }
 
-    await this.writeDocuments(remaining);
+      await this.writeDocuments(remaining);
 
-    return {
-      acknowledged: true,
-      deletedCount,
-    };
+      return {
+        acknowledged: true,
+        deletedCount,
+      };
+    });
   }
 
   /**
@@ -952,16 +968,18 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async deleteMany(filter: Filter<T>): Promise<DeleteResult> {
-    const documents = await this.readDocuments();
-    const remaining = documents.filter((doc) => !matchesFilter(doc, filter));
-    const deletedCount = documents.length - remaining.length;
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      const remaining = documents.filter((doc) => !matchesFilter(doc, filter));
+      const deletedCount = documents.length - remaining.length;
 
-    await this.writeDocuments(remaining);
+      await this.writeDocuments(remaining);
 
-    return {
-      acknowledged: true,
-      deletedCount,
-    };
+      return {
+        acknowledged: true,
+        deletedCount,
+      };
+    });
   }
 
   // ==================== Update Operations ====================
@@ -1091,85 +1109,87 @@ export class MangoCollection<T extends Document = Document> {
     options: UpdateOptions,
     limitOne: boolean
   ): Promise<UpdateResult> {
-    const documents = await this.readDocuments();
-    let matchedCount = 0;
-    let modifiedCount = 0;
-    let upsertedId: ObjectId | null = null;
-    let upsertedCount = 0;
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      let matchedCount = 0;
+      let modifiedCount = 0;
+      let upsertedId: ObjectId | null = null;
+      let upsertedCount = 0;
 
-    const updatedDocuments: T[] = [];
-    const modifiedDocs: T[] = [];
-    const unchangedDocs: T[] = [];
+      const updatedDocuments: T[] = [];
+      const modifiedDocs: T[] = [];
+      const unchangedDocs: T[] = [];
 
-    // Create context for positional update operators
-    const baseContext: PositionalContext = {
-      arrayFilters: options.arrayFilters,
-    };
+      // Create context for positional update operators
+      const baseContext: PositionalContext = {
+        arrayFilters: options.arrayFilters,
+      };
 
-    for (const doc of documents) {
-      const shouldMatch = limitOne ? matchedCount === 0 : true;
+      for (const doc of documents) {
+        const shouldMatch = limitOne ? matchedCount === 0 : true;
 
-      if (shouldMatch && matchesFilter(doc, filter)) {
-        matchedCount++;
+        if (shouldMatch && matchesFilter(doc, filter)) {
+          matchedCount++;
 
-        // Track matched array indices for $ positional operator
-        const matchedArrayIndex = this.findMatchedArrayIndices(doc, filter);
-        const context: PositionalContext = {
-          ...baseContext,
-          matchedArrayIndex,
-        };
+          // Track matched array indices for $ positional operator
+          const matchedArrayIndex = this.findMatchedArrayIndices(doc, filter);
+          const context: PositionalContext = {
+            ...baseContext,
+            matchedArrayIndex,
+          };
 
-        const updatedDoc = applyUpdateOperators(doc, update, context);
+          const updatedDoc = applyUpdateOperators(doc, update, context);
 
-        if (!documentsEqual(doc, updatedDoc)) {
-          modifiedCount++;
-          modifiedDocs.push(updatedDoc);
-          updatedDocuments.push(updatedDoc);
+          if (!documentsEqual(doc, updatedDoc)) {
+            modifiedCount++;
+            modifiedDocs.push(updatedDoc);
+            updatedDocuments.push(updatedDoc);
+          } else {
+            unchangedDocs.push(doc);
+            updatedDocuments.push(doc);
+          }
         } else {
           unchangedDocs.push(doc);
           updatedDocuments.push(doc);
         }
-      } else {
-        unchangedDocs.push(doc);
-        updatedDocuments.push(doc);
       }
-    }
 
-    if (matchedCount === 0 && options.upsert) {
-      const baseDoc = createDocumentFromFilter(filter);
+      if (matchedCount === 0 && options.upsert) {
+        const baseDoc = createDocumentFromFilter(filter);
 
-      // Apply $setOnInsert fields - only during upsert insert
-      if (update.$setOnInsert) {
-        for (const [path, value] of Object.entries(update.$setOnInsert)) {
-          setValueByPath(baseDoc as Record<string, unknown>, path, value);
+        // Apply $setOnInsert fields - only during upsert insert
+        if (update.$setOnInsert) {
+          for (const [path, value] of Object.entries(update.$setOnInsert)) {
+            setValueByPath(baseDoc as Record<string, unknown>, path, value);
+          }
         }
+
+        const newDoc = applyUpdateOperators(baseDoc, update, baseContext);
+
+        if (!('_id' in newDoc)) {
+          (newDoc as Record<string, unknown>)._id = new ObjectId();
+        }
+
+        upsertedId = (newDoc as unknown as { _id: ObjectId })._id;
+        upsertedCount = 1;
+        modifiedDocs.push(newDoc);
+        updatedDocuments.push(newDoc);
       }
 
-      const newDoc = applyUpdateOperators(baseDoc, update, baseContext);
-
-      if (!('_id' in newDoc)) {
-        (newDoc as Record<string, unknown>)._id = new ObjectId();
+      if (modifiedDocs.length > 0) {
+        await this.indexManager.checkUniqueConstraints(modifiedDocs, unchangedDocs);
       }
 
-      upsertedId = (newDoc as unknown as { _id: ObjectId })._id;
-      upsertedCount = 1;
-      modifiedDocs.push(newDoc);
-      updatedDocuments.push(newDoc);
-    }
+      await this.writeDocuments(updatedDocuments);
 
-    if (modifiedDocs.length > 0) {
-      await this.indexManager.checkUniqueConstraints(modifiedDocs, unchangedDocs);
-    }
-
-    await this.writeDocuments(updatedDocuments);
-
-    return {
-      acknowledged: true,
-      matchedCount,
-      modifiedCount,
-      upsertedCount,
-      upsertedId,
-    };
+      return {
+        acknowledged: true,
+        matchedCount,
+        modifiedCount,
+        upsertedCount,
+        upsertedId,
+      };
+    });
   }
 
   /**
@@ -1287,78 +1307,80 @@ export class MangoCollection<T extends Document = Document> {
   ): Promise<UpdateResult> {
     validateReplacement(replacement);
 
-    const documents = await this.readDocuments();
-    const matches = documents.filter((doc) => matchesFilter(doc, filter));
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      const matches = documents.filter((doc) => matchesFilter(doc, filter));
 
-    if (matches.length === 0) {
-      if (options.upsert) {
-        const newDoc = { ...replacement } as T;
-        if (!('_id' in newDoc)) {
-          (newDoc as Record<string, unknown>)._id = new ObjectId();
+      if (matches.length === 0) {
+        if (options.upsert) {
+          const newDoc = { ...replacement } as T;
+          if (!('_id' in newDoc)) {
+            (newDoc as Record<string, unknown>)._id = new ObjectId();
+          }
+          await this.indexManager.checkUniqueConstraints([newDoc], documents);
+          documents.push(newDoc);
+          await this.writeDocuments(documents);
+
+          return {
+            acknowledged: true,
+            matchedCount: 0,
+            modifiedCount: 0,
+            upsertedCount: 1,
+            upsertedId: (newDoc as unknown as { _id: ObjectId })._id,
+          };
         }
-        await this.indexManager.checkUniqueConstraints([newDoc], documents);
-        documents.push(newDoc);
-        await this.writeDocuments(documents);
-
         return {
           acknowledged: true,
           matchedCount: 0,
           modifiedCount: 0,
-          upsertedCount: 1,
-          upsertedId: (newDoc as unknown as { _id: ObjectId })._id,
+          upsertedCount: 0,
+          upsertedId: null,
         };
       }
+
+      const docToReplace = matches[0];
+      const originalId = (docToReplace as { _id?: unknown })._id;
+      const newDoc = { ...replacement } as T;
+      if (originalId !== undefined) {
+        (newDoc as Record<string, unknown>)._id = originalId;
+      }
+
+      // Convert _id to string for unique constraint check
+      // Use explicit undefined check to handle falsy _id values like 0 or ""
+      const getIdString = (id: unknown): string => {
+        if (id === undefined) return '';
+        if (typeof (id as ObjectId).toHexString === 'function') {
+          return (id as ObjectId).toHexString();
+        }
+        return String(id);
+      };
+      const idString = getIdString(originalId);
+
+      await this.indexManager.checkUniqueConstraints(
+        [newDoc],
+        documents,
+        originalId !== undefined ? new Set([idString]) : new Set()
+      );
+
+      const idx = documents.findIndex((doc) => {
+        const id = (doc as { _id?: unknown })._id;
+        return idsEqual(id, originalId);
+      });
+
+      if (idx !== -1) {
+        documents[idx] = newDoc;
+      }
+
+      await this.writeDocuments(documents);
+
       return {
         acknowledged: true,
-        matchedCount: 0,
-        modifiedCount: 0,
+        matchedCount: 1,
+        modifiedCount: 1,
         upsertedCount: 0,
         upsertedId: null,
       };
-    }
-
-    const docToReplace = matches[0];
-    const originalId = (docToReplace as { _id?: unknown })._id;
-    const newDoc = { ...replacement } as T;
-    if (originalId !== undefined) {
-      (newDoc as Record<string, unknown>)._id = originalId;
-    }
-
-    // Convert _id to string for unique constraint check
-    // Use explicit undefined check to handle falsy _id values like 0 or ""
-    const getIdString = (id: unknown): string => {
-      if (id === undefined) return '';
-      if (typeof (id as ObjectId).toHexString === 'function') {
-        return (id as ObjectId).toHexString();
-      }
-      return String(id);
-    };
-    const idString = getIdString(originalId);
-
-    await this.indexManager.checkUniqueConstraints(
-      [newDoc],
-      documents,
-      originalId !== undefined ? new Set([idString]) : new Set()
-    );
-
-    const idx = documents.findIndex((doc) => {
-      const id = (doc as { _id?: unknown })._id;
-      return idsEqual(id, originalId);
     });
-
-    if (idx !== -1) {
-      documents[idx] = newDoc;
-    }
-
-    await this.writeDocuments(documents);
-
-    return {
-      acknowledged: true,
-      matchedCount: 1,
-      modifiedCount: 1,
-      upsertedCount: 0,
-      upsertedId: null,
-    };
   }
 
   // ==================== FindOneAnd* Operations ====================
@@ -1397,37 +1419,39 @@ export class MangoCollection<T extends Document = Document> {
     filter: Filter<T>,
     options: FindOneAndDeleteOptions = {}
   ): Promise<T | null> {
-    const documents = await this.readDocuments();
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
 
-    let matches = documents.filter((doc) => matchesFilter(doc, filter));
+      let matches = documents.filter((doc) => matchesFilter(doc, filter));
 
-    if (matches.length === 0) {
-      return null;
-    }
+      if (matches.length === 0) {
+        return null;
+      }
 
-    if (options.sort) {
-      matches = this.sortDocuments(matches, options.sort);
-    }
+      if (options.sort) {
+        matches = this.sortDocuments(matches, options.sort);
+      }
 
-    const docToDelete = matches[0];
-    const docId = (docToDelete as { _id?: ObjectId })._id;
+      const docToDelete = matches[0];
+      const docId = (docToDelete as { _id?: ObjectId })._id;
 
-    if (!docId) {
-      throw new Error('Cannot delete document without _id');
-    }
+      if (!docId) {
+        throw new Error('Cannot delete document without _id');
+      }
 
-    const remaining = documents.filter((doc) => {
-      const id = (doc as { _id?: unknown })._id;
-      return !idsEqual(id, docId);
+      const remaining = documents.filter((doc) => {
+        const id = (doc as { _id?: unknown })._id;
+        return !idsEqual(id, docId);
+      });
+
+      await this.writeDocuments(remaining);
+
+      if (options.projection) {
+        return applyProjection(docToDelete, options.projection);
+      }
+
+      return docToDelete;
     });
-
-    await this.writeDocuments(remaining);
-
-    if (options.projection) {
-      return applyProjection(docToDelete, options.projection);
-    }
-
-    return docToDelete;
   }
 
   /**
@@ -1475,68 +1499,70 @@ export class MangoCollection<T extends Document = Document> {
   ): Promise<T | null> {
     validateReplacement(replacement);
 
-    const documents = await this.readDocuments();
-    const returnAfter = options.returnDocument === 'after';
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      const returnAfter = options.returnDocument === 'after';
 
-    let matches = documents.filter((doc) => matchesFilter(doc, filter));
+      let matches = documents.filter((doc) => matchesFilter(doc, filter));
 
-    if (matches.length === 0) {
-      if (options.upsert) {
-        const newDoc = { ...replacement } as T;
-        if (!('_id' in newDoc)) {
-          (newDoc as Record<string, unknown>)._id = new ObjectId();
-        }
+      if (matches.length === 0) {
+        if (options.upsert) {
+          const newDoc = { ...replacement } as T;
+          if (!('_id' in newDoc)) {
+            (newDoc as Record<string, unknown>)._id = new ObjectId();
+          }
 
-        await this.indexManager.checkUniqueConstraints([newDoc], documents);
+          await this.indexManager.checkUniqueConstraints([newDoc], documents);
 
-        documents.push(newDoc);
-        await this.writeDocuments(documents);
+          documents.push(newDoc);
+          await this.writeDocuments(documents);
 
-        if (returnAfter) {
-          return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
+          if (returnAfter) {
+            return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
+          }
+          return null;
         }
         return null;
       }
-      return null;
-    }
 
-    if (options.sort) {
-      matches = this.sortDocuments(matches, options.sort);
-    }
-
-    const docToReplace = matches[0];
-    const originalId = (docToReplace as { _id?: ObjectId })._id;
-
-    const newDoc = { ...replacement } as T;
-    if (originalId) {
-      (newDoc as Record<string, unknown>)._id = originalId;
-    }
-
-    const updatedDocuments: T[] = [];
-    const unchangedDocs: T[] = [];
-    let replaced = false;
-
-    for (const doc of documents) {
-      const id = (doc as { _id?: unknown })._id;
-      if (!replaced && idsEqual(id, originalId)) {
-        updatedDocuments.push(newDoc);
-        replaced = true;
-      } else {
-        updatedDocuments.push(doc);
-        unchangedDocs.push(doc);
+      if (options.sort) {
+        matches = this.sortDocuments(matches, options.sort);
       }
-    }
 
-    await this.indexManager.checkUniqueConstraints([newDoc], unchangedDocs);
+      const docToReplace = matches[0];
+      const originalId = (docToReplace as { _id?: ObjectId })._id;
 
-    await this.writeDocuments(updatedDocuments);
+      const newDoc = { ...replacement } as T;
+      if (originalId) {
+        (newDoc as Record<string, unknown>)._id = originalId;
+      }
 
-    const resultDoc = returnAfter ? newDoc : docToReplace;
-    if (options.projection) {
-      return applyProjection(resultDoc, options.projection);
-    }
+      const updatedDocuments: T[] = [];
+      const unchangedDocs: T[] = [];
+      let replaced = false;
 
-    return resultDoc;
+      for (const doc of documents) {
+        const id = (doc as { _id?: unknown })._id;
+        if (!replaced && idsEqual(id, originalId)) {
+          updatedDocuments.push(newDoc);
+          replaced = true;
+        } else {
+          updatedDocuments.push(doc);
+          unchangedDocs.push(doc);
+        }
+      }
+
+      await this.indexManager.checkUniqueConstraints([newDoc], unchangedDocs);
+
+      await this.writeDocuments(updatedDocuments);
+
+      const resultDoc = returnAfter ? newDoc : docToReplace;
+      if (options.projection) {
+        return applyProjection(resultDoc, options.projection);
+      }
+
+      return resultDoc;
+    });
   }
 
   /**
@@ -1587,75 +1613,77 @@ export class MangoCollection<T extends Document = Document> {
     update: UpdateOperators,
     options: FindOneAndUpdateOptions = {}
   ): Promise<T | null> {
-    const documents = await this.readDocuments();
-    const returnAfter = options.returnDocument === 'after';
+    return this.mutex.runExclusive(async () => {
+      const documents = await this.readDocuments();
+      const returnAfter = options.returnDocument === 'after';
 
-    let matches = documents.filter((doc) => matchesFilter(doc, filter));
+      let matches = documents.filter((doc) => matchesFilter(doc, filter));
 
-    if (matches.length === 0) {
-      if (options.upsert) {
-        const baseDoc = createDocumentFromFilter(filter);
+      if (matches.length === 0) {
+        if (options.upsert) {
+          const baseDoc = createDocumentFromFilter(filter);
 
-        // Apply $setOnInsert fields - only during upsert insert
-        if (update.$setOnInsert) {
-          for (const [path, value] of Object.entries(update.$setOnInsert)) {
-            setValueByPath(baseDoc as Record<string, unknown>, path, value);
+          // Apply $setOnInsert fields - only during upsert insert
+          if (update.$setOnInsert) {
+            for (const [path, value] of Object.entries(update.$setOnInsert)) {
+              setValueByPath(baseDoc as Record<string, unknown>, path, value);
+            }
           }
-        }
 
-        const newDoc = applyUpdateOperators(baseDoc, update);
+          const newDoc = applyUpdateOperators(baseDoc, update);
 
-        if (!('_id' in newDoc)) {
-          (newDoc as Record<string, unknown>)._id = new ObjectId();
-        }
+          if (!('_id' in newDoc)) {
+            (newDoc as Record<string, unknown>)._id = new ObjectId();
+          }
 
-        await this.indexManager.checkUniqueConstraints([newDoc], documents);
+          await this.indexManager.checkUniqueConstraints([newDoc], documents);
 
-        documents.push(newDoc);
-        await this.writeDocuments(documents);
+          documents.push(newDoc);
+          await this.writeDocuments(documents);
 
-        if (returnAfter) {
-          return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
+          if (returnAfter) {
+            return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
+          }
+          return null;
         }
         return null;
       }
-      return null;
-    }
 
-    if (options.sort) {
-      matches = this.sortDocuments(matches, options.sort);
-    }
-
-    const docToUpdate = matches[0];
-    const originalId = (docToUpdate as { _id?: ObjectId })._id;
-
-    const updatedDoc = applyUpdateOperators(docToUpdate, update);
-
-    const updatedDocuments: T[] = [];
-    const unchangedDocs: T[] = [];
-    let updated = false;
-
-    for (const doc of documents) {
-      const id = (doc as { _id?: unknown })._id;
-      if (!updated && idsEqual(id, originalId)) {
-        updatedDocuments.push(updatedDoc);
-        updated = true;
-      } else {
-        updatedDocuments.push(doc);
-        unchangedDocs.push(doc);
+      if (options.sort) {
+        matches = this.sortDocuments(matches, options.sort);
       }
-    }
 
-    await this.indexManager.checkUniqueConstraints([updatedDoc], unchangedDocs);
+      const docToUpdate = matches[0];
+      const originalId = (docToUpdate as { _id?: ObjectId })._id;
 
-    await this.writeDocuments(updatedDocuments);
+      const updatedDoc = applyUpdateOperators(docToUpdate, update);
 
-    const resultDoc = returnAfter ? updatedDoc : docToUpdate;
-    if (options.projection) {
-      return applyProjection(resultDoc, options.projection);
-    }
+      const updatedDocuments: T[] = [];
+      const unchangedDocs: T[] = [];
+      let updated = false;
 
-    return resultDoc;
+      for (const doc of documents) {
+        const id = (doc as { _id?: unknown })._id;
+        if (!updated && idsEqual(id, originalId)) {
+          updatedDocuments.push(updatedDoc);
+          updated = true;
+        } else {
+          updatedDocuments.push(doc);
+          unchangedDocs.push(doc);
+        }
+      }
+
+      await this.indexManager.checkUniqueConstraints([updatedDoc], unchangedDocs);
+
+      await this.writeDocuments(updatedDocuments);
+
+      const resultDoc = returnAfter ? updatedDoc : docToUpdate;
+      if (options.projection) {
+        return applyProjection(resultDoc, options.projection);
+      }
+
+      return resultDoc;
+    });
   }
 
   // ==================== Bulk Write ====================
@@ -1769,48 +1797,16 @@ export class MangoCollection<T extends Document = Document> {
           const deleteResult = await this.deleteMany(op.deleteMany.filter);
           result.deletedCount += deleteResult.deletedCount;
         } else if (op.replaceOne) {
-          validateReplacement(op.replaceOne.replacement);
-
-          const documents = await this.readDocuments();
-          const matches = documents.filter((doc) => matchesFilter(doc, op.replaceOne!.filter));
-
-          if (matches.length === 0 && op.replaceOne.upsert) {
-            const newDoc = { ...op.replaceOne.replacement } as T;
-            if (!('_id' in newDoc)) {
-              (newDoc as Record<string, unknown>)._id = new ObjectId();
-            }
-            await this.indexManager.checkUniqueConstraints([newDoc], documents);
-            documents.push(newDoc);
-            await this.writeDocuments(documents);
+          const replaceResult = await this.replaceOne(
+            op.replaceOne.filter,
+            op.replaceOne.replacement,
+            { upsert: op.replaceOne.upsert }
+          );
+          result.matchedCount += replaceResult.matchedCount;
+          result.modifiedCount += replaceResult.modifiedCount;
+          if (replaceResult.upsertedId) {
             result.upsertedCount++;
-            result.upsertedIds[i] = (newDoc as Record<string, unknown>)._id as ObjectId;
-          } else if (matches.length > 0) {
-            const docToReplace = matches[0];
-            const originalId = (docToReplace as { _id?: ObjectId })._id;
-            const newDoc = { ...op.replaceOne.replacement } as T;
-            if (originalId) {
-              (newDoc as Record<string, unknown>)._id = originalId;
-            }
-
-            const updatedDocuments: T[] = [];
-            const unchangedDocs: T[] = [];
-            let replaced = false;
-
-            for (const doc of documents) {
-              const id = (doc as { _id?: unknown })._id;
-              if (!replaced && idsEqual(id, originalId)) {
-                updatedDocuments.push(newDoc);
-                replaced = true;
-              } else {
-                updatedDocuments.push(doc);
-                unchangedDocs.push(doc);
-              }
-            }
-
-            await this.indexManager.checkUniqueConstraints([newDoc], unchangedDocs);
-            await this.writeDocuments(updatedDocuments);
-            result.matchedCount++;
-            result.modifiedCount++;
+            result.upsertedIds[i] = replaceResult.upsertedId;
           }
         }
       } catch (error) {
@@ -1938,29 +1934,31 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async drop(): Promise<boolean> {
-    // Delete data file
-    try {
-      await unlink(this.filePath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
+    return this.mutex.runExclusive(async () => {
+      // Delete data file
+      try {
+        await unlink(this.filePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
       }
-    }
 
-    // Delete index file
-    const indexFilePath = this.filePath.replace('.json', '.indexes.json');
-    try {
-      await unlink(indexFilePath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
+      // Delete index file
+      const indexFilePath = this.filePath.replace('.json', '.indexes.json');
+      try {
+        await unlink(indexFilePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
       }
-    }
 
-    // Reset index manager
-    await this.indexManager.reset();
+      // Reset index manager
+      await this.indexManager.reset();
 
-    return true;
+      return true;
+    });
   }
 
   /**
@@ -2048,7 +2046,7 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async rename(newName: string, options: RenameOptions = {}): Promise<MangoCollection<T>> {
-    // Validate new name
+    // Validate new name (validation doesn't need lock)
     if (!newName || newName.length === 0) {
       throw new InvalidNamespaceError('collection names cannot be empty');
     }
@@ -2065,56 +2063,58 @@ export class MangoCollection<T extends Document = Document> {
       throw new IllegalOperationError('cannot rename collection to itself');
     }
 
-    // Check source exists
-    try {
-      await access(this.filePath);
-    } catch {
-      throw new NamespaceNotFoundError();
-    }
-
-    const dbDir = dirname(this.filePath);
-    const newFilePath = join(dbDir, `${newName}.json`);
-    const newIndexPath = join(dbDir, `${newName}.indexes.json`);
-    const currentIndexPath = this.filePath.replace('.json', '.indexes.json');
-
-    // Check if target exists
-    let targetExists = false;
-    try {
-      await access(newFilePath);
-      targetExists = true;
-    } catch {
-      // Target doesn't exist, which is fine
-    }
-
-    if (targetExists) {
-      if (!options.dropTarget) {
-        throw new TargetNamespaceExistsError();
-      }
-      // Drop target
+    return this.mutex.runExclusive(async () => {
+      // Check source exists
       try {
-        await unlink(newFilePath);
+        await access(this.filePath);
       } catch {
-        // Ignore errors
+        throw new NamespaceNotFoundError();
       }
+
+      const dbDir = dirname(this.filePath);
+      const newFilePath = join(dbDir, `${newName}.json`);
+      const newIndexPath = join(dbDir, `${newName}.indexes.json`);
+      const currentIndexPath = this.filePath.replace('.json', '.indexes.json');
+
+      // Check if target exists
+      let targetExists = false;
       try {
-        await unlink(newIndexPath);
+        await access(newFilePath);
+        targetExists = true;
       } catch {
-        // Ignore errors
+        // Target doesn't exist, which is fine
       }
-    }
 
-    // Rename data file
-    await renameFile(this.filePath, newFilePath);
+      if (targetExists) {
+        if (!options.dropTarget) {
+          throw new TargetNamespaceExistsError();
+        }
+        // Drop target
+        try {
+          await unlink(newFilePath);
+        } catch {
+          // Ignore errors
+        }
+        try {
+          await unlink(newIndexPath);
+        } catch {
+          // Ignore errors
+        }
+      }
 
-    // Rename index file if it exists
-    try {
-      await access(currentIndexPath);
-      await renameFile(currentIndexPath, newIndexPath);
-    } catch {
-      // Index file doesn't exist, that's okay
-    }
+      // Rename data file
+      await renameFile(this.filePath, newFilePath);
 
-    // Return new collection instance
-    return new MangoCollection(this.dataDir, this.dbName, newName);
+      // Rename index file if it exists
+      try {
+        await access(currentIndexPath);
+        await renameFile(currentIndexPath, newIndexPath);
+      } catch {
+        // Index file doesn't exist, that's okay
+      }
+
+      // Return new collection instance
+      return new MangoCollection(this.dataDir, this.dbName, newName);
+    });
   }
 }
