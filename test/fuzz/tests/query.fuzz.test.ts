@@ -16,9 +16,7 @@ import {
   runDualTargetFuzz,
   testQuery,
   compareQueryResults,
-  isMongoDBAvailable,
   getTestModeName,
-  type FuzzContext,
 } from '../fuzz-harness.ts';
 import {
   simpleDocument,

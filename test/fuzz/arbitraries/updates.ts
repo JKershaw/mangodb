@@ -5,7 +5,7 @@
  */
 
 import * as fc from 'fast-check';
-import { bsonNumber, bsonString, bsonBoolean, jsonSafeBsonValue, mixedArray } from './values.ts';
+import { bsonNumber, bsonString, jsonSafeBsonValue } from './values.ts';
 
 // ============================================================================
 // Field Update Operators

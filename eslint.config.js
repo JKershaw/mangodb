@@ -31,6 +31,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', '*.js', '!eslint.config.js', 'test/*.js'],
+    ignores: ['dist/', 'node_modules/', '*.js', '!eslint.config.js', 'test/*.js', 'test/types/**/*.ts'],
   }
 );

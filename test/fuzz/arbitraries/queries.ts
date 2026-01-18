@@ -5,7 +5,7 @@
  */
 
 import * as fc from 'fast-check';
-import { bsonNull, bsonNumber, bsonString, bsonBoolean, jsonSafeBsonValue, mixedArray } from './values.ts';
+import { bsonNumber, bsonString, bsonBoolean, jsonSafeBsonValue } from './values.ts';
 
 // ============================================================================
 // Comparison Operators

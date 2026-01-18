@@ -15,7 +15,6 @@ import {
   numberArray,
   stringArray,
   jsonSafeBsonValue,
-  edgeCaseValue,
 } from './values.ts';
 
 // ============================================================================

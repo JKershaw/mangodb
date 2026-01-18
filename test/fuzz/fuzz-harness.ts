@@ -20,7 +20,6 @@ import {
   isMongoDBMode,
   getTestModeName,
   type TestClient,
-  type TestCollection,
   type Document,
 } from '../test-harness.ts';
 

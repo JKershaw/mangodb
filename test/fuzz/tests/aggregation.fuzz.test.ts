@@ -14,10 +14,8 @@ import {
   runFuzz,
   runDualTargetFuzz,
   testAggregation,
-  createDualTargetContext,
   compareResults,
   getTestModeName,
-  isMongoDBAvailable,
   type DualTargetContext,
   type ComparisonResult,
 } from '../fuzz-harness.ts';
