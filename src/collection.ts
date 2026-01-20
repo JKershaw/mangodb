@@ -22,6 +22,7 @@ import {
   stat,
 } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 import type {
   Document,
@@ -159,7 +160,21 @@ export class MangoCollection<T extends Document = Document> {
   private async writeDocuments(documents: T[]): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
     const serialized = documents.map((doc) => serializeDocument(doc));
-    await writeFile(this.filePath, JSON.stringify(serialized, null, 2));
+    const content = JSON.stringify(serialized, null, 2);
+
+    // Atomic write: write to temp file, then rename
+    const tempPath = `${this.filePath}.tmp-${randomUUID()}`;
+    try {
+      await writeFile(tempPath, content);
+      await renameFile(tempPath, this.filePath);
+    } finally {
+      // Clean up temp file if rename failed
+      try {
+        await unlink(tempPath);
+      } catch {
+        // Ignore - file was renamed or never created
+      }
+    }
   }
 
   private sortDocuments(docs: T[], sortSpec: Record<string, 1 | -1>): T[] {

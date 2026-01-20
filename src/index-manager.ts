@@ -1,8 +1,9 @@
 /**
  * Index management for MangoDB collections.
  */
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename as renameFile, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { Document, IndexKeySpec, IndexInfo, CreateIndexOptions } from './types.ts';
 import { getValueByPath } from './document-utils.ts';
 import {
@@ -77,7 +78,21 @@ export class IndexManager {
    */
   async saveIndexes(indexes: IndexInfo[]): Promise<void> {
     await mkdir(dirname(this.indexFilePath), { recursive: true });
-    await writeFile(this.indexFilePath, JSON.stringify({ indexes }, null, 2));
+    const content = JSON.stringify({ indexes }, null, 2);
+
+    // Atomic write: write to temp file, then rename
+    const tempPath = `${this.indexFilePath}.tmp-${randomUUID()}`;
+    try {
+      await writeFile(tempPath, content);
+      await renameFile(tempPath, this.indexFilePath);
+    } finally {
+      // Clean up temp file if rename failed
+      try {
+        await unlink(tempPath);
+      } catch {
+        // Ignore - file was renamed or never created
+      }
+    }
   }
 
   /**
