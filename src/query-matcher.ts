@@ -266,6 +266,12 @@ function matchesIn(docValue: unknown, inValues: unknown[]): boolean {
     if (iv instanceof RegExp) {
       return typeof dv === 'string' && iv.test(dv);
     }
+    // Handle null in $in array - should match null OR undefined (missing fields)
+    // This matches MongoDB behavior where { field: { $in: [null] } } matches
+    // both documents with field: null AND documents where field is missing
+    if (iv === null) {
+      return dv === null || dv === undefined;
+    }
     return valuesEqual(dv, iv);
   };
 
