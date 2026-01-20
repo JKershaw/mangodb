@@ -365,6 +365,65 @@ describe(`Basic Query Tests (${getTestModeName()})`, () => {
 
       assert.strictEqual(docs.length, 3);
     });
+
+    it('should match explicit null values when null is in $in array', async () => {
+      const collection = client.db(dbName).collection('op_in_null_explicit');
+      await collection.insertMany([
+        { value: null },
+        { value: 'something' },
+        { value: 42 },
+      ]);
+
+      const docs = await collection.find({ value: { $in: [null] } }).toArray();
+
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0].value, null);
+    });
+
+    it('should match missing fields when null is in $in array', async () => {
+      const collection = client.db(dbName).collection('op_in_null_missing');
+      await collection.insertMany([
+        { other: 'field' }, // value is missing
+        { value: 'something' },
+        { value: 42 },
+      ]);
+
+      const docs = await collection.find({ value: { $in: [null] } }).toArray();
+
+      // Missing field should match null in $in array
+      assert.strictEqual(docs.length, 1);
+      assert.strictEqual(docs[0].other, 'field');
+    });
+
+    it('should match both null and missing fields when null is in $in array', async () => {
+      const collection = client.db(dbName).collection('op_in_null_both');
+      await collection.insertMany([
+        { value: null }, // explicit null
+        { other: 'field' }, // value is missing
+        { value: 'something' },
+      ]);
+
+      const docs = await collection.find({ value: { $in: [null] } }).toArray();
+
+      // Should match both explicit null and missing field
+      assert.strictEqual(docs.length, 2);
+    });
+
+    it('should match null along with other values in $in array', async () => {
+      const collection = client.db(dbName).collection('op_in_null_mixed');
+      await collection.insertMany([
+        { value: null },
+        { other: 'field' }, // value is missing
+        { value: 'a' },
+        { value: 'b' },
+        { value: 'c' },
+      ]);
+
+      const docs = await collection.find({ value: { $in: [null, 'a', 'c'] } }).toArray();
+
+      // Should match: null, missing, 'a', 'c'
+      assert.strictEqual(docs.length, 4);
+    });
   });
 
   describe('$nin operator', () => {
@@ -395,6 +454,52 @@ describe(`Basic Query Tests (${getTestModeName()})`, () => {
       // Missing field is not in the array
       assert.strictEqual(docs.length, 1);
       assert.strictEqual(docs[0].other, 'field');
+    });
+
+    it('should exclude explicit null values when null is in $nin array', async () => {
+      const collection = client.db(dbName).collection('op_nin_null_explicit');
+      await collection.insertMany([
+        { value: null },
+        { value: 'something' },
+        { value: 42 },
+      ]);
+
+      const docs = await collection.find({ value: { $nin: [null] } }).toArray();
+
+      // Explicit null should be excluded
+      assert.strictEqual(docs.length, 2);
+      assert.ok(docs.every((d) => d.value !== null));
+    });
+
+    it('should exclude missing fields when null is in $nin array', async () => {
+      const collection = client.db(dbName).collection('op_nin_null_missing');
+      await collection.insertMany([
+        { other: 'field' }, // value is missing
+        { value: 'something' },
+        { value: 42 },
+      ]);
+
+      const docs = await collection.find({ value: { $nin: [null] } }).toArray();
+
+      // Missing field should be excluded (treated as null)
+      assert.strictEqual(docs.length, 2);
+      assert.ok(docs.every((d) => 'value' in d));
+    });
+
+    it('should exclude both null and missing fields when null is in $nin array', async () => {
+      const collection = client.db(dbName).collection('op_nin_null_both');
+      await collection.insertMany([
+        { value: null }, // explicit null
+        { other: 'field' }, // value is missing
+        { value: 'something' },
+        { value: 42 },
+      ]);
+
+      const docs = await collection.find({ value: { $nin: [null] } }).toArray();
+
+      // Both explicit null and missing field should be excluded
+      assert.strictEqual(docs.length, 2);
+      assert.ok(docs.every((d) => 'value' in d && d.value !== null));
     });
   });
 

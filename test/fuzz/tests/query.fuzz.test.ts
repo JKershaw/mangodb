@@ -276,17 +276,16 @@ describe(`Query Operator Fuzz Tests (${getTestModeName()})`, () => {
       );
     });
 
-    // Note: $in with null on missing fields is a known difference (MAN-36).
-    // This test uses documents that always have the field to avoid the bug.
     it('should match MongoDB behavior for $in with null', async () => {
       await runDualTargetFuzz(
         '$in-with-null-comparison',
         fc.record({
-          // Use documents that always have the 'field' key to avoid known bug
+          // Include documents with field present (null or value) AND missing field
           docs: fc.array(
-            fc.record({
-              field: fc.oneof(fc.constant(null), bsonNumber, bsonString),
-            }),
+            fc.oneof(
+              fc.record({ field: fc.oneof(fc.constant(null), bsonNumber, bsonString) }),
+              fc.record({ other: bsonString }) // field is missing
+            ),
             { minLength: 1, maxLength: 10 }
           ),
           otherValues: fc.array(jsonSafeBsonValue, { minLength: 0, maxLength: 3 }),
