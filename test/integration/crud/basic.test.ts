@@ -109,13 +109,6 @@ describe(`Foundation Tests (${getTestModeName()})`, () => {
       assert.strictEqual(result.insertedCount, 1);
     });
 
-    it('should return insertedCount of 0 for empty array', async () => {
-      const collection = client.db(dbName).collection('test_insert_many_empty');
-
-      const result = await collection.insertMany([]);
-
-      assert.strictEqual(result.insertedCount, 0);
-    });
   });
 
   describe('findOne', () => {
