@@ -1,6 +1,6 @@
 {
   "name": "@jkershaw/mangodb",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "File-based MongoDB drop-in replacement for TypeScript/Node.js. SQLite is to SQL as MangoDB is to MongoDB.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

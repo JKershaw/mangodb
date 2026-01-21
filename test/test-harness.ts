@@ -182,7 +182,7 @@ export interface BulkWriteResult {
 
 export interface TestCollection<T extends Document = Document> {
   insertOne(doc: T): Promise<{ acknowledged: boolean; insertedId: unknown }>;
-  insertMany(docs: T[]): Promise<{ acknowledged: boolean; insertedIds: Record<number, unknown> }>;
+  insertMany(docs: T[]): Promise<{ acknowledged: boolean; insertedCount: number; insertedIds: Record<number, unknown> }>;
   findOne(filter?: Partial<T>, options?: FindOptions): Promise<T | null>;
   find(filter?: Partial<T>, options?: FindOptions): TestCursor<T>;
   deleteOne(filter: Partial<T>): Promise<{ acknowledged: boolean; deletedCount: number }>;

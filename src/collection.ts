@@ -633,6 +633,7 @@ export class MangoCollection<T extends Document = Document> {
 
       return {
         acknowledged: true,
+        insertedCount: docsWithIds.length,
         insertedIds,
       };
     });

@@ -92,6 +92,23 @@ describe(`Foundation Tests (${getTestModeName()})`, () => {
       assert.ok('0' in result.insertedIds || 0 in result.insertedIds);
       assert.ok('1' in result.insertedIds || 1 in result.insertedIds);
     });
+
+    it('should return insertedCount matching number of documents', async () => {
+      const collection = client.db(dbName).collection('test_insert_many_count');
+
+      const result = await collection.insertMany([{ a: 1 }, { b: 2 }, { c: 3 }]);
+
+      assert.strictEqual(result.insertedCount, 3);
+    });
+
+    it('should return insertedCount of 1 for single document', async () => {
+      const collection = client.db(dbName).collection('test_insert_many_single');
+
+      const result = await collection.insertMany([{ a: 1 }]);
+
+      assert.strictEqual(result.insertedCount, 1);
+    });
+
   });
 
   describe('findOne', () => {

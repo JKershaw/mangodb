@@ -151,10 +151,12 @@ export interface InsertOneResult {
  * Result of an insertMany operation.
  * Contains information about the batch insert operation.
  * @property acknowledged - Whether the write operation was acknowledged by the server
+ * @property insertedCount - The number of documents that were inserted
  * @property insertedIds - A map of the index position to the ObjectId of each inserted document
  */
 export interface InsertManyResult {
   acknowledged: boolean;
+  insertedCount: number;
   insertedIds: Record<number, ObjectId>;
 }
 
