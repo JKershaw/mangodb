@@ -307,6 +307,18 @@ export function analyzeQuery(
       continue;
     }
 
+    // Skip sparse indexes - they exclude documents missing the indexed field,
+    // so using them for general queries could return incomplete results
+    if (indexInfo.sparse) {
+      continue;
+    }
+
+    // Skip partial indexes - they only include documents matching the filter expression,
+    // so using them for general queries could return incomplete results
+    if (indexInfo.partialFilterExpression) {
+      continue;
+    }
+
     const match = scoreIndexMatch(indexInfo, fieldConditions);
     if (!match) continue;
 

@@ -197,11 +197,13 @@ export class MangoCollection<T extends Document = Document> {
 
   /**
    * Get the document ID as a string for index lookups.
+   * Returns null if the document has no _id field (undefined or null).
+   * Note: Documents with _id: '' (empty string) are valid and will return ''.
    */
-  private getDocIdString(doc: T): string {
+  private getDocIdString(doc: T): string | null {
     const id = (doc as { _id?: unknown })._id;
     if (id === undefined || id === null) {
-      return '';
+      return null;
     }
     if (typeof (id as { toHexString?: () => string }).toHexString === 'function') {
       return (id as { toHexString(): string }).toHexString();
@@ -231,7 +233,7 @@ export class MangoCollection<T extends Document = Document> {
     const docMap = new Map<string, T>();
     for (const doc of documents) {
       const docId = this.getDocIdString(doc);
-      if (docId) {
+      if (docId !== null) {
         docMap.set(docId, doc);
       }
     }
@@ -681,7 +683,7 @@ export class MangoCollection<T extends Document = Document> {
       await this.writeDocuments(documents);
 
       // Update index data structures
-      this.indexManager.addToIndexes(docWithId);
+      await this.indexManager.addToIndexes(docWithId);
 
       return {
         acknowledged: true,
@@ -732,7 +734,7 @@ export class MangoCollection<T extends Document = Document> {
 
       // Update index data structures
       for (const docWithId of docsWithIds) {
-        this.indexManager.addToIndexes(docWithId);
+        await this.indexManager.addToIndexes(docWithId);
       }
 
       return {
@@ -1086,7 +1088,7 @@ export class MangoCollection<T extends Document = Document> {
 
       // Update index data structures
       if (deletedDoc) {
-        this.indexManager.removeFromIndexes(deletedDoc);
+        await this.indexManager.removeFromIndexes(deletedDoc);
       }
 
       return {
@@ -1133,7 +1135,7 @@ export class MangoCollection<T extends Document = Document> {
 
       // Update index data structures
       for (const doc of deletedDocs) {
-        this.indexManager.removeFromIndexes(doc);
+        await this.indexManager.removeFromIndexes(doc);
       }
 
       return {
@@ -1349,10 +1351,10 @@ export class MangoCollection<T extends Document = Document> {
 
       // Update index data structures
       for (let i = 0; i < originalDocs.length; i++) {
-        this.indexManager.updateInIndexes(originalDocs[i], modifiedDocs[i]);
+        await this.indexManager.updateInIndexes(originalDocs[i], modifiedDocs[i]);
       }
       if (upsertedDoc) {
-        this.indexManager.addToIndexes(upsertedDoc);
+        await this.indexManager.addToIndexes(upsertedDoc);
       }
 
       return {
@@ -1495,7 +1497,7 @@ export class MangoCollection<T extends Document = Document> {
           await this.writeDocuments(documents);
 
           // Update index data structures
-          this.indexManager.addToIndexes(newDoc);
+          await this.indexManager.addToIndexes(newDoc);
 
           return {
             acknowledged: true,
@@ -1550,7 +1552,7 @@ export class MangoCollection<T extends Document = Document> {
       await this.writeDocuments(documents);
 
       // Update index data structures
-      this.indexManager.updateInIndexes(docToReplace, newDoc);
+      await this.indexManager.updateInIndexes(docToReplace, newDoc);
 
       return {
         acknowledged: true,
@@ -1626,7 +1628,7 @@ export class MangoCollection<T extends Document = Document> {
       await this.writeDocuments(remaining);
 
       // Update index data structures
-      this.indexManager.removeFromIndexes(docToDelete);
+      await this.indexManager.removeFromIndexes(docToDelete);
 
       if (options.projection) {
         return applyProjection(docToDelete, options.projection);
@@ -1700,7 +1702,7 @@ export class MangoCollection<T extends Document = Document> {
           await this.writeDocuments(documents);
 
           // Update index data structures
-          this.indexManager.addToIndexes(newDoc);
+          await this.indexManager.addToIndexes(newDoc);
 
           if (returnAfter) {
             return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
@@ -1742,7 +1744,7 @@ export class MangoCollection<T extends Document = Document> {
       await this.writeDocuments(updatedDocuments);
 
       // Update index data structures
-      this.indexManager.updateInIndexes(docToReplace, newDoc);
+      await this.indexManager.updateInIndexes(docToReplace, newDoc);
 
       const resultDoc = returnAfter ? newDoc : docToReplace;
       if (options.projection) {
@@ -1830,7 +1832,7 @@ export class MangoCollection<T extends Document = Document> {
           await this.writeDocuments(documents);
 
           // Update index data structures
-          this.indexManager.addToIndexes(newDoc);
+          await this.indexManager.addToIndexes(newDoc);
 
           if (returnAfter) {
             return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
@@ -1869,7 +1871,7 @@ export class MangoCollection<T extends Document = Document> {
       await this.writeDocuments(updatedDocuments);
 
       // Update index data structures
-      this.indexManager.updateInIndexes(docToUpdate, updatedDoc);
+      await this.indexManager.updateInIndexes(docToUpdate, updatedDoc);
 
       const resultDoc = returnAfter ? updatedDoc : docToUpdate;
       if (options.projection) {

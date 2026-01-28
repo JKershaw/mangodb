@@ -65,6 +65,9 @@ export class IndexManager {
   /** Whether indexes have been built from documents */
   private indexesBuilt = false;
 
+  /** Promise that resolves when current build completes (null if no build in progress) */
+  private buildInProgress: Promise<void> | null = null;
+
   /**
    * Create an IndexManager for a collection.
    * @param indexFilePath - Path to the index metadata file
@@ -88,11 +91,13 @@ export class IndexManager {
 
   /**
    * Get the document ID as a string for index storage.
+   * Returns null if the document has no _id field (undefined or null).
+   * Note: Documents with _id: '' (empty string) are valid and will return ''.
    */
-  private getDocIdString(doc: Document): string {
+  private getDocIdString(doc: Document): string | null {
     const id = (doc as { _id?: unknown })._id;
     if (id === undefined || id === null) {
-      return '';
+      return null;
     }
     if (typeof (id as { toHexString?: () => string }).toHexString === 'function') {
       return (id as { toHexString(): string }).toHexString();
@@ -135,90 +140,120 @@ export class IndexManager {
    * @param documents - All documents in the collection
    */
   async buildIndexes<T extends Document>(documents: T[]): Promise<void> {
-    const indexes = await this.loadIndexes();
-    this.indexData.clear();
-
-    for (const indexInfo of indexes) {
-      // Skip special index types (text, geo, hashed) for now
-      const indexValues = Object.values(indexInfo.key);
-      if (indexValues.some((v) => v === 'text' || v === '2d' || v === '2dsphere' || v === 'hashed')) {
-        continue;
-      }
-
-      // Skip hidden indexes
-      if (indexInfo.hidden) {
-        continue;
-      }
-
-      const indexFields = Object.keys(indexInfo.key);
-      const firstField = indexFields[0];
-      const isSparse = indexInfo.sparse === true;
-      const partialFilter = indexInfo.partialFilterExpression;
-
-      const data: IndexData = {
-        equalityMap: new Map(),
-        sortedEntries: [],
-        firstField,
-        indexInfo,
-      };
-
-      // Build a temporary map for sorted entries (value -> Set<docId>)
-      const sortedMap = new Map<string, { value: unknown; docIds: Set<string> }>();
-
-      for (const doc of documents) {
-        const docId = this.getDocIdString(doc);
-        if (!docId) continue;
-
-        // Check sparse index condition
-        if (isSparse && !this.shouldIncludeInSparseIndex(doc, indexFields)) {
-          continue;
-        }
-
-        // Check partial filter condition
-        if (partialFilter && !this.matchesPartialFilter(doc, partialFilter)) {
-          continue;
-        }
-
-        // Extract key values for this document
-        const keyValues = this.extractKeyValue(doc, indexInfo.key);
-
-        // Add to equality map (compound key)
-        const compoundKey = this.serializeCompoundKey(keyValues);
-        if (!data.equalityMap.has(compoundKey)) {
-          data.equalityMap.set(compoundKey, new Set());
-        }
-        data.equalityMap.get(compoundKey)!.add(docId);
-
-        // Add to sorted entries (first field only, for range queries)
-        const firstValue = keyValues[firstField];
-        const serializedFirst = this.serializeKeyValue(firstValue);
-        if (!sortedMap.has(serializedFirst)) {
-          sortedMap.set(serializedFirst, { value: firstValue, docIds: new Set() });
-        }
-        sortedMap.get(serializedFirst)!.docIds.add(docId);
-      }
-
-      // Convert sorted map to sorted array
-      data.sortedEntries = Array.from(sortedMap.values());
-      data.sortedEntries.sort((a, b) => compareScalarValues(a.value, b.value));
-
-      this.indexData.set(indexInfo.name, data);
+    // If a build is already in progress, wait for it
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+      return;
     }
 
-    this.indexesBuilt = true;
+    // If already built, nothing to do
+    if (this.indexesBuilt) {
+      return;
+    }
+
+    // Create a promise that will resolve when build completes
+    let resolveBuild: () => void;
+    this.buildInProgress = new Promise((resolve) => {
+      resolveBuild = resolve;
+    });
+
+    try {
+      const indexes = await this.loadIndexes();
+      this.indexData.clear();
+
+      for (const indexInfo of indexes) {
+        // Skip special index types (text, geo, hashed) for now
+        const indexValues = Object.values(indexInfo.key);
+        if (indexValues.some((v) => v === 'text' || v === '2d' || v === '2dsphere' || v === 'hashed')) {
+          continue;
+        }
+
+        // Skip hidden indexes
+        if (indexInfo.hidden) {
+          continue;
+        }
+
+        const indexFields = Object.keys(indexInfo.key);
+        const firstField = indexFields[0];
+        const isSparse = indexInfo.sparse === true;
+        const partialFilter = indexInfo.partialFilterExpression;
+
+        const data: IndexData = {
+          equalityMap: new Map(),
+          sortedEntries: [],
+          firstField,
+          indexInfo,
+        };
+
+        // Build a temporary map for sorted entries (value -> Set<docId>)
+        const sortedMap = new Map<string, { value: unknown; docIds: Set<string> }>();
+
+        for (const doc of documents) {
+          const docId = this.getDocIdString(doc);
+          if (docId === null) continue;
+
+          // Check sparse index condition
+          if (isSparse && !this.shouldIncludeInSparseIndex(doc, indexFields)) {
+            continue;
+          }
+
+          // Check partial filter condition
+          if (partialFilter && !this.matchesPartialFilter(doc, partialFilter)) {
+            continue;
+          }
+
+          // Extract key values for this document
+          const keyValues = this.extractKeyValue(doc, indexInfo.key);
+
+          // Add to equality map (compound key)
+          const compoundKey = this.serializeCompoundKey(keyValues);
+          if (!data.equalityMap.has(compoundKey)) {
+            data.equalityMap.set(compoundKey, new Set());
+          }
+          data.equalityMap.get(compoundKey)!.add(docId);
+
+          // Add to sorted entries (first field only, for range queries)
+          const firstValue = keyValues[firstField];
+          const serializedFirst = this.serializeKeyValue(firstValue);
+          if (!sortedMap.has(serializedFirst)) {
+            sortedMap.set(serializedFirst, { value: firstValue, docIds: new Set() });
+          }
+          sortedMap.get(serializedFirst)!.docIds.add(docId);
+        }
+
+        // Convert sorted map to sorted array
+        data.sortedEntries = Array.from(sortedMap.values());
+        data.sortedEntries.sort((a, b) => compareScalarValues(a.value, b.value));
+
+        this.indexData.set(indexInfo.name, data);
+      }
+
+      this.indexesBuilt = true;
+    } finally {
+      this.buildInProgress = null;
+      resolveBuild!();
+    }
   }
 
   /**
    * Add a document to all indexes.
    * Called after insert operations.
+   * Waits for any in-progress build to complete before updating.
    *
    * @param doc - The document that was inserted
    */
-  addToIndexes<T extends Document>(doc: T): void {
+  async addToIndexes<T extends Document>(doc: T): Promise<void> {
+    // Wait for any in-progress build to complete
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+    }
+
+    // If indexes were never built (no queries yet), skip the update.
+    // The document is already in the data file, so the next build will include it.
     if (!this.indexesBuilt) return;
 
     const docId = this.getDocIdString(doc);
-    if (!docId) return;
+    if (docId === null) return;
 
     for (const [, data] of this.indexData) {
       const indexInfo = data.indexInfo;
@@ -268,14 +303,21 @@ export class IndexManager {
   /**
    * Remove a document from all indexes.
    * Called after delete operations.
+   * Waits for any in-progress build to complete before updating.
    *
    * @param doc - The document that was deleted
    */
-  removeFromIndexes<T extends Document>(doc: T): void {
+  async removeFromIndexes<T extends Document>(doc: T): Promise<void> {
+    // Wait for any in-progress build to complete
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+    }
+
+    // If indexes were never built, skip the update
     if (!this.indexesBuilt) return;
 
     const docId = this.getDocIdString(doc);
-    if (!docId) return;
+    if (docId === null) return;
 
     for (const [, data] of this.indexData) {
       const indexInfo = data.indexInfo;
@@ -313,16 +355,24 @@ export class IndexManager {
   /**
    * Update a document in all indexes.
    * Called after update operations.
+   * Waits for any in-progress build to complete before updating.
    *
    * @param oldDoc - The document before update
    * @param newDoc - The document after update
    */
-  updateInIndexes<T extends Document>(oldDoc: T, newDoc: T): void {
+  async updateInIndexes<T extends Document>(oldDoc: T, newDoc: T): Promise<void> {
+    // Wait for any in-progress build to complete
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+    }
+
+    // If indexes were never built, skip the update
     if (!this.indexesBuilt) return;
 
     // Simple implementation: remove old, add new
-    this.removeFromIndexes(oldDoc);
-    this.addToIndexes(newDoc);
+    // Note: these calls won't need to wait again since buildInProgress is now null
+    await this.removeFromIndexes(oldDoc);
+    await this.addToIndexes(newDoc);
   }
 
   /**
