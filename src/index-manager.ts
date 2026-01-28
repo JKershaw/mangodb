@@ -246,24 +246,20 @@ export class IndexManager {
       }
       data.equalityMap.get(compoundKey)!.add(docId);
 
-      // Add to sorted entries
+      // Add to sorted entries using binary search
       const firstValue = keyValues[data.firstField];
-      const serializedFirst = this.serializeKeyValue(firstValue);
+      const insertIdx = this.findInsertPosition(data.sortedEntries, firstValue);
 
-      // Find existing entry or insert new one
-      let found = false;
-      for (const entry of data.sortedEntries) {
-        if (this.serializeKeyValue(entry.value) === serializedFirst) {
-          entry.docIds.add(docId);
-          found = true;
-          break;
-        }
-      }
-
-      if (!found) {
-        // Insert in sorted position
+      // Check if there's an existing entry at or before this position with the same value
+      if (
+        insertIdx < data.sortedEntries.length &&
+        compareScalarValues(data.sortedEntries[insertIdx].value, firstValue) === 0
+      ) {
+        // Add to existing entry
+        data.sortedEntries[insertIdx].docIds.add(docId);
+      } else {
+        // Insert new entry at sorted position
         const newEntry = { value: firstValue, docIds: new Set([docId]) };
-        const insertIdx = this.findInsertPosition(data.sortedEntries, firstValue);
         data.sortedEntries.splice(insertIdx, 0, newEntry);
       }
     }
@@ -297,16 +293,18 @@ export class IndexManager {
         }
       }
 
-      // Remove from sorted entries
-      const serializedFirst = this.serializeKeyValue(keyValues[data.firstField]);
-      for (let i = 0; i < data.sortedEntries.length; i++) {
-        const entry = data.sortedEntries[i];
-        if (this.serializeKeyValue(entry.value) === serializedFirst) {
-          entry.docIds.delete(docId);
-          if (entry.docIds.size === 0) {
-            data.sortedEntries.splice(i, 1);
-          }
-          break;
+      // Remove from sorted entries using binary search
+      const firstValue = keyValues[data.firstField];
+      const idx = this.findInsertPosition(data.sortedEntries, firstValue);
+
+      // Check if entry exists at this position
+      if (
+        idx < data.sortedEntries.length &&
+        compareScalarValues(data.sortedEntries[idx].value, firstValue) === 0
+      ) {
+        data.sortedEntries[idx].docIds.delete(docId);
+        if (data.sortedEntries[idx].docIds.size === 0) {
+          data.sortedEntries.splice(idx, 1);
         }
       }
     }

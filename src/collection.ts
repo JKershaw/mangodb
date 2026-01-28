@@ -787,8 +787,11 @@ export class MangoCollection<T extends Document = Document> {
   async findOne(filter: Filter<T> = {}, options: FindOptions = {}): Promise<T | null> {
     const documents = await this.readDocuments();
 
-    // Try to use index lookup for better performance
-    let filtered = await this.tryIndexLookup(filter, documents);
+    // Check if this is a text search query - always use filterWithTextSupport for $text
+    const hasTextQuery = '$text' in (filter as Record<string, unknown>);
+
+    // Try to use index lookup for better performance (skip for $text queries)
+    let filtered = hasTextQuery ? null : await this.tryIndexLookup(filter, documents);
 
     // Fallback to full scan if index couldn't be used
     if (filtered === null) {
@@ -895,8 +898,11 @@ export class MangoCollection<T extends Document = Document> {
       async () => {
         const documents = await this.readDocuments();
 
-        // Try to use index lookup for better performance
-        const indexResult = await this.tryIndexLookup(filter, documents);
+        // Check if this is a text search query - always use filterWithTextSupport for $text
+        const hasTextQuery = '$text' in (filter as Record<string, unknown>);
+
+        // Try to use index lookup for better performance (skip for $text queries)
+        const indexResult = hasTextQuery ? null : await this.tryIndexLookup(filter, documents);
         if (indexResult !== null) {
           return indexResult;
         }
