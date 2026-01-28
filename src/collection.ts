@@ -68,6 +68,7 @@ import {
 
 import { IndexManager } from './index-manager.ts';
 import { Mutex } from './mutex.ts';
+import { analyzeQuery, type IndexScanPlan } from './query-analyzer.ts';
 
 import {
   TextIndexRequiredError,
@@ -190,6 +191,103 @@ export class MangoCollection<T extends Document = Document> {
       }
       return 0;
     });
+  }
+
+  // ==================== Index Utilization Helpers ====================
+
+  /**
+   * Get the document ID as a string for index lookups.
+   * Returns null if the document has no _id field (undefined or null).
+   * Note: Documents with _id: '' (empty string) are valid and will return ''.
+   */
+  private getDocIdString(doc: T): string | null {
+    const id = (doc as { _id?: unknown })._id;
+    if (id === undefined || id === null) {
+      return null;
+    }
+    if (typeof (id as { toHexString?: () => string }).toHexString === 'function') {
+      return (id as { toHexString(): string }).toHexString();
+    }
+    return String(id);
+  }
+
+  /**
+   * Ensure index data structures are built for query optimization.
+   * Builds indexes lazily on first query after documents are loaded.
+   */
+  private async ensureIndexesBuilt(documents: T[]): Promise<void> {
+    if (!this.indexManager.isIndexDataBuilt()) {
+      await this.indexManager.buildIndexes(documents);
+    }
+  }
+
+  /**
+   * Execute an index lookup plan and return matching documents.
+   *
+   * @param plan - The index scan plan from query analysis
+   * @param documents - All documents in the collection (for building doc map)
+   * @returns Array of matching documents, or null if lookup failed
+   */
+  private executeIndexLookup(plan: IndexScanPlan, documents: T[]): T[] | null {
+    // Build a map from docId -> document for fast lookup
+    const docMap = new Map<string, T>();
+    for (const doc of documents) {
+      const docId = this.getDocIdString(doc);
+      if (docId !== null) {
+        docMap.set(docId, doc);
+      }
+    }
+
+    let docIds: Set<string> | null = null;
+
+    if (plan.type === 'equality' && plan.equalityFields) {
+      docIds = this.indexManager.lookupEquality(plan.indexName, plan.equalityFields);
+    } else if (plan.type === 'range' && plan.rangeBounds) {
+      docIds = this.indexManager.lookupRange(plan.indexName, plan.rangeBounds);
+    }
+
+    if (docIds === null) {
+      return null;
+    }
+
+    // Convert doc IDs to documents
+    const candidates: T[] = [];
+    for (const docId of docIds) {
+      const doc = docMap.get(docId);
+      if (doc) {
+        candidates.push(doc);
+      }
+    }
+
+    // Apply remaining filter if any
+    if (plan.remainingFilter && Object.keys(plan.remainingFilter).length > 0) {
+      return candidates.filter((doc) => matchesFilter(doc, plan.remainingFilter as Filter<T>));
+    }
+
+    return candidates;
+  }
+
+  /**
+   * Try to use an index for a query.
+   * Returns matching documents if index can be used, null otherwise.
+   *
+   * @param filter - The query filter
+   * @param documents - All documents in the collection
+   * @returns Matching documents if index used, null for full scan fallback
+   */
+  private async tryIndexLookup(filter: Filter<T>, documents: T[]): Promise<T[] | null> {
+    // Ensure indexes are built
+    await this.ensureIndexesBuilt(documents);
+
+    // Analyze the query
+    const indexes = await this.indexManager.indexes();
+    const plan = analyzeQuery(filter, indexes);
+
+    if (!plan) {
+      return null; // Full scan required
+    }
+
+    return this.executeIndexLookup(plan, documents);
   }
 
   /**
@@ -584,6 +682,9 @@ export class MangoCollection<T extends Document = Document> {
       documents.push(docWithId);
       await this.writeDocuments(documents);
 
+      // Update index data structures
+      await this.indexManager.addToIndexes(docWithId);
+
       return {
         acknowledged: true,
         insertedId: (docWithId as unknown as { _id: ObjectId })._id,
@@ -630,6 +731,11 @@ export class MangoCollection<T extends Document = Document> {
 
       documents.push(...docsWithIds);
       await this.writeDocuments(documents);
+
+      // Update index data structures
+      for (const docWithId of docsWithIds) {
+        await this.indexManager.addToIndexes(docWithId);
+      }
 
       return {
         acknowledged: true,
@@ -682,7 +788,17 @@ export class MangoCollection<T extends Document = Document> {
    */
   async findOne(filter: Filter<T> = {}, options: FindOptions = {}): Promise<T | null> {
     const documents = await this.readDocuments();
-    let filtered = await this.filterWithTextSupport(documents, filter);
+
+    // Check if this is a text search query - always use filterWithTextSupport for $text
+    const hasTextQuery = '$text' in (filter as Record<string, unknown>);
+
+    // Try to use index lookup for better performance (skip for $text queries)
+    let filtered = hasTextQuery ? null : await this.tryIndexLookup(filter, documents);
+
+    // Fallback to full scan if index couldn't be used
+    if (filtered === null) {
+      filtered = await this.filterWithTextSupport(documents, filter);
+    }
 
     if (filtered.length === 0) {
       return null;
@@ -783,6 +899,17 @@ export class MangoCollection<T extends Document = Document> {
     return new MangoCursor<T>(
       async () => {
         const documents = await this.readDocuments();
+
+        // Check if this is a text search query - always use filterWithTextSupport for $text
+        const hasTextQuery = '$text' in (filter as Record<string, unknown>);
+
+        // Try to use index lookup for better performance (skip for $text queries)
+        const indexResult = hasTextQuery ? null : await this.tryIndexLookup(filter, documents);
+        if (indexResult !== null) {
+          return indexResult;
+        }
+
+        // Fallback to full scan with text support
         return this.filterWithTextSupport(documents, filter);
       },
       options.projection || null,
@@ -942,6 +1069,7 @@ export class MangoCollection<T extends Document = Document> {
     return this.mutex.runExclusive(async () => {
       const documents = await this.readDocuments();
       let deletedCount = 0;
+      let deletedDoc: T | null = null;
 
       const remaining: T[] = [];
       let deleted = false;
@@ -950,12 +1078,18 @@ export class MangoCollection<T extends Document = Document> {
         if (!deleted && matchesFilter(doc, filter)) {
           deleted = true;
           deletedCount = 1;
+          deletedDoc = doc;
         } else {
           remaining.push(doc);
         }
       }
 
       await this.writeDocuments(remaining);
+
+      // Update index data structures
+      if (deletedDoc) {
+        await this.indexManager.removeFromIndexes(deletedDoc);
+      }
 
       return {
         acknowledged: true,
@@ -986,14 +1120,27 @@ export class MangoCollection<T extends Document = Document> {
   async deleteMany(filter: Filter<T>): Promise<DeleteResult> {
     return this.mutex.runExclusive(async () => {
       const documents = await this.readDocuments();
-      const remaining = documents.filter((doc) => !matchesFilter(doc, filter));
-      const deletedCount = documents.length - remaining.length;
+      const remaining: T[] = [];
+      const deletedDocs: T[] = [];
+
+      for (const doc of documents) {
+        if (matchesFilter(doc, filter)) {
+          deletedDocs.push(doc);
+        } else {
+          remaining.push(doc);
+        }
+      }
 
       await this.writeDocuments(remaining);
 
+      // Update index data structures
+      for (const doc of deletedDocs) {
+        await this.indexManager.removeFromIndexes(doc);
+      }
+
       return {
         acknowledged: true,
-        deletedCount,
+        deletedCount: deletedDocs.length,
       };
     });
   }
@@ -1134,6 +1281,7 @@ export class MangoCollection<T extends Document = Document> {
 
       const updatedDocuments: T[] = [];
       const modifiedDocs: T[] = [];
+      const originalDocs: T[] = []; // Track original versions for index updates
       const unchangedDocs: T[] = [];
 
       // Create context for positional update operators
@@ -1159,6 +1307,7 @@ export class MangoCollection<T extends Document = Document> {
           if (!documentsEqual(doc, updatedDoc)) {
             modifiedCount++;
             modifiedDocs.push(updatedDoc);
+            originalDocs.push(doc);
             updatedDocuments.push(updatedDoc);
           } else {
             unchangedDocs.push(doc);
@@ -1170,6 +1319,7 @@ export class MangoCollection<T extends Document = Document> {
         }
       }
 
+      let upsertedDoc: T | null = null;
       if (matchedCount === 0 && options.upsert) {
         const baseDoc = createDocumentFromFilter(filter);
 
@@ -1190,6 +1340,7 @@ export class MangoCollection<T extends Document = Document> {
         upsertedCount = 1;
         modifiedDocs.push(newDoc);
         updatedDocuments.push(newDoc);
+        upsertedDoc = newDoc;
       }
 
       if (modifiedDocs.length > 0) {
@@ -1197,6 +1348,14 @@ export class MangoCollection<T extends Document = Document> {
       }
 
       await this.writeDocuments(updatedDocuments);
+
+      // Update index data structures
+      for (let i = 0; i < originalDocs.length; i++) {
+        await this.indexManager.updateInIndexes(originalDocs[i], modifiedDocs[i]);
+      }
+      if (upsertedDoc) {
+        await this.indexManager.addToIndexes(upsertedDoc);
+      }
 
       return {
         acknowledged: true,
@@ -1337,6 +1496,9 @@ export class MangoCollection<T extends Document = Document> {
           documents.push(newDoc);
           await this.writeDocuments(documents);
 
+          // Update index data structures
+          await this.indexManager.addToIndexes(newDoc);
+
           return {
             acknowledged: true,
             matchedCount: 0,
@@ -1388,6 +1550,9 @@ export class MangoCollection<T extends Document = Document> {
       }
 
       await this.writeDocuments(documents);
+
+      // Update index data structures
+      await this.indexManager.updateInIndexes(docToReplace, newDoc);
 
       return {
         acknowledged: true,
@@ -1462,6 +1627,9 @@ export class MangoCollection<T extends Document = Document> {
 
       await this.writeDocuments(remaining);
 
+      // Update index data structures
+      await this.indexManager.removeFromIndexes(docToDelete);
+
       if (options.projection) {
         return applyProjection(docToDelete, options.projection);
       }
@@ -1533,6 +1701,9 @@ export class MangoCollection<T extends Document = Document> {
           documents.push(newDoc);
           await this.writeDocuments(documents);
 
+          // Update index data structures
+          await this.indexManager.addToIndexes(newDoc);
+
           if (returnAfter) {
             return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
           }
@@ -1571,6 +1742,9 @@ export class MangoCollection<T extends Document = Document> {
       await this.indexManager.checkUniqueConstraints([newDoc], unchangedDocs);
 
       await this.writeDocuments(updatedDocuments);
+
+      // Update index data structures
+      await this.indexManager.updateInIndexes(docToReplace, newDoc);
 
       const resultDoc = returnAfter ? newDoc : docToReplace;
       if (options.projection) {
@@ -1657,6 +1831,9 @@ export class MangoCollection<T extends Document = Document> {
           documents.push(newDoc);
           await this.writeDocuments(documents);
 
+          // Update index data structures
+          await this.indexManager.addToIndexes(newDoc);
+
           if (returnAfter) {
             return options.projection ? applyProjection(newDoc, options.projection) : newDoc;
           }
@@ -1692,6 +1869,9 @@ export class MangoCollection<T extends Document = Document> {
       await this.indexManager.checkUniqueConstraints([updatedDoc], unchangedDocs);
 
       await this.writeDocuments(updatedDocuments);
+
+      // Update index data structures
+      await this.indexManager.updateInIndexes(docToUpdate, updatedDoc);
 
       const resultDoc = returnAfter ? updatedDoc : docToUpdate;
       if (options.projection) {

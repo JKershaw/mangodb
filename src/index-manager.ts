@@ -14,6 +14,8 @@ import {
 } from './errors.ts';
 
 import { matchesFilter } from './query-matcher.ts';
+import { compareScalarValues } from './utils.ts';
+import type { RangeBounds } from './query-analyzer.ts';
 
 /**
  * Result of getGeoIndexInfo() describing a geo index.
@@ -22,6 +24,24 @@ export interface GeoIndexInfo {
   field: string;
   type: '2d' | '2dsphere';
   indexName: string;
+}
+
+/**
+ * In-memory index data structure for query optimization.
+ * Stores document references by their _id for efficient lookup.
+ */
+export interface IndexData {
+  /** For equality lookups: Map<serializedKeyValue, Set<documentIdString>> */
+  equalityMap: Map<string, Set<string>>;
+
+  /** For range queries: sorted array of { value, docIds } for single-field indexes */
+  sortedEntries: Array<{ value: unknown; docIds: Set<string> }>;
+
+  /** The first field in the index (used for range queries) */
+  firstField: string;
+
+  /** Reference to the index metadata */
+  indexInfo: IndexInfo;
 }
 
 /**
@@ -39,6 +59,15 @@ export class IndexManager {
   private readonly dbName: string;
   private readonly collectionName: string;
 
+  /** In-memory index data structures for query optimization */
+  private indexData: Map<string, IndexData> = new Map();
+
+  /** Whether indexes have been built from documents */
+  private indexesBuilt = false;
+
+  /** Promise that resolves when current build completes (null if no build in progress) */
+  private buildInProgress: Promise<void> | null = null;
+
   /**
    * Create an IndexManager for a collection.
    * @param indexFilePath - Path to the index metadata file
@@ -49,6 +78,433 @@ export class IndexManager {
     this.indexFilePath = indexFilePath;
     this.dbName = dbName;
     this.collectionName = collectionName;
+  }
+
+  // ==================== Index Data Methods ====================
+
+  /**
+   * Check if index data structures have been built.
+   */
+  isIndexDataBuilt(): boolean {
+    return this.indexesBuilt;
+  }
+
+  /**
+   * Get the document ID as a string for index storage.
+   * Returns null if the document has no _id field (undefined or null).
+   * Note: Documents with _id: '' (empty string) are valid and will return ''.
+   */
+  private getDocIdString(doc: Document): string | null {
+    const id = (doc as { _id?: unknown })._id;
+    if (id === undefined || id === null) {
+      return null;
+    }
+    if (typeof (id as { toHexString?: () => string }).toHexString === 'function') {
+      return (id as { toHexString(): string }).toHexString();
+    }
+    return String(id);
+  }
+
+  /**
+   * Serialize a key value for use as a map key.
+   * Handles ObjectId, Date, and other special types.
+   */
+  private serializeKeyValue(value: unknown): string {
+    if (value === undefined) {
+      return JSON.stringify(null);
+    }
+    if (value !== null && typeof (value as { toHexString?: () => string }).toHexString === 'function') {
+      return JSON.stringify({ $oid: (value as { toHexString(): string }).toHexString() });
+    }
+    if (value instanceof Date) {
+      return JSON.stringify({ $date: value.toISOString() });
+    }
+    return JSON.stringify(value);
+  }
+
+  /**
+   * Serialize a compound key (multiple fields) for equality map.
+   */
+  private serializeCompoundKey(keyValues: Record<string, unknown>): string {
+    const serialized: Record<string, string> = {};
+    for (const [field, value] of Object.entries(keyValues)) {
+      serialized[field] = this.serializeKeyValue(value);
+    }
+    return JSON.stringify(serialized);
+  }
+
+  /**
+   * Build all index data structures from documents.
+   * Called lazily on first query after documents are loaded.
+   *
+   * @param documents - All documents in the collection
+   */
+  async buildIndexes<T extends Document>(documents: T[]): Promise<void> {
+    // If a build is already in progress, wait for it
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+      return;
+    }
+
+    // If already built, nothing to do
+    if (this.indexesBuilt) {
+      return;
+    }
+
+    // Create a promise that will resolve when build completes
+    let resolveBuild: () => void;
+    this.buildInProgress = new Promise((resolve) => {
+      resolveBuild = resolve;
+    });
+
+    try {
+      const indexes = await this.loadIndexes();
+      this.indexData.clear();
+
+      for (const indexInfo of indexes) {
+        // Skip special index types (text, geo, hashed) for now
+        const indexValues = Object.values(indexInfo.key);
+        if (indexValues.some((v) => v === 'text' || v === '2d' || v === '2dsphere' || v === 'hashed')) {
+          continue;
+        }
+
+        // Skip hidden indexes
+        if (indexInfo.hidden) {
+          continue;
+        }
+
+        const indexFields = Object.keys(indexInfo.key);
+        const firstField = indexFields[0];
+        const isSparse = indexInfo.sparse === true;
+        const partialFilter = indexInfo.partialFilterExpression;
+
+        const data: IndexData = {
+          equalityMap: new Map(),
+          sortedEntries: [],
+          firstField,
+          indexInfo,
+        };
+
+        // Build a temporary map for sorted entries (value -> Set<docId>)
+        const sortedMap = new Map<string, { value: unknown; docIds: Set<string> }>();
+
+        for (const doc of documents) {
+          const docId = this.getDocIdString(doc);
+          if (docId === null) continue;
+
+          // Check sparse index condition
+          if (isSparse && !this.shouldIncludeInSparseIndex(doc, indexFields)) {
+            continue;
+          }
+
+          // Check partial filter condition
+          if (partialFilter && !this.matchesPartialFilter(doc, partialFilter)) {
+            continue;
+          }
+
+          // Extract key values for this document
+          const keyValues = this.extractKeyValue(doc, indexInfo.key);
+
+          // Add to equality map (compound key)
+          const compoundKey = this.serializeCompoundKey(keyValues);
+          if (!data.equalityMap.has(compoundKey)) {
+            data.equalityMap.set(compoundKey, new Set());
+          }
+          data.equalityMap.get(compoundKey)!.add(docId);
+
+          // Add to sorted entries (first field only, for range queries)
+          const firstValue = keyValues[firstField];
+          const serializedFirst = this.serializeKeyValue(firstValue);
+          if (!sortedMap.has(serializedFirst)) {
+            sortedMap.set(serializedFirst, { value: firstValue, docIds: new Set() });
+          }
+          sortedMap.get(serializedFirst)!.docIds.add(docId);
+        }
+
+        // Convert sorted map to sorted array
+        data.sortedEntries = Array.from(sortedMap.values());
+        data.sortedEntries.sort((a, b) => compareScalarValues(a.value, b.value));
+
+        this.indexData.set(indexInfo.name, data);
+      }
+
+      this.indexesBuilt = true;
+    } finally {
+      this.buildInProgress = null;
+      resolveBuild!();
+    }
+  }
+
+  /**
+   * Add a document to all indexes.
+   * Called after insert operations.
+   * Waits for any in-progress build to complete before updating.
+   *
+   * @param doc - The document that was inserted
+   */
+  async addToIndexes<T extends Document>(doc: T): Promise<void> {
+    // Wait for any in-progress build to complete
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+    }
+
+    // If indexes were never built (no queries yet), skip the update.
+    // The document is already in the data file, so the next build will include it.
+    if (!this.indexesBuilt) return;
+
+    const docId = this.getDocIdString(doc);
+    if (docId === null) return;
+
+    for (const [, data] of this.indexData) {
+      const indexInfo = data.indexInfo;
+      const indexFields = Object.keys(indexInfo.key);
+      const isSparse = indexInfo.sparse === true;
+      const partialFilter = indexInfo.partialFilterExpression;
+
+      // Check sparse index condition
+      if (isSparse && !this.shouldIncludeInSparseIndex(doc, indexFields)) {
+        continue;
+      }
+
+      // Check partial filter condition
+      if (partialFilter && !this.matchesPartialFilter(doc, partialFilter)) {
+        continue;
+      }
+
+      // Extract key values
+      const keyValues = this.extractKeyValue(doc, indexInfo.key);
+
+      // Add to equality map
+      const compoundKey = this.serializeCompoundKey(keyValues);
+      if (!data.equalityMap.has(compoundKey)) {
+        data.equalityMap.set(compoundKey, new Set());
+      }
+      data.equalityMap.get(compoundKey)!.add(docId);
+
+      // Add to sorted entries using binary search
+      const firstValue = keyValues[data.firstField];
+      const insertIdx = this.findInsertPosition(data.sortedEntries, firstValue);
+
+      // Check if there's an existing entry at or before this position with the same value
+      if (
+        insertIdx < data.sortedEntries.length &&
+        compareScalarValues(data.sortedEntries[insertIdx].value, firstValue) === 0
+      ) {
+        // Add to existing entry
+        data.sortedEntries[insertIdx].docIds.add(docId);
+      } else {
+        // Insert new entry at sorted position
+        const newEntry = { value: firstValue, docIds: new Set([docId]) };
+        data.sortedEntries.splice(insertIdx, 0, newEntry);
+      }
+    }
+  }
+
+  /**
+   * Remove a document from all indexes.
+   * Called after delete operations.
+   * Waits for any in-progress build to complete before updating.
+   *
+   * @param doc - The document that was deleted
+   */
+  async removeFromIndexes<T extends Document>(doc: T): Promise<void> {
+    // Wait for any in-progress build to complete
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+    }
+
+    // If indexes were never built, skip the update
+    if (!this.indexesBuilt) return;
+
+    const docId = this.getDocIdString(doc);
+    if (docId === null) return;
+
+    for (const [, data] of this.indexData) {
+      const indexInfo = data.indexInfo;
+
+      // Extract key values
+      const keyValues = this.extractKeyValue(doc, indexInfo.key);
+
+      // Remove from equality map
+      const compoundKey = this.serializeCompoundKey(keyValues);
+      const docIds = data.equalityMap.get(compoundKey);
+      if (docIds) {
+        docIds.delete(docId);
+        if (docIds.size === 0) {
+          data.equalityMap.delete(compoundKey);
+        }
+      }
+
+      // Remove from sorted entries using binary search
+      const firstValue = keyValues[data.firstField];
+      const idx = this.findInsertPosition(data.sortedEntries, firstValue);
+
+      // Check if entry exists at this position
+      if (
+        idx < data.sortedEntries.length &&
+        compareScalarValues(data.sortedEntries[idx].value, firstValue) === 0
+      ) {
+        data.sortedEntries[idx].docIds.delete(docId);
+        if (data.sortedEntries[idx].docIds.size === 0) {
+          data.sortedEntries.splice(idx, 1);
+        }
+      }
+    }
+  }
+
+  /**
+   * Update a document in all indexes.
+   * Called after update operations.
+   * Waits for any in-progress build to complete before updating.
+   *
+   * @param oldDoc - The document before update
+   * @param newDoc - The document after update
+   */
+  async updateInIndexes<T extends Document>(oldDoc: T, newDoc: T): Promise<void> {
+    // Wait for any in-progress build to complete
+    if (this.buildInProgress) {
+      await this.buildInProgress;
+    }
+
+    // If indexes were never built, skip the update
+    if (!this.indexesBuilt) return;
+
+    // Simple implementation: remove old, add new
+    // Note: these calls won't need to wait again since buildInProgress is now null
+    await this.removeFromIndexes(oldDoc);
+    await this.addToIndexes(newDoc);
+  }
+
+  /**
+   * Clear all index data structures.
+   * Called when collection is dropped.
+   */
+  clearIndexData(): void {
+    this.indexData.clear();
+    this.indexesBuilt = false;
+  }
+
+  /**
+   * Find the insert position for a value in a sorted array using binary search.
+   */
+  private findInsertPosition(
+    entries: Array<{ value: unknown; docIds: Set<string> }>,
+    value: unknown
+  ): number {
+    let low = 0;
+    let high = entries.length;
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if (compareScalarValues(entries[mid].value, value) < 0) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    return low;
+  }
+
+  /**
+   * Look up documents by equality on indexed fields.
+   *
+   * @param indexName - Name of the index to use
+   * @param keyValues - Field values to match
+   * @returns Set of document IDs matching the query, or null if index not found
+   */
+  lookupEquality(indexName: string, keyValues: Record<string, unknown>): Set<string> | null {
+    const data = this.indexData.get(indexName);
+    if (!data) return null;
+
+    const compoundKey = this.serializeCompoundKey(keyValues);
+    const docIds = data.equalityMap.get(compoundKey);
+
+    return docIds ? new Set(docIds) : new Set();
+  }
+
+  /**
+   * Look up documents by range on the first field of an index.
+   *
+   * @param indexName - Name of the index to use
+   * @param bounds - Range bounds for the query
+   * @returns Set of document IDs matching the range, or null if index not found
+   */
+  lookupRange(indexName: string, bounds: RangeBounds): Set<string> | null {
+    const data = this.indexData.get(indexName);
+    if (!data) return null;
+
+    const entries = data.sortedEntries;
+    const result = new Set<string>();
+
+    // Find start position using binary search
+    let startIdx = 0;
+    if (bounds.lower !== undefined) {
+      startIdx = this.findLowerBound(entries, bounds.lower.value, bounds.lower.inclusive);
+    }
+
+    // Find end position
+    let endIdx = entries.length;
+    if (bounds.upper !== undefined) {
+      endIdx = this.findUpperBound(entries, bounds.upper.value, bounds.upper.inclusive);
+    }
+
+    // Collect all document IDs in the range
+    for (let i = startIdx; i < endIdx; i++) {
+      for (const docId of entries[i].docIds) {
+        result.add(docId);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Find the lower bound index for a range query.
+   */
+  private findLowerBound(
+    entries: Array<{ value: unknown; docIds: Set<string> }>,
+    value: unknown,
+    inclusive: boolean
+  ): number {
+    let low = 0;
+    let high = entries.length;
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      const cmp = compareScalarValues(entries[mid].value, value);
+      if (cmp < 0 || (!inclusive && cmp === 0)) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    return low;
+  }
+
+  /**
+   * Find the upper bound index for a range query.
+   */
+  private findUpperBound(
+    entries: Array<{ value: unknown; docIds: Set<string> }>,
+    value: unknown,
+    inclusive: boolean
+  ): number {
+    let low = 0;
+    let high = entries.length;
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      const cmp = compareScalarValues(entries[mid].value, value);
+      if (cmp < 0 || (inclusive && cmp === 0)) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+
+    return low;
   }
 
   /**
@@ -349,6 +805,9 @@ export class IndexManager {
     indexes.push(newIndex);
     await this.saveIndexes(indexes);
 
+    // Clear index data so it will be rebuilt on next query
+    this.clearIndexData();
+
     return indexName;
   }
 
@@ -401,6 +860,9 @@ export class IndexManager {
 
     indexes.splice(indexIdx, 1);
     await this.saveIndexes(indexes);
+
+    // Clear index data so it will be rebuilt without the dropped index
+    this.clearIndexData();
   }
 
   /**
@@ -417,10 +879,8 @@ export class IndexManager {
    * After reset, the collection will only have the default _id index.
    */
   async reset(): Promise<void> {
-    // The loadIndexes method will return default _id index when file doesn't exist
-    // So we just need to make sure we're not holding any stale state
-    // Since we don't cache indexes in memory, this is a no-op for now
-    // but is called by collection.drop() for consistency
+    // Clear in-memory index data structures
+    this.clearIndexData();
   }
 
   /**

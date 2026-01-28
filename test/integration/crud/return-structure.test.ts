@@ -14,7 +14,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createTestClient, getTestModeName, type TestClient } from '../../test-harness.ts';
-import { ObjectId } from 'bson';
 
 describe(`Return Structure Tests (${getTestModeName()})`, () => {
   let client: TestClient;
