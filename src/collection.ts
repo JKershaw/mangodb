@@ -14,13 +14,13 @@ import { AggregationCursor, type AggregationDbContext } from './aggregation/inde
 import { applyProjection, compareValuesForSort } from './utils.ts';
 import {
   readFile,
-  writeFile,
   mkdir,
   unlink,
   rename as renameFile,
   access,
   stat,
 } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -160,13 +160,33 @@ export class MangoCollection<T extends Document = Document> {
 
   private async writeDocuments(documents: T[]): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    const serialized = documents.map((doc) => serializeDocument(doc));
-    const content = JSON.stringify(serialized, null, 2);
 
     // Atomic write: write to temp file, then rename
     const tempPath = `${this.filePath}.tmp-${randomUUID()}`;
+
     try {
-      await writeFile(tempPath, content);
+      // Use streaming write to avoid RangeError on large collections
+      // JSON.stringify on entire collection can exceed V8's string length limit
+      await new Promise<void>((resolve, reject) => {
+        const stream = createWriteStream(tempPath);
+        stream.on('error', reject);
+
+        stream.write('[\n');
+        for (let i = 0; i < documents.length; i++) {
+          if (i > 0) stream.write(',\n');
+          const serialized = serializeDocument(documents[i]);
+          // Indent each line by 2 spaces to match previous JSON.stringify format
+          const json = JSON.stringify(serialized, null, 2)
+            .split('\n')
+            .map((line) => '  ' + line)
+            .join('\n');
+          stream.write(json);
+        }
+        stream.write('\n]');
+        stream.end();
+        stream.on('finish', resolve);
+      });
+
       await renameFile(tempPath, this.filePath);
     } finally {
       // Clean up temp file if rename failed
