@@ -12,15 +12,9 @@ import { ObjectId } from 'bson';
 import { MangoCursor, IndexCursor } from './cursor.ts';
 import { AggregationCursor, type AggregationDbContext } from './aggregation/index.ts';
 import { applyProjection, compareValuesForSort } from './utils.ts';
-import {
-  readFile,
-  mkdir,
-  unlink,
-  rename as renameFile,
-  access,
-  stat,
-} from 'node:fs/promises';
+import { mkdir, unlink, rename as renameFile, access, stat } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
+import { readJsonArray, countJsonArrayElements } from './json-stream-reader.ts';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -145,14 +139,49 @@ export class MangoCollection<T extends Document = Document> {
 
   // ==================== Private Helpers ====================
 
+  /**
+   * Read the collection's documents.
+   *
+   * Reads through {@link readJsonArray}, which streams the file once it is large
+   * enough to approach V8's ~536MB string length limit. Past that limit
+   * `readFile` itself throws `RangeError: Invalid string length`, which used to
+   * leave the collection permanently unreadable - `deleteMany` could not shrink
+   * it, because shrinking requires reading the current document set first.
+   *
+   * Reads take no mutex: holding `runExclusive` across a streamed read would let
+   * a slow reader block every write. Consistency comes from the atomic
+   * write-to-temp + rename in `writeDocuments()` - an already-open file
+   * descriptor keeps reading the pre-rename inode, so an in-flight read sees a
+   * consistent snapshot rather than a torn file.
+   *
+   * A missing collection file reads as an empty collection.
+   */
   private async readDocuments(): Promise<T[]> {
     try {
-      const content = await readFile(this.filePath, 'utf-8');
-      const parsed = JSON.parse(content);
-      return parsed.map((doc: Record<string, unknown>) => deserializeDocument<T>(doc));
+      const documents = await readJsonArray(this.filePath);
+      return documents.map((doc) => deserializeDocument<T>(doc as Record<string, unknown>));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Count the collection's documents without materializing them.
+   *
+   * Always streams: unlike {@link readDocuments}, counting has no reason to hold
+   * the collection in memory at any size.
+   *
+   * A missing collection file counts as 0.
+   */
+  private async countStoredDocuments(): Promise<number> {
+    try {
+      return await countJsonArrayElements(this.filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return 0;
       }
       throw error;
     }
@@ -2193,7 +2222,9 @@ export class MangoCollection<T extends Document = Document> {
    * ```
    */
   async stats(): Promise<CollectionStats> {
-    const docs = await this.readDocuments();
+    // Count by streaming - stats only needs the document count, so there is no
+    // reason to materialize (or even parse) the whole collection.
+    const count = await this.countStoredDocuments();
     const indexes = await this.indexManager.indexes();
 
     let dataSize = 0;
@@ -2226,7 +2257,7 @@ export class MangoCollection<T extends Document = Document> {
 
     return {
       ns: `${this.dbName}.${collectionName}`,
-      count: docs.length,
+      count,
       size: dataSize,
       storageSize: dataSize,
       totalIndexSize: indexSize,

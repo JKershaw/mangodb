@@ -297,7 +297,7 @@ These are fundamental differences from MongoDB's architecture:
 | Query execution | Index-optimized | Full collection scan |
 | Concurrency | Multi-process safe | Single process only |
 | Atomicity | Multi-document transactions | Single-document only |
-| Memory | Streams large results | Loads all documents |
+| Memory | Streams large results | Streams large files, materializes all documents |
 | Authentication | Built-in auth | Filesystem permissions |
 
 ---
