@@ -317,6 +317,35 @@ Dates are serialized as ISO strings:
 { "createdAt": { "$date": "2023-06-15T14:30:00.000Z" } }
 ```
 
+### Reading Large Collection Files
+
+V8 caps JavaScript string length at roughly 536MB. Reading a collection file
+larger than that into one string throws `RangeError: Invalid string length`
+before parsing even starts - and a collection in that state could never be shrunk
+back down, because `deleteMany` has to read the current document set first.
+
+Collection files past 64MB are therefore read as a stream and parsed one document
+at a time, so no single string ever holds the whole file. Smaller files are still
+read whole, which is several times faster and never approaches the limit.
+
+Three consequences worth knowing:
+
+- **The limit is memory-proportional, not fixed.** Streaming removes the hard
+  ~536MB cliff, but a query still materializes every document it reads into an
+  array. Very large collections remain bounded by available memory, and MangoDB
+  is still unsuited to them - see
+  [When to Use MangoDB](../README.md#when-to-use-mangodb).
+- **Counting never materializes.** `db.stats()` and `collection.stats()` scan for
+  the document count without holding the collection in memory, at any size.
+- **Any valid JSON array layout is readable.** The streaming reader is
+  depth/quote/escape aware rather than whitespace dependent, so files written by
+  older MangoDB versions, by the current writer, or by hand all parse
+  identically, and both read paths return the same values.
+
+A corrupt or truncated collection file raises a `SyntaxError` naming the file.
+It is never silently treated as an empty collection - including in `db.stats()`,
+which previously swallowed the parse failure and reported 0 documents.
+
 ---
 
 ## Geospatial Gotchas
@@ -383,3 +412,13 @@ const client2 = new MangoClient('./data');  // May cause data corruption
 ```
 
 For testing with parallel test runners, use isolated data directories per test file or process.
+
+### Read Snapshot Semantics
+
+Within a single process, reads do not take the write mutex - holding it across a
+streamed read would let a slow reader block every write. Consistency comes from
+the write path instead: writes go to a temp file and are then renamed into place,
+so a read that has already opened the file keeps reading the pre-rename contents.
+A read therefore sees a consistent snapshot of the collection as of when it
+started, never a half-written file, but a read started before a concurrent write
+will not observe that write.

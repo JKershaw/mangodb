@@ -3,6 +3,7 @@ import { AggregationCursor, type AggregationDbContext } from './aggregation/inde
 import { rm, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { matchesFilter } from './query-matcher.ts';
+import { countJsonArrayElements } from './json-stream-reader.ts';
 import type {
   Document,
   Filter,
@@ -190,13 +191,12 @@ export class MangoDb {
         } else if (file.endsWith('.json')) {
           collections++;
           dataSize += fileStat.size;
-          // Read document count
-          try {
-            const content = JSON.parse(await readFile(filePath, 'utf-8'));
-            objects += Array.isArray(content) ? content.length : 0;
-          } catch {
-            // If file can't be parsed, assume 0 documents
-          }
+          // Count by streaming rather than reading the file into one string.
+          // A collection past V8's ~536MB string limit used to throw here and
+          // get swallowed by a bare catch, silently reporting 0 documents.
+          // Parse failures now surface instead of masquerading as an empty
+          // collection.
+          objects += await countJsonArrayElements(filePath);
         }
       }
     } catch (error) {
