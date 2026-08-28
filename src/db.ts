@@ -3,6 +3,7 @@ import { AggregationCursor, type AggregationDbContext } from './aggregation/inde
 import { rm, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { matchesFilter } from './query-matcher.ts';
+import { countJsonArray } from './stream-json.ts';
 import type {
   Document,
   Filter,
@@ -190,10 +191,13 @@ export class MangoDb {
         } else if (file.endsWith('.json')) {
           collections++;
           dataSize += fileStat.size;
-          // Read document count
+          // Read document count. Counted by streaming rather than
+          // readFile+JSON.parse: the whole-file read throws RangeError past
+          // V8's max string length (~512MB), and the catch below would have
+          // swallowed that and silently reported 0 documents for exactly the
+          // largest collections. See src/stream-json.ts.
           try {
-            const content = JSON.parse(await readFile(filePath, 'utf-8'));
-            objects += Array.isArray(content) ? content.length : 0;
+            objects += await countJsonArray(filePath);
           } catch {
             // If file can't be parsed, assume 0 documents
           }

@@ -199,4 +199,69 @@ describe(`Large Batch Tests (${getTestModeName()})`, () => {
       assert.strictEqual(remaining, 400);
     });
   });
+
+  describe('reading back large collections', () => {
+    // The write path was hardened first (streaming writes); the read path used
+    // to load the whole collection file into one string, so a collection that
+    // grew past V8's max string length became permanently unreadable — and
+    // unshrinkable, since a delete has to read the current documents first.
+    // These run against both targets, so they assert behaviour rather than
+    // MangoDB's storage format.
+    it('should read back every document of a large collection', async () => {
+      const collection = client.db(dbName).collection('test_read_back_large');
+
+      const docs = Array.from({ length: 2000 }, (_, i) => ({
+        index: i,
+        payload: 'y'.repeat(500),
+      }));
+      await collection.insertMany(docs);
+
+      const readBack = await collection.find({}).toArray();
+      assert.strictEqual(readBack.length, 2000);
+
+      const indexes = readBack.map((d) => d.index as number).sort((a, b) => a - b);
+      assert.strictEqual(indexes[0], 0);
+      assert.strictEqual(indexes[1999], 1999);
+      assert.ok(
+        readBack.every((d) => (d.payload as string).length === 500),
+        'every document should survive the round trip intact'
+      );
+    });
+
+    it('should shrink a large collection back down', async () => {
+      const collection = client.db(dbName).collection('test_shrink_large');
+
+      const docs = Array.from({ length: 1500 }, (_, i) => ({
+        index: i,
+        payload: 'z'.repeat(500),
+      }));
+      await collection.insertMany(docs);
+
+      await collection.deleteMany({ index: { $lt: 1000 } });
+
+      assert.strictEqual(await collection.countDocuments(), 500);
+      const survivors = await collection.find({}).toArray();
+      assert.ok(
+        survivors.every((d) => (d.index as number) >= 1000),
+        'only the documents outside the delete filter should remain'
+      );
+    });
+
+    it('should report a non-zero document count in db.stats()', async () => {
+      const db = client.db(dbName);
+      const collection = db.collection('test_stats_large');
+
+      const docs = Array.from({ length: 1200 }, (_, i) => ({
+        index: i,
+        payload: 'w'.repeat(500),
+      }));
+      await collection.insertMany(docs);
+
+      const stats = await db.stats();
+      assert.ok(
+        stats.objects >= 1200,
+        `stats().objects should count the documents, got ${stats.objects}`
+      );
+    });
+  });
 });
