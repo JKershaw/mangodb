@@ -12,15 +12,9 @@ import { ObjectId } from 'bson';
 import { MangoCursor, IndexCursor } from './cursor.ts';
 import { AggregationCursor, type AggregationDbContext } from './aggregation/index.ts';
 import { applyProjection, compareValuesForSort } from './utils.ts';
-import {
-  readFile,
-  mkdir,
-  unlink,
-  rename as renameFile,
-  access,
-  stat,
-} from 'node:fs/promises';
+import { mkdir, unlink, rename as renameFile, access, stat } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
+import { readJsonArray } from './stream-json.ts';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -147,8 +141,11 @@ export class MangoCollection<T extends Document = Document> {
 
   private async readDocuments(): Promise<T[]> {
     try {
-      const content = await readFile(this.filePath, 'utf-8');
-      const parsed = JSON.parse(content);
+      // Streamed rather than readFile+JSON.parse: building the whole collection
+      // as one string throws RangeError past V8's max string length (~512MB),
+      // which used to leave a large collection permanently unreadable and
+      // therefore unshrinkable. See src/stream-json.ts.
+      const parsed = await readJsonArray<Record<string, unknown>>(this.filePath);
       return parsed.map((doc: Record<string, unknown>) => deserializeDocument<T>(doc));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
