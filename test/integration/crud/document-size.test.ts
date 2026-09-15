@@ -89,6 +89,7 @@ describe('MangoDB document storage limits', { skip: isMongoDBMode() }, () => {
       assert.ok(error instanceof OversizedJsonValueError);
       assert.ok(error instanceof RangeError);
       assert.equal(error.filePath, file);
+      assert.equal(error.maxValueLength, length - 1);
       assert.match(error.message, /too-large/);
       return true;
     });
@@ -109,6 +110,8 @@ describe('MangoDB document storage limits', { skip: isMongoDBMode() }, () => {
         if (message === 'Invalid string length') {
           assert.ok(error instanceof OversizedJsonValueError);
           assert.equal(error.cause, failure);
+          assert.equal(error.maxValueLength, MAX_VALUE_LENGTH);
+          assert.equal(error.filePath, file);
           assert.match(error.message, /broken/);
         } else {
           assert.equal(error, failure);
