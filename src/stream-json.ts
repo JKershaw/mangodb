@@ -13,8 +13,8 @@
  *
  * This scanner walks the file in chunks, tracking string/escape state and
  * nesting depth, and hands back one complete top-level value at a time. Only a
- * single document is ever held as a string, so the fixed 512MB cliff becomes an
- * ordinary memory-proportional limit. It deliberately does not change the
+ * single document is ever held as a string, with an explicit per-value string
+ * length limit. It deliberately does not change the
  * whole-collection-in-memory design of `readDocuments()`, which still returns a
  * full array; lifting that needs the NDJSON rearchitecture and is out of scope.
  *
@@ -24,6 +24,35 @@
  * parse identically.
  */
 import { createReadStream } from 'node:fs';
+import { constants } from 'node:buffer';
+
+/** Maximum serialized value length in UTF-16 code units, not UTF-8 bytes. */
+export const MAX_VALUE_LENGTH = constants.MAX_STRING_LENGTH;
+
+export class OversizedJsonValueError extends RangeError {
+  readonly filePath: string;
+  readonly maxValueLength: number;
+  readonly byteOffset?: number;
+
+  constructor(
+    filePath: string,
+    maxValueLength: number,
+    context: { byteOffset?: number; documentId?: string; cause?: unknown } = {}
+  ) {
+    const location =
+      context.byteOffset !== undefined
+        ? ` at byte offset ${context.byteOffset}`
+        : ` for document _id ${context.documentId ?? '(unknown)'}`;
+    super(
+      `JSON value in ${filePath}${location} exceeds the serialized value limit of ${maxValueLength} UTF-16 code units; split the document or store large payloads separately`,
+      { cause: context.cause }
+    );
+    this.name = 'OversizedJsonValueError';
+    this.filePath = filePath;
+    this.maxValueLength = maxValueLength;
+    this.byteOffset = context.byteOffset;
+  }
+}
 
 /** Characters JSON treats as insignificant whitespace between tokens. */
 function isWhitespace(ch: string): boolean {
@@ -41,20 +70,30 @@ function endsScalar(ch: string): boolean {
  *
  * @param filePath - Path to a file whose top-level value is a JSON array.
  * @param chunkSize - Read buffer size in bytes; exposed for tests.
+ * @param maxValueLength - Per-value UTF-16 code-unit limit; exposed for tests.
  * @throws {SyntaxError} If the file is not a well-formed JSON array.
  */
 export async function* streamJsonArrayEntries(
   filePath: string,
-  chunkSize = 1 << 16
+  chunkSize = 1 << 16,
+  maxValueLength = MAX_VALUE_LENGTH
 ): AsyncGenerator<string> {
+  if (
+    !Number.isInteger(maxValueLength) ||
+    maxValueLength < 1 ||
+    maxValueLength > MAX_VALUE_LENGTH
+  ) {
+    throw new RangeError(`maxValueLength must be between 1 and ${MAX_VALUE_LENGTH}`);
+  }
   const stream = createReadStream(filePath, {
     encoding: 'utf-8',
     highWaterMark: chunkSize,
   });
 
-  let buf = '';
-  let pos = 0; // scan cursor into `buf`
+  let value = '';
   let start = -1; // where the value currently being scanned began, or -1
+  let byteOffset = 0;
+  let bytesRead = 0;
   let depth = 0; // nesting depth inside the current value
   let inString = false;
   let escaped = false;
@@ -62,10 +101,20 @@ export async function* streamJsonArrayEntries(
   let sawClose = false; // consumed the array's closing ']'
 
   for await (const chunk of stream) {
-    buf += chunk as string;
+    const buf = chunk as string;
+    let pos = 0;
+    let bytePos = 0;
 
     while (pos < buf.length) {
       const ch = buf[pos]!;
+
+      if (
+        start !== -1 &&
+        (inString || depth > 0 || !endsScalar(ch)) &&
+        value.length + pos - start >= maxValueLength
+      ) {
+        throw new OversizedJsonValueError(filePath, maxValueLength, { byteOffset });
+      }
 
       // Inside a quoted string: only escape handling and the closing quote matter.
       if (inString) {
@@ -76,9 +125,8 @@ export async function* streamJsonArrayEntries(
           // A bare top-level string is a complete value the moment it closes.
           if (start !== -1 && depth === 0) {
             pos++;
-            yield buf.slice(start, pos);
-            buf = buf.slice(pos);
-            pos = 0;
+            yield value + buf.slice(start, pos);
+            value = '';
             start = -1;
             continue;
           }
@@ -117,6 +165,9 @@ export async function* streamJsonArrayEntries(
           continue;
         }
         start = pos;
+        bytesRead += Buffer.byteLength(buf.slice(bytePos, pos), 'utf8');
+        bytePos = pos;
+        byteOffset = bytesRead;
         if (ch === '{' || ch === '[') {
           depth = 1;
         } else if (ch === '"') {
@@ -134,9 +185,8 @@ export async function* streamJsonArrayEntries(
           depth--;
           if (depth === 0) {
             pos++;
-            yield buf.slice(start, pos);
-            buf = buf.slice(pos);
-            pos = 0;
+            yield value + buf.slice(start, pos);
+            value = '';
             start = -1;
             continue;
           }
@@ -148,23 +198,21 @@ export async function* streamJsonArrayEntries(
       // Inside an unquoted scalar: it ends at whitespace, a comma or the
       // array's closing bracket, none of which are consumed here.
       if (endsScalar(ch)) {
-        yield buf.slice(start, pos);
-        buf = buf.slice(pos);
-        pos = 0;
+        yield value + buf.slice(start, pos);
+        value = '';
         start = -1;
         continue;
       }
       pos++;
     }
 
-    // Drop the consumed prefix so the buffer never grows past the value being
-    // scanned plus one chunk.
-    const keepFrom = start === -1 ? pos : start;
-    if (keepFrom > 0) {
-      buf = buf.slice(keepFrom);
-      if (start !== -1) start = 0;
-      pos -= keepFrom;
+    // Append only checked value text, never the remainder of its final chunk.
+    // This removes the read-buffer overshoot without reserving a chunk on writes.
+    if (start !== -1) {
+      value += buf.slice(start, pos);
+      start = 0;
     }
+    bytesRead += Buffer.byteLength(buf.slice(bytePos), 'utf8');
   }
 
   // A trailing unquoted scalar with no delimiter before EOF (e.g. `[1`) is
@@ -180,9 +228,12 @@ export async function* streamJsonArrayEntries(
  * Equivalent in result to `JSON.parse(await readFile(path, 'utf-8'))` for an
  * array file, but never builds the whole file as a single string.
  */
-export async function readJsonArray<T = unknown>(filePath: string): Promise<T[]> {
+export async function readJsonArray<T = unknown>(
+  filePath: string,
+  maxValueLength = MAX_VALUE_LENGTH
+): Promise<T[]> {
   const out: T[] = [];
-  for await (const entry of streamJsonArrayEntries(filePath)) {
+  for await (const entry of streamJsonArrayEntries(filePath, undefined, maxValueLength)) {
     out.push(JSON.parse(entry) as T);
   }
   return out;
@@ -192,8 +243,11 @@ export async function readJsonArray<T = unknown>(filePath: string): Promise<T[]>
  * Count the elements of a JSON array file without parsing or retaining them.
  * Used by `db.stats()`, which only ever needed the length.
  */
-export async function countJsonArray(filePath: string): Promise<number> {
+export async function countJsonArray(
+  filePath: string,
+  maxValueLength = MAX_VALUE_LENGTH
+): Promise<number> {
   let n = 0;
-  for await (const _entry of streamJsonArrayEntries(filePath)) n++;
+  for await (const _entry of streamJsonArrayEntries(filePath, undefined, maxValueLength)) n++;
   return n;
 }

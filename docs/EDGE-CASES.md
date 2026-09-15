@@ -319,6 +319,39 @@ Dates are serialized as ISO strings:
 
 ---
 
+## Size Limits
+
+Collection files are read and written one JSON value at a time, so a collection
+of small documents can exceed V8's single-string limit. Operations still load
+the whole collection into memory; streaming file I/O does not remove that
+memory constraint.
+
+Each serialized document must fit within Node's
+`buffer.constants.MAX_STRING_LENGTH` (typically 536,870,888 **UTF-16 code units**,
+not bytes). This includes Extended JSON representation and whitespace inside
+the document. MongoDB instead has a 16 MiB **BSON byte** limit; MangoDB does not
+enforce that limit, so a MangoDB document may not be portable to MongoDB.
+
+The reader checks only the value text, not adjacent values, separators or the
+remainder of a read chunk. The writer checks the same value length, including
+internal pretty-print indentation, so accepted writes do not fall into a
+chunk-boundary read gap. Memory exhaustion or serialization/recursion limits
+can still occur earlier; this ceiling is not a guarantee of usable document size.
+
+An oversized value throws `OversizedJsonValueError`, a `RangeError` subclass.
+The message includes the file, the limit and either the value's starting UTF-8
+byte offset on read (zero-based) or a bounded `_id` description on write.
+String-length failures during serialization are also diagnosed. Failed writes
+close their stream and remove the temporary file without replacing existing data.
+
+`db.stats()` now rejects when a collection has an oversized value rather than
+silently omitting its document count. Unrelated scan/parse failures retain the
+previous behavior: the affected collection contributes zero objects; malformed
+index metadata contributes zero indexes. Counting still scans values without
+fully validating their JSON content.
+
+---
+
 ## Geospatial Gotchas
 
 ### Coordinate Order

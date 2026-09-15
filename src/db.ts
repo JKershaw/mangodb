@@ -3,7 +3,7 @@ import { AggregationCursor, type AggregationDbContext } from './aggregation/inde
 import { rm, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { matchesFilter } from './query-matcher.ts';
-import { countJsonArray } from './stream-json.ts';
+import { countJsonArray, OversizedJsonValueError } from './stream-json.ts';
 import type {
   Document,
   Filter,
@@ -198,7 +198,8 @@ export class MangoDb {
           // largest collections. See src/stream-json.ts.
           try {
             objects += await countJsonArray(filePath);
-          } catch {
+          } catch (error) {
+            if (error instanceof OversizedJsonValueError) throw error;
             // If file can't be parsed, assume 0 documents
           }
         }

@@ -14,7 +14,9 @@ import { AggregationCursor, type AggregationDbContext } from './aggregation/inde
 import { applyProjection, compareValuesForSort } from './utils.ts';
 import { mkdir, unlink, rename as renameFile, access, stat } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
-import { readJsonArray } from './stream-json.ts';
+import { pipeline } from 'node:stream/promises';
+import { inspect } from 'node:util';
+import { readJsonArray, MAX_VALUE_LENGTH, OversizedJsonValueError } from './stream-json.ts';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -155,34 +157,59 @@ export class MangoCollection<T extends Document = Document> {
     }
   }
 
-  private async writeDocuments(documents: T[]): Promise<void> {
+  private async writeDocuments(documents: T[], maxValueLength = MAX_VALUE_LENGTH): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
 
     // Atomic write: write to temp file, then rename
     const tempPath = `${this.filePath}.tmp-${randomUUID()}`;
 
     try {
-      // Use streaming write to avoid RangeError on large collections
-      // JSON.stringify on entire collection can exceed V8's string length limit
-      await new Promise<void>((resolve, reject) => {
-        const stream = createWriteStream(tempPath);
-        stream.on('error', reject);
-
-        stream.write('[\n');
+      const filePath = this.filePath;
+      function* entries() {
+        yield '[\n';
         for (let i = 0; i < documents.length; i++) {
-          if (i > 0) stream.write(',\n');
-          const serialized = serializeDocument(documents[i]);
-          // Indent each line by 2 spaces to match previous JSON.stringify format
-          const json = JSON.stringify(serialized, null, 2)
-            .split('\n')
-            .map((line) => '  ' + line)
-            .join('\n');
-          stream.write(json);
+          if (i > 0) yield ',\n';
+          let json: string;
+          try {
+            const serialized = serializeDocument(documents[i]);
+            const raw = JSON.stringify(serialized, null, 2);
+            // The first two spaces are outside the value; internal indentation
+            // counts toward the same token length checked by the reader.
+            let length = raw.length;
+            for (let j = 0; j < raw.length; j++) {
+              if (raw[j] === '\n') length += 2;
+            }
+            if (length > maxValueLength) throw new RangeError('Invalid string length');
+            json = raw.replace(/\n/g, '\n  ');
+          } catch (error) {
+            // Do not mislabel recursion failures or unrelated serialization errors.
+            if (error instanceof RangeError && error.message === 'Invalid string length') {
+              throw new OversizedJsonValueError(filePath, maxValueLength, {
+                documentId: inspect(documents[i]?._id, {
+                  depth: 0,
+                  maxStringLength: 80,
+                  customInspect: false,
+                }),
+                cause: error,
+              });
+            }
+            throw error;
+          }
+          yield '  ';
+          yield json;
         }
-        stream.write('\n]');
-        stream.end();
-        stream.on('finish', resolve);
-      });
+        yield '\n]';
+      }
+      const stream = createWriteStream(tempPath);
+      const closed = new Promise<void>((resolve) => stream.once('close', resolve));
+      try {
+        await pipeline(entries(), stream);
+      } finally {
+        // A serialization failure can precede the asynchronous file open.
+        // Wait for close before unlinking, including when pipeline rejects early.
+        stream.destroy();
+        await closed;
+      }
 
       await renameFile(tempPath, this.filePath);
     } finally {

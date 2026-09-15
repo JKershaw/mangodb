@@ -294,6 +294,7 @@ These are fundamental differences from MongoDB's architecture:
 | Aspect | MongoDB | MangoDB |
 |--------|---------|---------|
 | Storage | BSON binary format | JSON text files |
+| Document size | 16 MiB BSON bytes | Runtime `MAX_STRING_LENGTH` UTF-16 code units per serialized JSON value, including internal indentation (typically 536,870,888); memory may run out earlier. See [Size Limits](./EDGE-CASES.md#size-limits). |
 | Query execution | Index-optimized | Full collection scan |
 | Concurrency | Multi-process safe | Single process only |
 | Atomicity | Multi-document transactions | Single-document only |

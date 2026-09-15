@@ -12,7 +12,14 @@ import assert from 'node:assert';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { streamJsonArrayEntries, readJsonArray, countJsonArray } from '../../src/stream-json.ts';
+import { constants } from 'node:buffer';
+import {
+  streamJsonArrayEntries,
+  readJsonArray,
+  countJsonArray,
+  MAX_VALUE_LENGTH,
+  OversizedJsonValueError,
+} from '../../src/stream-json.ts';
 
 let dir: string;
 let file: string;
@@ -171,6 +178,57 @@ describe('countJsonArray', () => {
     const docs = Array.from({ length: 123 }, (_, i) => ({ i }));
     await writeFile(file, asWritten(docs));
     assert.strictEqual(await countJsonArray(file), 123);
+  });
+
+  describe('per-value size boundary', () => {
+    it('uses the runtime string-length ceiling', () => {
+      assert.strictEqual(MAX_VALUE_LENGTH, constants.MAX_STRING_LENGTH);
+    });
+
+    for (const chunkSize of [1, 2, 7, 16, 65536]) {
+      for (const value of ['{"s":"é🥭"}', '"é🥭"', '12345', '[0,1]', 'false']) {
+        it(`accepts exactly ${value.length} code units in ${chunkSize}-byte chunks: ${value}`, async () => {
+          await writeFile(file, `[${value},${value}]${' '.repeat(100)}`);
+          const entries: string[] = [];
+          for await (const entry of streamJsonArrayEntries(file, chunkSize, value.length)) {
+            entries.push(entry);
+          }
+          assert.deepStrictEqual(entries, [value, value]);
+        });
+
+        it(`rejects one code unit over the limit in ${chunkSize}-byte chunks: ${value}`, async () => {
+          const prefix = '["é", ';
+          await writeFile(file, `${prefix}${value}]`);
+          await assert.rejects(
+            async () => {
+              for await (const _entry of streamJsonArrayEntries(
+                file,
+                chunkSize,
+                value.length - 1
+              )) {
+                // Exhaust the externally authored file.
+              }
+            },
+            (error: unknown) => {
+              assert.ok(error instanceof OversizedJsonValueError);
+              assert.ok(error instanceof RangeError);
+              assert.strictEqual(error.filePath, file);
+              assert.strictEqual(error.maxValueLength, value.length - 1);
+              assert.strictEqual(error.byteOffset, Buffer.byteLength(prefix));
+              assert.match(error.message, /UTF-16 code units/);
+              return true;
+            }
+          );
+        });
+      }
+    }
+
+    it('reads and counts a collection larger than the per-value limit', async () => {
+      const docs = Array.from({ length: 200 }, () => ({ n: 1 }));
+      await writeFile(file, JSON.stringify(docs));
+      assert.deepStrictEqual(await readJsonArray(file, 7), docs);
+      assert.strictEqual(await countJsonArray(file, 7), docs.length);
+    });
   });
 
   it('counts an empty collection as zero', async () => {

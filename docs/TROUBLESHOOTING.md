@@ -36,6 +36,29 @@ nvm use 22
 
 ## Runtime Errors
 
+### "OversizedJsonValueError" / "RangeError: Invalid string length"
+
+**Cause**: One serialized document exceeds Node's single-string capacity, not
+necessarily the total collection size. The limit is
+`buffer.constants.MAX_STRING_LENGTH` UTF-16 code units (typically 536,870,888);
+it is not a UTF-8 byte limit. Extended JSON and internal indentation count too.
+
+MangoDB reports `OversizedJsonValueError` (still catchable with
+`instanceof RangeError`) with the file, limit, and the starting byte offset on
+read or a bounded document `_id` description on write. This includes
+string-length errors thrown during serialization. Failed writes preserve the
+previous collection file and clean up their temporary stream/file.
+
+**Solution**: Split oversized documents or store large payloads in separate
+files. For an externally authored oversized collection file, back it up and
+repair/split the offending document outside MangoDB before reading it again.
+Increasing the heap does not change the runtime string-length ceiling.
+
+`db.stats()` also propagates this error for the entire call; unrelated malformed
+files retain their previous zero-count behavior. Large collections of small
+documents remain stream-readable, but collection operations still require
+memory for the whole collection. See [Size Limits](./EDGE-CASES.md#size-limits).
+
 ### "ENOENT: no such file or directory"
 
 **Cause**: Data directory doesn't exist or isn't writable.
